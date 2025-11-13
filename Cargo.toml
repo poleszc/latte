@@ -1,0 +1,14 @@
+[package]
+name = "latte"
+version = "0.1.0"
+edition = "2024"
+
+[build-dependencies]
+lalrpop = "0.22.2"
+
+[dependencies]
+clap = { version = "4.5.41", features = ["derive"] }
+lalrpop-util = { version = "0.22.2", features = ["lexer", "unicode"] }
+ariadne = {version = "0.4.0", features = ["auto-color"]}
+logos = "0.14"
+tempfile = "3"
