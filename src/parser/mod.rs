@@ -1,6 +1,6 @@
 // Exports from the parser module.
 pub mod ast;
-mod lexer;
+pub mod lexer;
 pub mod tokens;
 
 use crate::error::CompilerError;
