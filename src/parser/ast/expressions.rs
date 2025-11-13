@@ -15,20 +15,24 @@ pub enum ExprKind {
     LiteralTrue,
     LiteralFalse,
     LiteralString(String),
+    LiteralNull,
     App {
         callee: Box<Expr>,
         args: Vec<Expr>,
     }, // obj.foo(1, 2)
-    Field {
+    ArrayAccess {
+        array: Box<Expr>,
+        index: Box<Expr>,
+    }, // arr [i]
+    FieldAccess {
         expr: Box<Expr>,
         field_name: Ident,
     }, // class.field
     Method {
-        // class.method(1, 2)
         expr: Box<Expr>,
         method_name: Ident,
         args: Vec<Expr>,
-    },
+    }, // class.method(1, 2)
     Paren(Box<Expr>),
     UnaryOp {
         op: UnaryOp,
@@ -39,7 +43,15 @@ pub enum ExprKind {
         lhs: Box<Expr>,
         rhs: Box<Expr>,
     },
-    New(Type),
+    NewObject(Ident), // new Animal
+    NewArray {
+        element_type: Type,
+        size: Box<Expr>,
+    }, // new int[10]
+    Cast {
+        target_type: Type,
+        expr: Expr<Expr>,
+    }, // (list)null
 }
 
 #[derive(Debug, PartialEq, Clone)]

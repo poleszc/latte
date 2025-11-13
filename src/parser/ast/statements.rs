@@ -1,6 +1,9 @@
+use super::definitions::FuncDef;
 use super::expressions::Expr;
 use super::types::Type;
 use super::{Ident, SourcePosition};
+
+// TODO: Add consts?
 
 /// STATEMENTS ///
 #[derive(Debug, PartialEq, Clone)]
@@ -17,9 +20,8 @@ pub struct Stmt {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum StmtKind {
-    Empty,        // ;
-    Block(Block), // {}
-    // TODO: Add consts?
+    Empty,                 // ;
+    Block(Block),          // {}
     Decl(Type, Vec<Item>), // int x, y = 5;
     Assign {
         // object.field = 5;
@@ -40,14 +42,20 @@ pub enum StmtKind {
         cond: Box<Expr>,
         body: Box<Stmt>,
     },
-    // TODOP: Maybe remove that?
     For {
         init: Option<Box<Stmt>>,
         cond: Option<Box<Expr>>,
         post: Option<Box<Expr>>,
         body: Box<Stmt>,
     },
+    ForEach {
+        element_type: Type,
+        item_name: Ident,
+        collection: Box<Expr>,
+        body: Box<Stmt>,
+    },
     Expr(Box<Expr>),
+    FuncDef(FuncDef), // Embedded functions.
 }
 
 #[derive(Debug, PartialEq, Clone)]
