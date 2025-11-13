@@ -9,9 +9,6 @@ pub use expressions::*;
 pub use statements::*;
 pub use types::*;
 
-// TODO: Add arrays.
-// TODO: Add nested functions.
-
 /// COMMON AST TYPES ///
 #[derive(Debug, PartialEq, Clone, Copy, Default)]
 pub struct SourcePosition(pub usize, pub usize);
