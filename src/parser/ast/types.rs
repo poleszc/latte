@@ -14,7 +14,7 @@ pub enum TypeKind {
     Bool,
     Void,
     Class(Ident),
-    // TODO: Think about that. Maybe it will be used internally by the type checker.
     Array(Box<Type>), // TODO: Box?
+    // TODO: Think about that. Maybe it will be used internally by the type checker.
     Fun(Box<Type>, Vec<Type>),
 }
