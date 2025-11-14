@@ -31,8 +31,8 @@ pub enum StmtKind {
     Return {
         expr: Option<Box<Expr>>,
     },
-    Incr(Ident),
-    Decr(Ident),
+    Incr(Box<Expr>),
+    Decr(Box<Expr>),
     If {
         cond: Box<Expr>,
         if_true: Box<Stmt>,

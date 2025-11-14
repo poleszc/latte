@@ -1,6 +1,5 @@
 use crate::parser::tokens::{Token, LexicalError};
 use crate::parser::ast;
-use crate::parser::ast::SourcePosition;
 
 grammar;
 
@@ -10,26 +9,70 @@ extern {
       
     // Define token types from the custom lexer.
     enum Token {
-        "identifier" => Token::Identifier(<String>),
-        "int" => Token::Integer(<i32>),
+        Identifier(<String>) => Token::Identifier(<String>),
+        LiteralInteger(<i32>) => Token::LiteralInteger(<i32>),
+        LiteralString(<String>) => Token::LiteralString(<String>),
+        
+        // Keywords
+        "class" => Token::KWClass,
+        "extends" => Token::KWExtends,
+        "int" => Token::KWInt,
+        "string" => Token::KWString,
+        "boolean" => Token::KWBool,
+        "void" => Token::KWVoid,
+        "if" => Token::KWIf,
+        "else" => Token::KWElse,
+        "while" => Token::KWWhile,
+        "for" => Token::KWFor,
+        "return" => Token::KWReturn,
+        "true" => Token::KWTrue,
+        "false" => Token::KWFalse,
+        "new" => Token::KWNew,
+        "null" => Token::KWNull,
+
+        // Operators
+        "+" => Token::OPAdd,
+        "-" => Token::OPSub,
+        "*" => Token::OPMul,
+        "/" => Token::OPDiv,
+        "%" => Token::OPMod,
+        "<" => Token::OPLt,
+        "<=" => Token::OPLe,
+        ">" => Token::OPGt,
+        ">=" => Token::OPGe,
+        "==" => Token::OPEq,
+        "!=" => Token::OPNeq,
+        "&&" => Token::OPAnd,
+        "||" => Token::OPOr,
+        "!" => Token::OPNot,
+        "=" => Token::OPAssign,
+        "++" => Token::OPIncr,
+        "--" => Token::OPDecr,
+
+        // Misc
         "(" => Token::LParen,
         ")" => Token::RParen,
-        "=" => Token::Assign,
+        "{" => Token::LBrace,
+        "}" => Token::RBrace,
+        "[" => Token::LBracket,
+        "]" => Token::RBracket,
         ";" => Token::Semicolon,
-        "+" => Token::OperatorAdd,
-        "-" => Token::OperatorSub,
-        "*" => Token::OperatorMul,
-        "/" => Token::OperatorDiv,
+        ":" => Token::Colon,
+        "," => Token::Comma,
+        "." => Token::Dot,
     }
 
 }
 
-pub Program: ast::Program = {
-    <stmts: Comma<Statement>> => ast::Program(stmts)
-}
+////////////
+/// MISC ///
+////////////
+PositionedIdent: ast::Ident = {
+    <start: @L> <i: Identifier> <end: @R> => ast::Ident(i, SourcePosition(start, end)),
+};
 
 Comma<T>: Vec<T> = {
-    <mut v:(<T> ";")*> <e:T?> => match e {
+    <v:(<T> ",")*> <e:T?> => match e {
         None => v,
         Some(e) => {
             v.push(e);
@@ -38,99 +81,301 @@ Comma<T>: Vec<T> = {
     }
 }
 
-pub Statement: ast::Stmt = {
-    <start: @L><name:"identifier"> "=" <value:Expression><end: @R> => {
-        ast::Stmt {
-            kind: ast::StmtKind::Assignment { name, value },
-            position: SourcePosition(start, end),
-        }
+CommaNonEmpty<T>: Vec<T> = {
+    <v:(<T> ",")*> <e:T> => { let mut v = v; v.push(e); v }
+}
 
+///////////////
+/// PROGRAM ///
+///////////////
+pub Program: ast::Program = {
+    <start: @L> <defs: TopDef*> <end: @R> => ast::Program(
+        defs,
+        position: SourcePosition(start, end),
+    )
+};
 
+/////////////////////////////
+/// TOP-LEVEL DEFINITIONS ///
+/////////////////////////////
+TopDef: ast::TopDef = {
+    <start: @L> <f: FuncDef> <end: @R> => ast::TopDef {
+        kind: ast::TopDefKind::Func(f),
+        position: SourcePosition(start, end),
     },
-    <expr:Expression> => {
-        ast::Stmt {
-            position: expr.position,
-            kind: ast::StmtKind::Expression { value: expr },
-        }
+    <start: @L> <c: ClassDef> <end: @R> => ast::TopDef {
+        kind: ast::TopDefKind::Class(c),
+        position: SourcePosition(start, end),
+    },
+};
+
+/// Functions ///
+FuncDef: ast::FuncDef = {
+    // TODO: Do we only allow block expressions of normal expressions as well (like in ifs)?
+    <start: @L> <ret_type: Type> <name: PositionedIdent> "(" <args: Comma<Arg>> ")" <body: Block> <end: @R> => ast::FuncDef {
+        name,
+        ret_type,
+        args,
+        body,
+        position: SourcePosition(start, end),
+    },
+};
+
+Arg: ast::Arg = {
+    <start: @L> <arg_type: Type> <name: PositionedIdent> <end: @R> => ast::Arg {
+        arg_type,
+        name,
+        position: SourcePosition(start, end),
+    }
+};
+
+/// Classes ///
+ClassDef: ast::ClassDef = {
+    <start: @L> "class" <name: PositionedIdent> <extends: ("extends" PositionedIdent)?> "{" <entries: ClassEntry*> "}" <end: @R> => ast::ClassDef {
+        name,
+        extends,
+        entries,
+        position: SourcePosition(start, end),
     },
 }
 
-pub Expression: Box<ast::Expr> = {
+ClassEntry: ast::ClassEntry = {
+    <start: @L> <typ: Type> <name: PositionedIdent> ";" <end: @R> => ast::ClassEntry {
+        kind: ast::ClassEntryKind::Field(typ, name),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <method: FuncDef> <end: @R> => ast::ClassEntry {
+        kind: ast::ClassEntryKind::Method(method),
+        position: SourcePosition(start, end),
+    },
+}
+
+///////////////////
+/// STATEMENTS ///
+//////////////////
+Block: ast::Block = {
+    <start: @L> "{" <stmts: Stmt*> "}" <end: @R> => ast::Block {
+        stmts,
+        position: SourcePosition(start, end),
+    },
+}
+
+Stmt: ast::Stmt = {
+    <start: @L> ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Empty,
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <block: Block> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Block(block),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <t: Type> <items: CommaNonEmpty<Item>> ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Decl(t, items),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <target: Expr> "=" <value: Expr> ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Assign {
+            target, 
+            value,
+        },
+        position: SourcePosition(start, end),
+    },
+    <start: @L> "return" <expr: Expr?> ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Return(expr),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <expr: Expr> "++" ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Incr(expr),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <expr: Expr> "--" ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Decr(expr),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> "if" "(" <cond: Expr> ")" <if_true: Stmt> <if_false: ("else" Stmt)?> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::If{
+            cond,
+            if_true,
+            if_false,
+        },
+        position: SourcePosition(start, end),
+    },
+    <start: @L> "while" "(" <cond: Expr> ")" <body: Stmt> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::While{ cond, body },
+        position: SourcePosition(start, end),
+    },
+    // TODO: Add normal for loop.
+    <start: @L> "for" "(" <element_type: Type> <item_name: PositionedIdent> ":" <collection: Expr> ")" <body:Stmt> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::ForEach{
+            element_type,
+            item_name,
+            collection,
+            body,
+        },
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <f: FuncDef> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::FuncDef(f),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <expr: Expr> ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Expr(expr),
+        position: SourcePosition(start, end),
+    },
+};
+
+Item: ast::Item = {
+    <start: @L> <name: PositionedIdent> <end: @R> => ast::Item {
+        kind: ast::ItemKind::NoInit(name),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <name: PositionedIdent> "=" <expr: Expr> <end: @R> => ast::Item {
+        kind: ast::ItemKind::Init(name, expr),
+        position: SourcePosition(start, end),
+
+    },
+};
+
+/////////////
+/// TYPES ///
+/////////////
+Type: ast::Type = {
+    <start: @L> "int" <end: @R> => ast::Type { kind: ast::TypeKind::Int, position: SourcePosition(start, end) },
+    <start: @L> "string" <end: @R> => ast::Type { kind: ast::TypeKind::String, position: SourcePosition(start, end) },
+    <start: @L> "boolean" <end: @R> => ast::Type { kind: ast::TypeKind::Bool, position: SourcePosition(start, end) },
+    <start: @L> "void" <end: @R> => ast::Type { kind: ast::TypeKind::Void, position: SourcePosition(start, end) },
+    <start: @L> <id: PositionedIdent> <end: @R> => ast::Type { kind: ast::TypeKind::Class(id), position: SourcePosition(start, end) },
+    <start: @L> <t: Type> "[" "]" <end: @R> => ast::Type { kind: ast::TypeKind::Array(t), position: SourcePosition(start, end) },
+};
+
+///////////////////
+/// EXPRESSIONS ///
+///////////////////
+Expr: Box<ast::Expr> = {
     #[precedence(level="1")]
-    Term,
+    Atom,
 
     #[precedence(level="2")] #[assoc(side="left")]
-    <lhs:Expression> "*" <rhs:Expression> => {
-        Box::new(
-            ast::Expr {
-                position: SourcePosition(lhs.position.0, rhs.position.1),
-                kind: ast::ExprKind::BinaryOp {
-                    op: ast::BinOp::Mul,
-                    lhs,
-                    rhs,
-                    weight: None,
-                },
-            }
-        )
-    },
-    <lhs:Expression> "/" <rhs:Expression> => {
-        Box::new(
-            ast::Expr {
-                position: SourcePosition(lhs.position.0, rhs.position.1),
-                kind: ast::ExprKind::BinaryOp {
-                    op: ast::BinOp::Div,
-                    lhs,
-                    rhs,
-                    weight: None,
-                },
-            }
-        )
-    },
+    <callee: Expr> "(" <args: Comma<Expr>> ")" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::App { callee, args },
+        position: SourcePosition(callee.position.0, end),
+    }),
+    <object: Expr> "." <field_name: PositionedIdent> => Box::new(ast::Expr {
+            kind: ast::ExprKind::Field { object, field_name },
+            position: SourcePosition(object.position.0, field_name.1.1);
+    }),
 
-    #[precedence(level="3")] #[assoc(side="right")]
-    <lhs:Expression> "+" <rhs:Expression> => {
-        Box::new(
-            ast::Expr {
-                position: SourcePosition(lhs.position.0, rhs.position.1),
-                kind: ast::ExprKind::BinaryOp {
-                    op: ast::BinOp::Add,
-                    lhs,
-                    rhs,
-                    weight: None,
-                },
-            }
-        )
-    },
+    <array: Expr> "[" <index: Expr> "]" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::ArrayAccess { array, index },
+        position: SourcePosition(array.position.0, end)
+    }),
+    <object: Expr> "." <method_name: PositionedIdent> "(" <args: Comma<Expr>> ")" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::Method { object, method_name, args },
+        position: SourcePosition(object.position.0, end)
+    }),
 
-    <lhs:Expression> "-" <rhs:Expression> => {
-        Box::new(
-            ast::Expr {
-                position: SourcePosition(lhs.position.0, rhs.position.1),
-                kind: ast::ExprKind::BinaryOp {
-                    op: ast::BinOp::Sub,
-                    lhs,
-                    rhs,
-                    weight: None,
-                },
+    #[precedence(level="3")]
+    <start: @L> "-" <e: Expr> <end: @R> => make_unary(start, ast::UnaryOp::Neg, e, end),
+    <start: @L> "!" <e: Expr> <end: @R> => make_unary(start, ast::UnaryOp::Not, e, end),
+    <start: @L> "(" <t: Type> ")" <e: Expr> <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::Cast {
+            target_type: t,
+            expr: e,
+        }
+        position: SourcePosition(start, end),
+    }),
+
+    #[precedence(level="4")] #[assoc(side="left")]
+    <l: Expr> "*" <r: Expr> => make_binary(ast::BinaryOp::Mul, l, r),
+    <l: Expr> "/" <r: Expr> => make_binary(ast::BinaryOp::Div, l, r),
+    <l: Expr> "%" <r: Expr> => make_binary(ast::BinaryOp::Mod, l, r),
+
+    #[precedence(level="5")] #[assoc(side="left")]
+    <l: Expr> "+" <r: Expr> => make_binary(ast::BinaryOp::Add, l, r),
+    <l: Expr> "-" <r: Expr> => make_binary(ast::BinaryOp::Sub, l, r),
+
+    #[precedence(level="6")] #[assoc(side="left")]
+    <l: Expr> "<" <r: Expr> => make_binary(ast::BinaryOp::Lt, l, r),
+    <l: Expr> "<=" <r: Expr> => make_binary(ast::BinaryOp::Le, l, r),
+    <l: Expr> ">" <r: Expr> => make_binary(ast::BinaryOp::Gt, l, r),
+    <l: Expr> ">=" <r: Expr> => make_binary(ast::BinaryOp::Ge, l, r),
+    
+    #[precedence(level="7")] #[assoc(side="left")]
+    <l: Expr> "==" <r: Expr> => make_binary(ast::BinaryOp::Eq, l, r),
+    <l: Expr> "!=" <r: Expr> => make_binary(ast::BinaryOp::Neq, l, r),
+
+    #[precedence(level="8")] #[assoc(side="left")]
+    <l: Expr> "&&" <r: Expr> => make_binary(ast::BinaryOp::And, l, r),
+
+    #[precedence(level="9")] #[assoc(side="left")]
+    <l: Expr> "||" <r: Expr> => make_binary(ast::BinaryOp::Or, l, r),
+};
+
+Atom: Box<ast::Expr> = {
+    <start: @L> <i: Integer> <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::LiteralInt(i),
+        position: SourcePosition(start, end),
+    }),
+    <start: @L> "true" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::LiteralTrue,
+        position: SourcePosition(start, end),
+    }),
+    <start: @L> "false" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::LiteralFalse,
+        position: SourcePosition(start, end),
+    }),
+    <start: @L> <s: StringLit> <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::LiteralString(s),
+        position: SourcePosition(start, end),
+    }),
+    <start: @L> "null" <end: @R> => Box::new(ast::Expr { 
+        kind: ast::ExprKind::LiteralNull,
+        position: SourcePosition(start, end)
+    }),
+    <id: PositionedIdent> => Box::new(ast::Expr {
+        kind: ast::ExprKind::Var(id.clone()), 
+        position: id.1,
+    }),
+    <start: @L> "new" <t: Type> <size_opt: ("[" Expr "]")?> <end: @R> => {
+        match size_opt {
+            // new int[10]
+            Some(size) => Box::new(ast::Expr {
+                kind: ast::ExprKind::NewArray { element_type: t, size },
+                position: SourcePosition(start, end)
+            }),
+            // new Animal
+            None => {
+                if let ast::TypeKind::Class(id) = t.kind {
+                    Box::new(ast::Expr {
+                        kind: ast::ExprKind::NewObject(id),
+                        position: SourcePosition(start, end)
+                    })
+                } 
+                else {
+                     Box::new(ast::Expr {
+                        kind: ast::ExprKind::NewObject(Ident("error".to_string(), t.position)),
+                        position: SourcePosition(start, end)
+                    })
+                }
             }
-        )
+        }
     },
+    <start: @L> "(" <e: Expr> ")" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::Paren(e),
+        position: SourcePosition(start, end)
+    }),
+};
+
+fn make_binary(op: ast::BinaryOp, lhs: Box<ast::Expr>, rhs: Box<ast::Expr>) -> Box<ast::Expr> {
+    Box::new(ast::Expr {
+        position: SourcePosition(lhs.position.0, rhs.position.1),
+        kind: ast::ExprKind::BinaryOp { op, lhs, rhs },
+    })
 }
 
-pub Term: Box<ast::Expr> = {
-    <start: @L><val:"int"><end: @R> => {
-        Box::new(ast::Expr {
-            kind: ast::ExprKind::Literal(val),
-            position: SourcePosition(start, end),
-        })
-
-
-    },
-    <start: @L><name:"identifier"><end: @R> => {
-        Box::new(ast::Expr {
-            kind: ast::ExprKind::Identifier(name),
-            position: SourcePosition(start, end),
-        })
-    },
-    "(" <Expression> ")",
+fn make_unary(start: usize, op: ast::UnaryOp, expr: Box<ast::Expr>, end: usize) -> Box<ast::Expr> {
+    Box::new(ast::Expr {
+        position: SourcePosition(start, end),
+        kind: ast::ExprKind::UnaryOp { op, expr },
+    })
 }
