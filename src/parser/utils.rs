@@ -1,5 +1,5 @@
+use crate::SourcePosition;
 use crate::parser::ast;
-
 #[inline]
 pub fn make_binary(op: ast::BinaryOp, lhs: Box<ast::Expr>, rhs: Box<ast::Expr>) -> Box<ast::Expr> {
     Box::new(ast::Expr {
@@ -9,7 +9,12 @@ pub fn make_binary(op: ast::BinaryOp, lhs: Box<ast::Expr>, rhs: Box<ast::Expr>) 
 }
 
 #[inline]
-pub fn make_unary(start: usize, op: ast::UnaryOp, expr: Box<ast::Expr>, end: usize) -> Box<ast::Expr> {
+pub fn make_unary(
+    start: usize,
+    op: ast::UnaryOp,
+    expr: Box<ast::Expr>,
+    end: usize,
+) -> Box<ast::Expr> {
     Box::new(ast::Expr {
         position: SourcePosition(start, end),
         kind: ast::ExprKind::UnaryOp { op, expr },

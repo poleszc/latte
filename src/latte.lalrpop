@@ -1,5 +1,11 @@
 use crate::parser::tokens::{Token, LexicalError};
 use crate::parser::utils;
+use crate::parser::ast;
+use crate::SourcePosition;
+use crate::latte::utils::make_unary;
+use crate::latte::utils::make_binary;
+
+
 
 grammar;
 
@@ -88,10 +94,10 @@ CommaNonEmpty<T>: Vec<T> = {
 /// PROGRAM ///
 ///////////////
 pub Program: ast::Program = {
-    <start: @L> <defs: TopDef*> <end: @R> => ast::Program(
+    <start: @L> <defs: TopDef*> <end: @R> => ast::Program {
         defs,
         position: SourcePosition(start, end),
-    )
+    }
 };
 
 /////////////////////////////
@@ -109,9 +115,9 @@ TopDef: ast::TopDef = {
 };
 
 FuncDef: ast::FuncDef = {
-    <start: @L> <ret_type: Type> <name: PositionedIdent> "(" <args: Comma<Arg>> ")" <body: Block> <end: @R> => ast::FuncDef {
+    <start: @L> <return_type: Type> <name: PositionedIdent> "(" <args: Comma<Arg>> ")" <body: Block> <end: @R> => ast::FuncDef {
         name,
-        ret_type,
+        return_type,
         args,
         body,
         position: SourcePosition(start, end),
@@ -242,7 +248,7 @@ SimpleStmt: ast::Stmt = {
         position: SourcePosition(start, end),
     },
     <start: @L> "return" <expr: Expr?> ";" <end: @R> => ast::Stmt {
-        kind: ast::StmtKind::Return(expr),
+        kind: ast::StmtKind::Return { expr },
         position: SourcePosition(start, end),
     },
     <start: @L> <expr: Expr6> "++" ";" <end: @R> => ast::Stmt {
@@ -311,19 +317,19 @@ ComplexType: ast::Type = {
 
 ArrayType: ast::Type = {
     <base: PrimitiveType> "[" "]" <end: @R> => {
+        let start_pos = base.position.0;
         ast::Type {
             kind: ast::TypeKind::Array(Box::new(base)),
-            position: SourcePosition(base.position.0, end),
+            position: SourcePosition(start_pos, end),
         }
     },
-    // Array of objects.
     <base: ClassType> "[" "]" <end: @R> => {
+        let start_pos = base.position.0;
         ast::Type {
             kind: ast::TypeKind::Array(Box::new(base)),
-            position: SourcePosition(base.position.0, end),
+            position: SourcePosition(start_pos, end),
         }
     },
-    // TODO: Multidimensional arrays are not allowed.
 };
 
 Type: ast::Type = {
@@ -379,25 +385,32 @@ Expr51: Box<ast::Expr> = {
 }
 
 Expr6: Box<ast::Expr> = {
-    // Wywołanie funkcji
-    <callee: Expr6> "(" <args: Comma<Expr>> ")" <end: @R> => Box::new(ast::Expr {
-        kind: ast::ExprKind::App { callee, args },
-        position: SourcePosition(callee.position.0, end),
-    }),
+    <callee: Expr6> "(" <args: Comma<Expr>> ")" <end: @R> => {
+        let start_pos = callee.position.0;
+        Box::new(ast::Expr {
+            kind: ast::ExprKind::App { callee, args },
+            position: SourcePosition(start_pos, end),
+        })
+    },
     
-    <object: Expr6> "." <field_name: PositionedIdent> => Box::new(ast::Expr {
-        kind: ast::ExprKind::Field { object, field_name: field_name.clone() },
-        position: SourcePosition(object.position.0, field_name.1.1)
-    }),
+    <expr: Expr6> "." <field_name: PositionedIdent> => {
+        let start_pos = expr.position.0;
+        Box::new(ast::Expr {
+            kind: ast::ExprKind::FieldAccess { expr, field_name: field_name.clone() },
+            position: SourcePosition(start_pos, field_name.1.1)
+        })
+    },
     
-    <array: Expr6> "[" <index: Expr> "]" <end: @R> => Box::new(ast::Expr {
-        kind: ast::ExprKind::ArrayAccess { array, index },
-        position: SourcePosition(array.position.0, end)
-    }),
+    // TODO: For now removed cause I don't know how to handle it.
+    // <array: Expr6> "["<index: Expr> "]" <end: @R> => Box::new(ast::Expr {
+    //     let start_pos = expr.position.0;
+    //     kind: ast::ExprKind::ArrayAccess { array, index },
+    //     position: SourcePosition(start_pos, end)
+    // }),
 
     <start: @L> "new" <typ: ClassType> <end: @R> => Box::new(ast::Expr {
-        kind: ast::ExprKind::NewObject { typ },
-        position: SourcePosition(array.position.0, end)
+        kind: ast::ExprKind::NewObject(typ),
+        position: SourcePosition(start, end)
     }),
 
     <start: @L> "new" <typ: PrimitiveType> "[" <expr: Expr> "]" <end: @R> => Box::new(ast::Expr {
@@ -405,7 +418,7 @@ Expr6: Box<ast::Expr> = {
             element_type: typ,
             size: expr,
         },
-        position: SourcePosition(array.position.0, end)
+        position: SourcePosition(start, end)
     }),
     
     // TODO: Method calls.
@@ -433,5 +446,5 @@ Expr7: Box<ast::Expr> = {
         kind: ast::ExprKind::Var(id.clone()),
         position: id.1,
     }),
-    // TODO: Parens
+    "(" <Expr> ")",
 };

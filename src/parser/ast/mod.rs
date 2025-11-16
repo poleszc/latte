@@ -10,7 +10,7 @@ pub use statements::*;
 pub use types::*;
 
 /// COMMON AST TYPES ///
-#[derive(Debug, PartialEq, Clone, Copy, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub struct SourcePosition(pub usize, pub usize);
 
 impl From<(usize, usize)> for SourcePosition {

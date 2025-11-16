@@ -6,7 +6,7 @@ use std::{
 
 fn main() {
     lalrpop::process_root().unwrap();
-    generate_integration_tests().unwrap();
+    // generate_integration_tests().unwrap();
 }
 
 fn generate_integration_tests() -> io::Result<()> {

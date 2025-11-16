@@ -1,4 +1,4 @@
-use super::ty::Type;
+use super::types::Type;
 use super::{Ident, SourcePosition};
 
 /// EXPRESSIONS ///
@@ -18,7 +18,7 @@ pub enum ExprKind {
     LiteralNull,
     App {
         callee: Box<Expr>,
-        args: Vec<Expr>,
+        args: Vec<Box<Expr>>,
     }, // obj.foo(1, 2)
     ArrayAccess {
         array: Box<Expr>,
@@ -43,7 +43,7 @@ pub enum ExprKind {
         lhs: Box<Expr>,
         rhs: Box<Expr>,
     },
-    NewObject(Ident), // new Animal
+    NewObject(Type), // new Animal
     NewArray {
         element_type: Type,
         size: Box<Expr>,
