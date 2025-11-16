@@ -1,14 +1,16 @@
+use serde::Serialize;
+
 use super::types::Type;
 use super::{Ident, SourcePosition};
 
 /// EXPRESSIONS ///
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub struct Expr {
     pub kind: ExprKind,
     pub position: SourcePosition,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum ExprKind {
     Var(Ident),
     LiteralInt(i32),
@@ -57,13 +59,13 @@ pub enum ExprKind {
     NullArr,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum UnaryOp {
     Neg, // -
     Not, // !
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum BinaryOp {
     // Arithmetic operators
     Add, // +

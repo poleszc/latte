@@ -1,11 +1,12 @@
 // File containing the token definitions for the custom lexer implementation.
 use logos::Logos;
-use std::{fmt, num::ParseIntError};
+use std::{fmt::{self, write}, num::ParseIntError};
 
 #[derive(Default, Debug, Clone, PartialEq)]
 pub enum LexicalError {
     InvalidInteger(ParseIntError),
     InvalidString,
+    UnterminatedComment,
     #[default]
     InvalidToken,
 }
@@ -16,6 +17,7 @@ impl fmt::Display for LexicalError {
             LexicalError::InvalidInteger(err) => write!(fmt, "Invalid integer literal: {}", err),
             LexicalError::InvalidString => write!(fmt, "Unterminated or invalid string literal"),
             LexicalError::InvalidToken => write!(fmt, "Invalid token"),
+            LexicalError::UnterminatedComment => write!(fmt, "Unterminated multi-line comment"),
         }
     }
 }
@@ -26,11 +28,8 @@ impl From<ParseIntError> for LexicalError {
     }
 }
 
-/// A callback function for logos to parse string literals.
-/// It removes the surrounding quotes and processes escape sequences.
 fn string_literal(lex: &mut logos::Lexer<Token>) -> Result<String, LexicalError> {
     let slice = lex.slice();
-    // Remove the surrounding quotes.
     let inner = &slice[1..slice.len() - 1];
 
     let mut s = String::with_capacity(inner.len());
@@ -45,11 +44,9 @@ fn string_literal(lex: &mut logos::Lexer<Token>) -> Result<String, LexicalError>
                 Some('\\') => s.push('\\'),
                 Some('"') => s.push('"'),
                 Some(_) => {
-                    // Latte spec might not support other escapes, but we can be lenient
-                    // or return an error. For now, let's assume an invalid escape.
                     return Err(LexicalError::InvalidString);
                 }
-                None => return Err(LexicalError::InvalidString), // Dangling backslash
+                None => return Err(LexicalError::InvalidString),
             }
         } else {
             s.push(c);
@@ -58,10 +55,23 @@ fn string_literal(lex: &mut logos::Lexer<Token>) -> Result<String, LexicalError>
     Ok(s)
 }
 
+fn skip_multiline_comment(lex: &mut logos::Lexer<Token>) -> Result<(), LexicalError> {
+    let remainder = lex.remainder();
+    
+    match remainder.find("*/") {
+        Some(end_pos) => {
+            lex.bump(end_pos + 2);
+            Ok(())
+        }
+        None => {
+            Err(LexicalError::UnterminatedComment)
+        }
+    }
+}
+
 #[derive(Logos, Clone, Debug, PartialEq)]
 #[logos(skip r"[ \t\n\f\r]+", error = LexicalError)] // Skip whitespaces.
 #[logos(skip r"//[^\n]*")] // Skip one line comments.
-#[logos(skip r"/\*([^*]|\*+[^*/])*\*+/")] // Skip multiline comments.
 pub enum Token {
     // Keywords.
     #[token("class")]
@@ -162,6 +172,8 @@ pub enum Token {
 
     #[regex(r#""([^"\\]|\\.)*""#, string_literal)]
     LiteralString(String),
+    #[token("/*", skip_multiline_comment)]
+    Comment,
 }
 
 impl fmt::Display for Token {
@@ -219,6 +231,7 @@ impl fmt::Display for Token {
             Token::Identifier(s) => write!(f, "identifier '{}'", s),
             Token::LiteralInteger(i) => write!(f, "integer literal '{}'", i),
             Token::LiteralString(s) => write!(f, "string literal \"{}\"", s.escape_default()),
+            Token::Comment => write!(f, "Comment")
         }
     }
 }

@@ -1,26 +1,39 @@
-// Custom lexer implementation using logos.
+// src/parser/lexer.rs
 use crate::parser::tokens::{LexicalError, Token};
-use logos::{Logos, SpannedIter};
+use logos::Logos;
 
-pub type Spanned<Tok, Loc, Error> = Result<(Loc, Tok, Loc), Error>;
-
-pub struct Lexer<'input> {
-    token_stream: SpannedIter<'input, Token>,
+pub struct LatteLexer<'input> {
+    lexer: logos::Lexer<'input, Token>,
 }
 
-impl<'input> Lexer<'input> {
+impl<'input> LatteLexer<'input> {
     pub fn new(input: &'input str) -> Self {
         Self {
-            token_stream: Token::lexer(input).spanned(),
+            lexer: Token::lexer(input),
         }
     }
 }
 
-impl<'input> Iterator for Lexer<'input> {
-    type Item = Spanned<Token, usize, LexicalError>;
+impl<'input> Iterator for LatteLexer<'input> {
+    type Item = Result<(usize, Token, usize), LexicalError>;
+
     fn next(&mut self) -> Option<Self::Item> {
-        self.token_stream
-            .next()
-            .map(|(token, span)| Ok((span.start, token?, span.end)))
+        match self.lexer.next() {
+            Some(Ok(token)) => {
+                let span = self.lexer.span();
+                Some(Ok((span.start, token, span.end)))
+            }
+            Some(Err(error)) => {
+                let span = self.lexer.span();
+                eprintln!(
+                    "LEXICAL ERROR: {:?} at span {:?} for slice '{}'",
+                    error,
+                    span,
+                    self.lexer.slice()
+                );
+                Some(Err(error))
+            }
+            None => None,
+        }
     }
 }

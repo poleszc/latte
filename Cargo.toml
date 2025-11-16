@@ -12,3 +12,5 @@ lalrpop-util = { version = "0.22.2", features = ["lexer", "unicode"] }
 ariadne = {version = "0.4.0", features = ["auto-color"]}
 logos = "0.14"
 tempfile = "3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

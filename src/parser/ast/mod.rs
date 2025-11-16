@@ -6,11 +6,12 @@ pub mod types;
 
 pub use definitions::*;
 pub use expressions::*;
+use serde::Serialize;
 pub use statements::*;
 pub use types::*;
 
 /// COMMON AST TYPES ///
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Serialize)]
 pub struct SourcePosition(pub usize, pub usize);
 
 impl From<(usize, usize)> for SourcePosition {
@@ -20,5 +21,5 @@ impl From<(usize, usize)> for SourcePosition {
 }
 
 /// Identifier
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
 pub struct Ident(pub String, pub SourcePosition);

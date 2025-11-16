@@ -84,12 +84,11 @@ Comma<T>: Vec<T> = {
 }
 
 CommaNonEmpty<T>: Vec<T> = {
-    <mut v:(<T> ",")+> <e:T?> => match e {
-        None => v,
-        Some(e) => { v.push(e); v }
+    <mut v:(<T> ",")*> <e:T> => {
+        v.push(e);
+        v
     }
 };
-
 ///////////////
 /// PROGRAM ///
 ///////////////
@@ -240,7 +239,7 @@ SimpleStmt: ast::Stmt = {
         kind: ast::StmtKind::Decl(t, items),
         position: SourcePosition(start, end),
     },
-    <start: @L> <target: Expr6> "=" <value: Expr> ";" <end: @R> => ast::Stmt {
+    <start: @L> <target: Expr7> "=" <value: Expr> ";" <end: @R> => ast::Stmt {
         kind: ast::StmtKind::Assign {
             target, 
             value,
@@ -251,15 +250,15 @@ SimpleStmt: ast::Stmt = {
         kind: ast::StmtKind::Return { expr },
         position: SourcePosition(start, end),
     },
-    <start: @L> <expr: Expr6> "++" ";" <end: @R> => ast::Stmt {
+    <start: @L> <expr: Expr7> "++" ";" <end: @R> => ast::Stmt {
         kind: ast::StmtKind::Incr(expr),
         position: SourcePosition(start, end),
     },
-    <start: @L> <expr: Expr6> "--" ";" <end: @R> => ast::Stmt {
+    <start: @L> <expr: Expr7> "--" ";" <end: @R> => ast::Stmt {
         kind: ast::StmtKind::Decr(expr),
         position: SourcePosition(start, end),
     },
-    <start: @L> <expr: Expr6> ";" <end: @R> => ast::Stmt {
+    <start: @L> <expr: Expr> ";" <end: @R> => ast::Stmt {
         kind: ast::StmtKind::Expr(expr),
         position: SourcePosition(start, end),
     },
@@ -340,7 +339,6 @@ Type: ast::Type = {
 ///////////////////
 /// EXPRESSIONS ///
 ///////////////////
-
 Expr: Box<ast::Expr> = {
     <l: Expr> "||" <r: Expr1> => make_binary(ast::BinaryOp::Or, l, r),
     Expr1,
@@ -378,14 +376,14 @@ Expr5: Box<ast::Expr> = {
     Expr6,
 };
 
-Expr51: Box<ast::Expr> = {
+Expr6: Box<ast::Expr> = {
     <start: @L> "-" <e: Expr6> <end: @R> => make_unary(start, ast::UnaryOp::Neg, e, end),
     <start: @L> "!" <e: Expr6> <end: @R> => make_unary(start, ast::UnaryOp::Not, e, end),
-    Expr6
+    Expr7
 }
 
-Expr6: Box<ast::Expr> = {
-    <callee: Expr6> "(" <args: Comma<Expr>> ")" <end: @R> => {
+Expr7: Box<ast::Expr> = {
+    <callee: Expr7> "(" <args: Comma<Expr>> ")" <end: @R> => {
         let start_pos = callee.position.0;
         Box::new(ast::Expr {
             kind: ast::ExprKind::App { callee, args },
@@ -393,7 +391,7 @@ Expr6: Box<ast::Expr> = {
         })
     },
     
-    <expr: Expr6> "." <field_name: PositionedIdent> => {
+    <expr: Expr7> "." <field_name: PositionedIdent> => {
         let start_pos = expr.position.0;
         Box::new(ast::Expr {
             kind: ast::ExprKind::FieldAccess { expr, field_name: field_name.clone() },
@@ -402,7 +400,7 @@ Expr6: Box<ast::Expr> = {
     },
     
     // TODO: For now removed cause I don't know how to handle it.
-    // <array: Expr6> "["<index: Expr> "]" <end: @R> => Box::new(ast::Expr {
+    // <array: Expr7> "["<index: Expr> "]" <end: @R> => Box::new(ast::Expr {
     //     let start_pos = expr.position.0;
     //     kind: ast::ExprKind::ArrayAccess { array, index },
     //     position: SourcePosition(start_pos, end)
@@ -422,10 +420,10 @@ Expr6: Box<ast::Expr> = {
     }),
     
     // TODO: Method calls.
-    Expr7,
+    Expr8,
 };
 
-Expr7: Box<ast::Expr> = {
+Expr8: Box<ast::Expr> = {
     <start: @L> <i: "integer_lit"> <end: @R> => Box::new(ast::Expr {
         kind: ast::ExprKind::LiteralInt(i),
         position: SourcePosition(start, end),
