@@ -48,10 +48,13 @@ pub enum ExprKind {
         element_type: Type,
         size: Box<Expr>,
     }, // new int[10]
+    // TODO: Remove that.
     Cast {
         target_type: Type,
-        expr: Expr<Expr>,
+        expr: Box<Expr>,
     }, // (list)null
+    NullObj,
+    NullArr,
 }
 
 #[derive(Debug, PartialEq, Clone)]
