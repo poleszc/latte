@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-pub struct InstantArgs {
+pub struct LatteArgs {
     /// Input file for the compiler.
     pub input_file: PathBuf,
     /// Run the program after successful compilation.

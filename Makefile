@@ -1,12 +1,6 @@
-PROJECT_NAME=instant-compiler
-
 all: build-all
 	
-build-all: build-jvm build-llvm
-
-build-jvm:
-	cargo build --bin insc_jvm --release
-	cp target/release/insc_jvm .
+build-all: build-llvm
 
 build-llvm:
 	cargo build --bin insc_llvm --release
@@ -20,8 +14,8 @@ clean-all: clean
 
 clean:
 	echo "Cleaning up..."
-	rm -rf insc_jvm insc_llvm
-	rm -rf tests/in/*.j tests/in/*.class tests/in/*.ll tests/in/*.bc
+	rm -rf insc_llvm
+	rm -rf tests/in/*.ll tests/in/*.bc
 
 .PHONY:
-	all build build-jvm build-llvm test clean clean-all
+	all build build-llvm test clean clean-all

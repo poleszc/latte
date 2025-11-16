@@ -40,7 +40,7 @@ pub enum Token {
     KWInt,
     #[token("string")]
     KWString,
-    #[token("bool")]
+    #[token("boolean")]
     KWBool,
     #[token("void")]
     KWVoid,

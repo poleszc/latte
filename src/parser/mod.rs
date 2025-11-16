@@ -2,9 +2,10 @@
 pub mod ast;
 pub mod lexer;
 pub mod tokens;
+pub mod utils;
 
 use crate::error::CompilerError;
-use crate::instant::ProgramParser;
+use crate::latte::ProgramParser;
 use lexer::Lexer;
 
 /// Main function performing the parsing. Initializes the lexer and the parser and returns the parsed AST.

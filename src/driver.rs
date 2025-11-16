@@ -3,7 +3,7 @@ use std::{fs, path::Path};
 use clap::Parser;
 
 use crate::{
-    InstantArgs,
+    LatteArgs,
     error::CompilerError,
     parser::{self, ast},
 };
@@ -13,11 +13,11 @@ use crate::{
 /// - Performs the parsing
 /// - Runs the compilation function(`backend_compile`).
 pub fn run_compiler<
-    F: FnOnce(&mut ast::Program, &Path, &str, &InstantArgs) -> Result<(), CompilerError>,
+    F: FnOnce(&mut ast::Program, &Path, &str, &LatteArgs) -> Result<(), CompilerError>,
 >(
     backend_compile: F,
 ) -> Result<(), CompilerError> {
-    let args = InstantArgs::parse();
+    let args = LatteArgs::parse();
 
     let output_dir = match args.output_dir {
         Some(ref path) => path.clone(),
@@ -34,6 +34,9 @@ pub fn run_compiler<
     let source_code = fs::read_to_string(input_file)?;
     let mut parsed_program = parser::parse(&source_code)?;
 
+    dbg!(parsed_program);
+
+
     let file_stem = args
         .output
         .as_deref()
@@ -45,7 +48,7 @@ pub fn run_compiler<
             ))
         })?;
 
-    backend_compile(&mut parsed_program, &output_dir, file_stem, &args)?;
+    // backend_compile(&mut parsed_program, &output_dir, file_stem, &args)?;
 
     Ok(())
 }

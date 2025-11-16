@@ -1,5 +1,6 @@
 use crate::parser::tokens::{Token, LexicalError};
-use crate::parser::ast;
+use crate::parser::utils;
+
 
 grammar;
 
@@ -9,9 +10,9 @@ extern {
       
     // Define token types from the custom lexer.
     enum Token {
-        Identifier(<String>) => Token::Identifier(<String>),
-        LiteralInteger(<i32>) => Token::LiteralInteger(<i32>),
-        LiteralString(<String>) => Token::LiteralString(<String>),
+        "ident" => Token::Identifier(<String>),
+        "integer_lit" => Token::LiteralInteger(<i32>),
+        "string_lit" => Token::LiteralString(<String>),
         
         // Keywords
         "class" => Token::KWClass,
@@ -68,8 +69,13 @@ extern {
 /// MISC ///
 ////////////
 PositionedIdent: ast::Ident = {
-    <start: @L> <i: Identifier> <end: @R> => ast::Ident(i, SourcePosition(start, end)),
+    <start: @L> <i: "ident"> <end: @R> => ast::Ident(i, SourcePosition(start, end)),
 };
+
+// Added to avoid shift-reduce conflicts.
+PositionedTypeIdent: ast::Ident = {
+    <ident: PositionedIdent> => ident,
+}
 
 Comma<T>: Vec<T> = {
     <v:(<T> ",")*> <e:T?> => match e {
@@ -81,10 +87,13 @@ Comma<T>: Vec<T> = {
     }
 }
 
+#[inline]
 CommaNonEmpty<T>: Vec<T> = {
-    <v:(<T> ",")*> <e:T> => { let mut v = v; v.push(e); v }
-}
-
+    <mut v:(<T> ",")+> <e:T?> => match e {
+        None => v,
+        Some(e) => { v.push(e); v }
+    }
+};
 ///////////////
 /// PROGRAM ///
 ///////////////
@@ -160,7 +169,14 @@ Block: ast::Block = {
     },
 }
 
+// https://en.wikipedia.org/wiki/Dangling_else
+// https://www.cs.cornell.edu/andru/javaspec/19.doc.html
 Stmt: ast::Stmt = {
+    UnmatchedStmt,
+    MatchedStmt,
+}
+
+MatchedStmt: ast::Stmt = {
     <start: @L> ";" <end: @R> => ast::Stmt {
         kind: ast::StmtKind::Empty,
         position: SourcePosition(start, end),
@@ -192,25 +208,31 @@ Stmt: ast::Stmt = {
         kind: ast::StmtKind::Decr(expr),
         position: SourcePosition(start, end),
     },
-    <start: @L> "if" "(" <cond: Expr> ")" <if_true: Stmt> <if_false: ("else" Stmt)?> <end: @R> => ast::Stmt {
+    <start: @L> <expr: Expr> ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Expr(expr),
+        position: SourcePosition(start, end),
+    },
+
+    <start: @L> "if" "(" <cond: Expr> ")" <if_true: MatchedStmt> "else" <if_false: MatchedStmt> <end: @R> => ast::Stmt {
         kind: ast::StmtKind::If{
             cond,
-            if_true,
-            if_false,
+            if_true: Box::new(if_true),
+            if_false: Some(Box::new(if_false)),
         },
         position: SourcePosition(start, end),
     },
-    <start: @L> "while" "(" <cond: Expr> ")" <body: Stmt> <end: @R> => ast::Stmt {
-        kind: ast::StmtKind::While{ cond, body },
+
+    <start: @L> "while" "(" <cond: Expr> ")" <body: MatchedStmt> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::While{ cond, body: Box::new(body) },
         position: SourcePosition(start, end),
     },
     // TODO: Add normal for loop.
-    <start: @L> "for" "(" <element_type: Type> <item_name: PositionedIdent> ":" <collection: Expr> ")" <body:Stmt> <end: @R> => ast::Stmt {
+    <start: @L> "for" "(" <element_type: Type> <item_name: PositionedIdent> ":" <collection: Expr> ")" <body: MatchedStmt> <end: @R> => ast::Stmt {
         kind: ast::StmtKind::ForEach{
             element_type,
             item_name,
             collection,
-            body,
+            body: Box::new(body),
         },
         position: SourcePosition(start, end),
     },
@@ -218,8 +240,42 @@ Stmt: ast::Stmt = {
         kind: ast::StmtKind::FuncDef(f),
         position: SourcePosition(start, end),
     },
-    <start: @L> <expr: Expr> ";" <end: @R> => ast::Stmt {
-        kind: ast::StmtKind::Expr(expr),
+};
+
+UnmatchedStmt: ast::Stmt = {
+    <start: @L> "if" "(" <cond: Expr> ")" <if_true: Stmt> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::If {
+            cond,
+            if_true: Box::new(if_true),
+            if_false: None,
+        },
+        position: SourcePosition(start, end),
+    },
+    
+    <start: @L> "if" "(" <cond: Expr> ")" <if_true: MatchedStmt> "else" <if_false: UnmatchedStmt> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::If {
+            cond,
+            if_true: Box::new(if_true),
+            if_false: Some(Box::new(if_false)),
+        },
+        position: SourcePosition(start, end),
+    },
+    
+    <start: @L> "while" "(" <cond: Expr> ")" <body: UnmatchedStmt> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::While { 
+            cond, 
+            body: Box::new(body) 
+        },
+        position: SourcePosition(start, end),
+    },
+    
+    <start: @L> "for" "(" <element_type: Type> <item_name: PositionedIdent> ":" <collection: Expr> ")" <body: UnmatchedStmt> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::ForEach {
+            element_type,
+            item_name,
+            collection,
+            body: Box::new(body),
+        },
         position: SourcePosition(start, end),
     },
 };
@@ -239,80 +295,31 @@ Item: ast::Item = {
 /////////////
 /// TYPES ///
 /////////////
+#[inline]
 Type: ast::Type = {
+    BaseType,
+    <start: @L> <base: BaseType> "[" "]" <end: @R> => {
+        ast::Type {
+            kind: ast::TypeKind::Array(Box::new(base)),
+            position: SourcePosition(start, end),
+        }
+    },
+};
+
+// Non-array types.
+BaseType: ast::Type = {
     <start: @L> "int" <end: @R> => ast::Type { kind: ast::TypeKind::Int, position: SourcePosition(start, end) },
     <start: @L> "string" <end: @R> => ast::Type { kind: ast::TypeKind::String, position: SourcePosition(start, end) },
     <start: @L> "boolean" <end: @R> => ast::Type { kind: ast::TypeKind::Bool, position: SourcePosition(start, end) },
     <start: @L> "void" <end: @R> => ast::Type { kind: ast::TypeKind::Void, position: SourcePosition(start, end) },
-    <start: @L> <id: PositionedIdent> <end: @R> => ast::Type { kind: ast::TypeKind::Class(id), position: SourcePosition(start, end) },
-    <start: @L> <t: Type> "[" "]" <end: @R> => ast::Type { kind: ast::TypeKind::Array(t), position: SourcePosition(start, end) },
+    <start: @L> <id: PositionedTypeIdent> <end: @R> => ast::Type { kind: ast::TypeKind::Class(id), position: SourcePosition(start, end) },
 };
-
 ///////////////////
 /// EXPRESSIONS ///
 ///////////////////
-Expr: Box<ast::Expr> = {
-    #[precedence(level="1")]
-    Atom,
 
-    #[precedence(level="2")] #[assoc(side="left")]
-    <callee: Expr> "(" <args: Comma<Expr>> ")" <end: @R> => Box::new(ast::Expr {
-        kind: ast::ExprKind::App { callee, args },
-        position: SourcePosition(callee.position.0, end),
-    }),
-    <object: Expr> "." <field_name: PositionedIdent> => Box::new(ast::Expr {
-            kind: ast::ExprKind::Field { object, field_name },
-            position: SourcePosition(object.position.0, field_name.1.1);
-    }),
-
-    <array: Expr> "[" <index: Expr> "]" <end: @R> => Box::new(ast::Expr {
-        kind: ast::ExprKind::ArrayAccess { array, index },
-        position: SourcePosition(array.position.0, end)
-    }),
-    <object: Expr> "." <method_name: PositionedIdent> "(" <args: Comma<Expr>> ")" <end: @R> => Box::new(ast::Expr {
-        kind: ast::ExprKind::Method { object, method_name, args },
-        position: SourcePosition(object.position.0, end)
-    }),
-
-    #[precedence(level="3")]
-    <start: @L> "-" <e: Expr> <end: @R> => make_unary(start, ast::UnaryOp::Neg, e, end),
-    <start: @L> "!" <e: Expr> <end: @R> => make_unary(start, ast::UnaryOp::Not, e, end),
-    <start: @L> "(" <t: Type> ")" <e: Expr> <end: @R> => Box::new(ast::Expr {
-        kind: ast::ExprKind::Cast {
-            target_type: t,
-            expr: e,
-        }
-        position: SourcePosition(start, end),
-    }),
-
-    #[precedence(level="4")] #[assoc(side="left")]
-    <l: Expr> "*" <r: Expr> => make_binary(ast::BinaryOp::Mul, l, r),
-    <l: Expr> "/" <r: Expr> => make_binary(ast::BinaryOp::Div, l, r),
-    <l: Expr> "%" <r: Expr> => make_binary(ast::BinaryOp::Mod, l, r),
-
-    #[precedence(level="5")] #[assoc(side="left")]
-    <l: Expr> "+" <r: Expr> => make_binary(ast::BinaryOp::Add, l, r),
-    <l: Expr> "-" <r: Expr> => make_binary(ast::BinaryOp::Sub, l, r),
-
-    #[precedence(level="6")] #[assoc(side="left")]
-    <l: Expr> "<" <r: Expr> => make_binary(ast::BinaryOp::Lt, l, r),
-    <l: Expr> "<=" <r: Expr> => make_binary(ast::BinaryOp::Le, l, r),
-    <l: Expr> ">" <r: Expr> => make_binary(ast::BinaryOp::Gt, l, r),
-    <l: Expr> ">=" <r: Expr> => make_binary(ast::BinaryOp::Ge, l, r),
-    
-    #[precedence(level="7")] #[assoc(side="left")]
-    <l: Expr> "==" <r: Expr> => make_binary(ast::BinaryOp::Eq, l, r),
-    <l: Expr> "!=" <r: Expr> => make_binary(ast::BinaryOp::Neq, l, r),
-
-    #[precedence(level="8")] #[assoc(side="left")]
-    <l: Expr> "&&" <r: Expr> => make_binary(ast::BinaryOp::And, l, r),
-
-    #[precedence(level="9")] #[assoc(side="left")]
-    <l: Expr> "||" <r: Expr> => make_binary(ast::BinaryOp::Or, l, r),
-};
-
-Atom: Box<ast::Expr> = {
-    <start: @L> <i: Integer> <end: @R> => Box::new(ast::Expr {
+PrimaryExpr: Box<ast::Expr> = {
+    <start: @L> <i: "integer_lit"> <end: @R> => Box::new(ast::Expr {
         kind: ast::ExprKind::LiteralInt(i),
         position: SourcePosition(start, end),
     }),
@@ -324,36 +331,31 @@ Atom: Box<ast::Expr> = {
         kind: ast::ExprKind::LiteralFalse,
         position: SourcePosition(start, end),
     }),
-    <start: @L> <s: StringLit> <end: @R> => Box::new(ast::Expr {
+    <start: @L> <s: "string_lit"> <end: @R> => Box::new(ast::Expr {
         kind: ast::ExprKind::LiteralString(s),
         position: SourcePosition(start, end),
     }),
-    <start: @L> "null" <end: @R> => Box::new(ast::Expr { 
+    <start: @L> "null" <end: @R> => Box::new(ast::Expr {
         kind: ast::ExprKind::LiteralNull,
         position: SourcePosition(start, end)
     }),
-    <id: PositionedIdent> => Box::new(ast::Expr {
-        kind: ast::ExprKind::Var(id.clone()), 
-        position: id.1,
-    }),
     <start: @L> "new" <t: Type> <size_opt: ("[" Expr "]")?> <end: @R> => {
         match size_opt {
-            // new int[10]
             Some(size) => Box::new(ast::Expr {
                 kind: ast::ExprKind::NewArray { element_type: t, size },
                 position: SourcePosition(start, end)
             }),
-            // new Animal
             None => {
                 if let ast::TypeKind::Class(id) = t.kind {
                     Box::new(ast::Expr {
                         kind: ast::ExprKind::NewObject(id),
                         position: SourcePosition(start, end)
                     })
-                } 
+                }
                 else {
+                     // TODO: Try to remove that.
                      Box::new(ast::Expr {
-                        kind: ast::ExprKind::NewObject(Ident("error".to_string(), t.position)),
+                        kind: ast::ExprKind::NewObject(ast::Ident("error".to_string(), t.position)),
                         position: SourcePosition(start, end)
                     })
                 }
@@ -366,16 +368,181 @@ Atom: Box<ast::Expr> = {
     }),
 };
 
-fn make_binary(op: ast::BinaryOp, lhs: Box<ast::Expr>, rhs: Box<ast::Expr>) -> Box<ast::Expr> {
-    Box::new(ast::Expr {
-        position: SourcePosition(lhs.position.0, rhs.position.1),
-        kind: ast::ExprKind::BinaryOp { op, lhs, rhs },
-    })
-}
+Expr: Box<ast::Expr> = {
+    #[precedence(level="0")]
+    PrimaryExpr,
 
-fn make_unary(start: usize, op: ast::UnaryOp, expr: Box<ast::Expr>, end: usize) -> Box<ast::Expr> {
-    Box::new(ast::Expr {
-        position: SourcePosition(start, end),
-        kind: ast::ExprKind::UnaryOp { op, expr },
-    })
-}
+    #[precedence(level="0")]
+    <id: PositionedIdent> => Box::new(ast::Expr {
+        kind: ast::ExprKind::Var(id.clone()),
+        position: id.1,
+    }),
+
+    #[precedence(level="1")] #[assoc(side="left")]
+    <callee: Expr> "(" <args: Comma<Expr>> ")" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::App { callee, args },
+        position: SourcePosition(callee.position.0, end),
+    }),
+    #[precedence(level="1")] #[assoc(side="left")]
+    <object: Expr> "." <field_name: PositionedIdent> => Box::new(ast::Expr {
+            kind: ast::ExprKind::Field { object, field_name: field_name.clone() },
+            position: SourcePosition(object.position.0, field_name.1.1)
+    }),
+    #[precedence(level="1")] #[assoc(side="left")]
+    <array: Expr> "[" <index: Expr> "]" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::ArrayAccess { array, index },
+        position: SourcePosition(array.position.0, end)
+    }),
+    #[precedence(level="1")] #[assoc(side="left")]
+    <object: Expr> "." <method_name: PositionedIdent> "(" <args: Comma<Expr>> ")" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::Method { object, method_name, args },
+        position: SourcePosition(object.position.0, end)
+    }),
+
+    #[precedence(level="2")]
+    <start: @L> "-" <e: Expr> <end: @R> => make_unary(start, ast::UnaryOp::Neg, e, end),
+    <start: @L> "!" <e: Expr> <end: @R> => make_unary(start, ast::UnaryOp::Not, e, end),
+
+    #[precedence(level="3")] #[assoc(side="left")]
+    <l: Expr> "*" <r: Expr> => make_binary(ast::BinaryOp::Mul, l, r),
+    <l: Expr> "/" <r: Expr> => make_binary(ast::BinaryOp::Div, l, r),
+    <l: Expr> "%" <r: Expr> => make_binary(ast::BinaryOp::Mod, l, r),
+
+    #[precedence(level="4")] #[assoc(side="left")]
+    <l: Expr> "+" <r: Expr> => make_binary(ast::BinaryOp::Add, l, r),
+    <l: Expr> "-" <r: Expr> => make_binary(ast::BinaryOp::Sub, l, r),
+
+    #[precedence(level="5")] #[assoc(side="left")]
+    <l: Expr> "<" <r: Expr> => make_binary(ast::BinaryOp::Lt, l, r),
+    <l: Expr> "<=" <r: Expr> => make_binary(ast::BinaryOp::Le, l, r),
+    <l: Expr> ">" <r: Expr> => make_binary(ast::BinaryOp::Gt, l, r),
+    <l: Expr> ">=" <r: Expr> => make_binary(ast::BinaryOp::Ge, l, r),
+
+    #[precedence(level="6")] #[assoc(side="left")]
+    <l: Expr> "==" <r: Expr> => make_binary(ast::BinaryOp::Eq, l, r),
+    <l: Expr> "!=" <r: Expr> => make_binary(ast::BinaryOp::Neq, l, r),
+
+    #[precedence(level="7")] #[assoc(side="left")]
+    <l: Expr> "&&" <r: Expr> => make_binary(ast::BinaryOp::And, l, r),
+
+    #[precedence(level="8")] #[assoc(side="left")]
+    <l: Expr> "||" <r: Expr> => make_binary(ast::BinaryOp::Or, l, r),
+};
+
+///////////////////
+/// EXPRESSIONS ///
+///////////////////
+// Expr: Box<ast::Expr> = {
+//     #[precedence(level="1")]
+//     Atom,
+
+//     #[precedence(level="2")] #[assoc(side="left")]
+//     <callee: Expr> "(" <args: Comma<Expr>> ")" <end: @R> => Box::new(ast::Expr {
+//         kind: ast::ExprKind::App { callee, args },
+//         position: SourcePosition(callee.position.0, end),
+//     }),
+//     <object: Expr> "." <field_name: PositionedIdent> => Box::new(ast::Expr {
+//             kind: ast::ExprKind::Field { object, field_name },
+//             position: SourcePosition(object.position.0, field_name.1.1);
+//     }),
+
+//     <array: Expr> "[" <index: Expr> "]" <end: @R> => Box::new(ast::Expr {
+//         kind: ast::ExprKind::ArrayAccess { array, index },
+//         position: SourcePosition(array.position.0, end)
+//     }),
+//     <object: Expr> "." <method_name: PositionedIdent> "(" <args: Comma<Expr>> ")" <end: @R> => Box::new(ast::Expr {
+//         kind: ast::ExprKind::Method { object, method_name, args },
+//         position: SourcePosition(object.position.0, end)
+//     }),
+
+//     #[precedence(level="3")]
+//     <start: @L> "-" <e: Expr> <end: @R> => make_unary(start, ast::UnaryOp::Neg, e, end),
+//     <start: @L> "!" <e: Expr> <end: @R> => make_unary(start, ast::UnaryOp::Not, e, end),
+//     // <start: @L> "(" <t: Type> ")" <e: Expr> <end: @R> => Box::new(ast::Expr {
+//     //     kind: ast::ExprKind::Cast {
+//     //         target_type: t,
+//     //         expr: e,
+//     //     }
+//     //     position: SourcePosition(start, end),
+//     // }),
+
+//     #[precedence(level="4")] #[assoc(side="left")]
+//     <l: Expr> "*" <r: Expr> => make_binary(ast::BinaryOp::Mul, l, r),
+//     <l: Expr> "/" <r: Expr> => make_binary(ast::BinaryOp::Div, l, r),
+//     <l: Expr> "%" <r: Expr> => make_binary(ast::BinaryOp::Mod, l, r),
+
+//     #[precedence(level="5")] #[assoc(side="left")]
+//     <l: Expr> "+" <r: Expr> => make_binary(ast::BinaryOp::Add, l, r),
+//     <l: Expr> "-" <r: Expr> => make_binary(ast::BinaryOp::Sub, l, r),
+
+//     #[precedence(level="6")] #[assoc(side="left")]
+//     <l: Expr> "<" <r: Expr> => make_binary(ast::BinaryOp::Lt, l, r),
+//     <l: Expr> "<=" <r: Expr> => make_binary(ast::BinaryOp::Le, l, r),
+//     <l: Expr> ">" <r: Expr> => make_binary(ast::BinaryOp::Gt, l, r),
+//     <l: Expr> ">=" <r: Expr> => make_binary(ast::BinaryOp::Ge, l, r),
+    
+//     #[precedence(level="7")] #[assoc(side="left")]
+//     <l: Expr> "==" <r: Expr> => make_binary(ast::BinaryOp::Eq, l, r),
+//     <l: Expr> "!=" <r: Expr> => make_binary(ast::BinaryOp::Neq, l, r),
+
+//     #[precedence(level="8")] #[assoc(side="left")]
+//     <l: Expr> "&&" <r: Expr> => make_binary(ast::BinaryOp::And, l, r),
+
+//     #[precedence(level="9")] #[assoc(side="left")]
+//     <l: Expr> "||" <r: Expr> => make_binary(ast::BinaryOp::Or, l, r),
+// };
+
+// Atom: Box<ast::Expr> = {
+//     <start: @L> <i: "integer_lit"> <end: @R> => Box::new(ast::Expr {
+//         kind: ast::ExprKind::LiteralInt(i),
+//         position: SourcePosition(start, end),
+//     }),
+//     <start: @L> "true" <end: @R> => Box::new(ast::Expr {
+//         kind: ast::ExprKind::LiteralTrue,
+//         position: SourcePosition(start, end),
+//     }),
+//     <start: @L> "false" <end: @R> => Box::new(ast::Expr {
+//         kind: ast::ExprKind::LiteralFalse,
+//         position: SourcePosition(start, end),
+//     }),
+//     <start: @L> <s: "string_lit"> <end: @R> => Box::new(ast::Expr {
+//         kind: ast::ExprKind::LiteralString(s),
+//         position: SourcePosition(start, end),
+//     }),
+//     <start: @L> "null" <end: @R> => Box::new(ast::Expr { 
+//         kind: ast::ExprKind::LiteralNull,
+//         position: SourcePosition(start, end)
+//     }),
+//     <id: PositionedIdent> => Box::new(ast::Expr {
+//         kind: ast::ExprKind::Var(id.clone()), 
+//         position: id.1,
+//     }),
+//     <start: @L> "new" <t: Type> <size_opt: ("[" Expr "]")?> <end: @R> => {
+//         match size_opt {
+//             // new int[10]
+//             Some(size) => Box::new(ast::Expr {
+//                 kind: ast::ExprKind::NewArray { element_type: t, size },
+//                 position: SourcePosition(start, end)
+//             }),
+//             // new Animal
+//             None => {
+//                 if let ast::TypeKind::Class(id) = t.kind {
+//                     Box::new(ast::Expr {
+//                         kind: ast::ExprKind::NewObject(id),
+//                         position: SourcePosition(start, end)
+//                     })
+//                 } 
+//                 else {
+//                      Box::new(ast::Expr {
+//                         kind: ast::ExprKind::NewObject(Ident("error".to_string(), t.position)),
+//                         position: SourcePosition(start, end)
+//                     })
+//                 }
+//             }
+//         }
+//     },
+//     <start: @L> "(" <e: Expr> ")" <end: @R> => Box::new(ast::Expr {
+//         kind: ast::ExprKind::Paren(e),
+//         position: SourcePosition(start, end)
+//     }),
+// };
