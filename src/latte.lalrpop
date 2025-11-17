@@ -2,10 +2,7 @@ use crate::parser::tokens::{Token, LexicalError};
 use crate::parser::utils;
 use crate::parser::ast;
 use crate::SourcePosition;
-use crate::latte::utils::make_unary;
-use crate::latte::utils::make_binary;
-
-
+use crate::latte::utils::{make_unary, make_binary};
 
 grammar;
 
@@ -14,10 +11,12 @@ extern {
     type Error = LexicalError;
       
     enum Token {
+        // Literals.
         "ident" => Token::Identifier(<String>),
         "integer_lit" => Token::LiteralInteger(<i32>),
         "string_lit" => Token::LiteralString(<String>),
         
+        // Keywords.
         "class" => Token::KWClass,
         "extends" => Token::KWExtends,
         "int" => Token::KWInt,
@@ -34,6 +33,7 @@ extern {
         "new" => Token::KWNew,
         "null" => Token::KWNull,
 
+        // Operators.
         "+" => Token::OPAdd,
         "-" => Token::OPSub,
         "*" => Token::OPMul,
@@ -52,6 +52,7 @@ extern {
         "++" => Token::OPIncr,
         "--" => Token::OPDecr,
 
+        // Misc.
         "(" => Token::LParen,
         ")" => Token::RParen,
         "{" => Token::LBrace,
@@ -422,8 +423,6 @@ Expr7: Box<ast::Expr> = {
         },
         position: SourcePosition(start, end)
     }),
-    
-    // TODO: Method calls.
     Expr8,
 };
 
@@ -448,6 +447,7 @@ Expr8: Box<ast::Expr> = {
         kind: ast::ExprKind::LiteralNull,
         position: SourcePosition(start, end),
     }),
+    // TODO: Add null casts.
     // <start: @L> "(" <typ: PositionedIdent> ")" "null" <end: @R> => Box::new(ast::Expr {
     //     kind: ast::ExprKind::TypedNull(ast::t),
     //     position: SourcePosition(start, end),

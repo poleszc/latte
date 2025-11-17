@@ -1,4 +1,7 @@
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use clap::Parser;
 
@@ -50,11 +53,18 @@ pub fn run_compiler<
     let json_string = serde_json::to_string_pretty(&parsed_program)
         .map_err(|e| CompilerError::Other(format!("Failed to serialize AST to JSON: {}", e)))?;
 
-    fs::write(&json_output_path, json_string)
-        .map_err(|e| CompilerError::Other(format!("Failed to write AST to file '{}': {}", json_output_path.display(), e)))?;
+    fs::write(&json_output_path, json_string).map_err(|e| {
+        CompilerError::Other(format!(
+            "Failed to write AST to file '{}': {}",
+            json_output_path.display(),
+            e
+        ))
+    })?;
 
-    println!("Successfully parsed and saved AST to {}", json_output_path.display());
-
+    println!(
+        "Successfully parsed and saved AST to {}",
+        json_output_path.display()
+    );
 
     let file_stem = args
         .output

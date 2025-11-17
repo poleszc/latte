@@ -1,3 +1,4 @@
+/// Utilities for the parsing stage. Mainly functions used by the lalrpop parser.
 use crate::SourcePosition;
 use crate::parser::ast;
 #[inline]

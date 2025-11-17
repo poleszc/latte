@@ -1,6 +1,6 @@
 // File containing the token definitions for the custom lexer implementation.
 use logos::Logos;
-use std::{fmt::{self, write}, num::ParseIntError};
+use std::{fmt, num::ParseIntError};
 
 #[derive(Default, Debug, Clone, PartialEq)]
 pub enum LexicalError {
@@ -57,15 +57,13 @@ fn string_literal(lex: &mut logos::Lexer<Token>) -> Result<String, LexicalError>
 
 fn skip_multiline_comment(lex: &mut logos::Lexer<Token>) -> Result<(), LexicalError> {
     let remainder = lex.remainder();
-    
+
     match remainder.find("*/") {
         Some(end_pos) => {
             lex.bump(end_pos + 2);
             Ok(())
         }
-        None => {
-            Err(LexicalError::UnterminatedComment)
-        }
+        None => Err(LexicalError::UnterminatedComment),
     }
 }
 
@@ -183,59 +181,59 @@ impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             // Keywords
-            Token::KWClass => write!(f, "'class'"),
-            Token::KWExtends => write!(f, "'extends'"),
-            Token::KWInt => write!(f, "'int'"),
-            Token::KWString => write!(f, "'string'"),
-            Token::KWBool => write!(f, "'boolean'"),
-            Token::KWVoid => write!(f, "'void'"),
-            Token::KWIf => write!(f, "'if'"),
-            Token::KWElse => write!(f, "'else'"),
-            Token::KWWhile => write!(f, "'while'"),
-            Token::KWFor => write!(f, "'for'"),
-            Token::KWReturn => write!(f, "'return'"),
-            Token::KWTrue => write!(f, "'true'"),
-            Token::KWFalse => write!(f, "'false'"),
-            Token::KWNew => write!(f, "'new'"),
-            Token::KWNull => write!(f, "'null'"),
+            Token::KWClass => write!(f, "class"),
+            Token::KWExtends => write!(f, "extends"),
+            Token::KWInt => write!(f, "int"),
+            Token::KWString => write!(f, "string"),
+            Token::KWBool => write!(f, "boolean"),
+            Token::KWVoid => write!(f, "void"),
+            Token::KWIf => write!(f, "if"),
+            Token::KWElse => write!(f, "else"),
+            Token::KWWhile => write!(f, "while"),
+            Token::KWFor => write!(f, "for"),
+            Token::KWReturn => write!(f, "return"),
+            Token::KWTrue => write!(f, "true"),
+            Token::KWFalse => write!(f, "false"),
+            Token::KWNew => write!(f, "new"),
+            Token::KWNull => write!(f, "null"),
 
             // Operators
-            Token::OPAdd => write!(f, "'+'"),
-            Token::OPSub => write!(f, "'-'"),
-            Token::OPMul => write!(f, "'*'"),
-            Token::OPDiv => write!(f, "'/'"),
-            Token::OPMod => write!(f, "'%'"),
-            Token::OPLt => write!(f, "'<'"),
-            Token::OPLe => write!(f, "'<='"),
-            Token::OPGt => write!(f, "'>'"),
-            Token::OPGe => write!(f, "'>='"),
-            Token::OPEq => write!(f, "'=='"),
-            Token::OPNeq => write!(f, "'!='"),
-            Token::OPAnd => write!(f, "'&&'"),
-            Token::OPOr => write!(f, "'||'"),
-            Token::OPNot => write!(f, "'!'"),
-            Token::OPAssign => write!(f, "'='"),
-            Token::OPIncr => write!(f, "'++'"),
-            Token::OPDecr => write!(f, "'--'"),
+            Token::OPAdd => write!(f, "+"),
+            Token::OPSub => write!(f, "-"),
+            Token::OPMul => write!(f, "*"),
+            Token::OPDiv => write!(f, "/"),
+            Token::OPMod => write!(f, "%"),
+            Token::OPLt => write!(f, "<"),
+            Token::OPLe => write!(f, "<="),
+            Token::OPGt => write!(f, ">"),
+            Token::OPGe => write!(f, ">="),
+            Token::OPEq => write!(f, "=="),
+            Token::OPNeq => write!(f, "!="),
+            Token::OPAnd => write!(f, "&&"),
+            Token::OPOr => write!(f, "||"),
+            Token::OPNot => write!(f, "!"),
+            Token::OPAssign => write!(f, "="),
+            Token::OPIncr => write!(f, "++"),
+            Token::OPDecr => write!(f, "--"),
 
             // Misc
-            Token::LParen => write!(f, "'('"),
-            Token::RParen => write!(f, "')'"),
-            Token::LBrace => write!(f, "'{{'"),
-            Token::RBrace => write!(f, "'}}'"),
-            Token::LBracket => write!(f, "'['"),
-            Token::RBracket => write!(f, "']'"),
-            Token::Semicolon => write!(f, "';'"),
-            Token::Colon => write!(f, "':'"),
-            Token::Comma => write!(f, "','"),
-            Token::Dot => write!(f, "'.'"),
+            Token::LParen => write!(f, "("),
+            Token::RParen => write!(f, ")"),
+            Token::LBrace => write!(f, "{{"),
+            Token::RBrace => write!(f, "}}"),
+            Token::LBracket => write!(f, "["),
+            Token::RBracket => write!(f, "]"),
+            Token::Semicolon => write!(f, ";"),
+            Token::Colon => write!(f, ":"),
+            Token::Comma => write!(f, ","),
+            Token::Dot => write!(f, "."),
             Token::Dims => write!(f, "[]"),
 
             // Identifiers and Literals
             Token::Identifier(s) => write!(f, "identifier '{}'", s),
             Token::LiteralInteger(i) => write!(f, "integer literal '{}'", i),
             Token::LiteralString(s) => write!(f, "string literal \"{}\"", s.escape_default()),
-            Token::Comment => write!(f, "Comment")
+            Token::Comment => write!(f, "Comment"),
         }
     }
 }

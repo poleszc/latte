@@ -17,6 +17,10 @@ clean:
 	rm -rf insc_llvm
 	rm -rf tests/good/*.ll tests/good/*.bc
 	rm -rf tests/good/*.json
+	rm -rf tests/extensions/arrays/*.json
+	rm -rf tests/extensions/objects/*.json
+	rm -rf tests/extensions/struct/*.json
+	rm -rf tests/extensions/virtual/*.json
 	rm -rf tests/bad/*.json
 
 .PHONY:
