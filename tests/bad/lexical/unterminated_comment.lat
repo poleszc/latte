@@ -1,0 +1,7 @@
+/* This is a comment that starts but never ends.
+   The rest of the file will be consumed by the lexer
+   as part of this comment.
+
+int main() {
+    return 0;
+}

@@ -1,0 +1,4 @@
+int main() {
+    string text = "An invalid sequence: \z is here.";
+    return 0;
+}

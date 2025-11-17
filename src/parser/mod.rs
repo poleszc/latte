@@ -4,7 +4,7 @@ pub mod lexer;
 pub mod tokens;
 pub mod utils;
 
-use crate::error::CompilerError;
+use crate::diagnostics::CompilerError;
 use crate::latte::ProgramParser;
 use crate::parser::lexer::LatteLexer;
 use crate::parser::tokens::Token;

@@ -1,5 +1,5 @@
-// src/parser/lexer.rs
-use crate::parser::tokens::{LexicalError, Token};
+use crate::diagnostics::LexicalError;
+use crate::parser::tokens::Token;
 use logos::Logos;
 
 pub struct LatteLexer<'input> {
@@ -15,7 +15,7 @@ impl<'input> LatteLexer<'input> {
 }
 
 impl<'input> Iterator for LatteLexer<'input> {
-    type Item = Result<(usize, Token, usize), LexicalError>;
+    type Item = Result<(usize, Token, usize), (LexicalError, std::ops::Range<usize>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.lexer.next() {
@@ -25,13 +25,7 @@ impl<'input> Iterator for LatteLexer<'input> {
             }
             Some(Err(error)) => {
                 let span = self.lexer.span();
-                eprintln!(
-                    "LEXICAL ERROR: {:?} at span {:?} for slice '{}'",
-                    error,
-                    span,
-                    self.lexer.slice()
-                );
-                Some(Err(error))
+                Some(Err((error, span)))
             }
             None => None,
         }

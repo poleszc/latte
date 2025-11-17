@@ -1,0 +1,4 @@
+int main() {
+    string path = "brr\";
+    return 0;
+}

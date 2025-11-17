@@ -6,13 +6,11 @@ lalrpop_mod!(pub latte);
 pub mod config;
 pub mod diagnostics;
 pub mod driver;
-pub mod error;
 pub mod llvm;
 pub mod parser;
 
 pub use crate::config::LatteArgs;
-pub use crate::diagnostics::report_error;
+pub use crate::diagnostics::{CompilerError, report_compiler_error};
 pub use crate::driver::run_compiler;
-pub use crate::error::CompilerError;
 pub use crate::latte::ProgramParser;
 pub use crate::parser::ast::SourcePosition;

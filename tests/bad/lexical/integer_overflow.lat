@@ -1,0 +1,4 @@
+int main() {
+    int big_number = 2147483648;
+    return 0;
+}

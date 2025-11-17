@@ -7,7 +7,7 @@ use clap::Parser;
 
 use crate::{
     LatteArgs,
-    error::CompilerError,
+    diagnostics::CompilerError,
     parser::{self, ast},
 };
 
