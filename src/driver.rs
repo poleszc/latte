@@ -35,7 +35,7 @@ pub fn run_compiler<
 
     let input_file = &args.input_file;
     let source_code = fs::read_to_string(input_file)?;
-    let mut parsed_program = parser::parse(&source_code)?;
+    let parsed_program = parser::parse(&source_code)?;
 
     let mut json_output_path = PathBuf::from(&output_dir);
     let file_stem = args

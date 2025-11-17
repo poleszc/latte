@@ -20,3 +20,4 @@ pub enum TypeKind {
     // TODO: Think about that. Maybe it will be used internally by the type checker.
     Fun(Box<Type>, Vec<Type>),
 }
+// TODO: to_string for errors

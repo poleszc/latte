@@ -128,6 +128,10 @@ pub enum SemanticError {
         name: String,
         position: SourcePosition,
     },
+    UndefinedClass {
+        name: String,
+        position: SourcePosition,
+    },
     DuplicateSymbol {
         name: String,
         position: SourcePosition,
@@ -161,6 +165,7 @@ pub enum SemanticError {
     ZeroDivision {
         position: SourcePosition,
     },
+    UndefinedMain,
     // TODO: Class errors.
 }
 // TODO: Maybe not needed. Remove?
@@ -172,6 +177,9 @@ impl fmt::Display for SemanticError {
             }
             SemanticError::UndefinedFunction { name, .. } => {
                 write!(fmt, "Undefined function '{}'", name)
+            }
+            SemanticError::UndefinedClass { name, .. } => {
+                write!(fmt, "Undefined class '{}'", name)
             }
             SemanticError::DuplicateSymbol { name, .. } => {
                 write!(fmt, "Symbol '{}' is already defined", name)
@@ -196,6 +204,7 @@ impl fmt::Display for SemanticError {
                 write!(fmt, "Invalid left-hand side of assignment")
             }
             SemanticError::ZeroDivision { .. } => write!(fmt, "Division by a zero literal"),
+            SemanticError::UndefinedMain => write!(fmt, "Program doesn't provide a `main` function"),
         }
     }
 }

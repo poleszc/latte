@@ -74,7 +74,10 @@ extern {
 /// MISC ///
 ////////////
 PositionedIdent: ast::Ident = {
-    <start: @L> <i: "Identifier"> <end: @R> => ast::Ident(i, SourcePosition(start, end)),
+    <start: @L> <i: "Identifier"> <end: @R> => ast::Ident {
+        name: i,
+        position: SourcePosition(start, end)
+    },
 };
 
 Comma<T>: Vec<T> = {
@@ -400,7 +403,7 @@ Expr7: Box<ast::Expr> = {
         let start_pos = expr.position.0;
         Box::new(ast::Expr {
             kind: ast::ExprKind::FieldAccess { expr, field_name: field_name.clone() },
-            position: SourcePosition(start_pos, field_name.1.1)
+            position: SourcePosition(start_pos, field_name.position.1)
         })
     },
     
@@ -455,7 +458,7 @@ Expr8: Box<ast::Expr> = {
     // }),
     <id: PositionedIdent> => Box::new(ast::Expr {
         kind: ast::ExprKind::Var(id.clone()),
-        position: id.1,
+        position: id.position,
     }),
     "(" <Expr> ")",
 };

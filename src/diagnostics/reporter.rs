@@ -99,6 +99,11 @@ impl Diagnostic {
                     .with_label(position.0..position.1, "Function not found")
                     .with_note("This function was not declared in the current scope")
             }
+            SemanticError::UndefinedClass { name, position } => {
+                Diagnostic::error(format!("Undefined class '{}'", name))
+                    .with_label(position.0..position.1, "Class not found")
+                    .with_note("This class was not declared in the current scope")
+            }
             SemanticError::DuplicateSymbol {
                 name,
                 position,
@@ -178,6 +183,12 @@ impl Diagnostic {
                 .with_note("Division by zero is undefined and will cause a runtime error")
                 .with_help("Use a non-zero value")
             },
+            SemanticError::UndefinedMain => {
+                Diagnostic::error("This program doesn't provide a `main` function")
+                .with_label(0..0, "No `main` function in this program")
+                .with_help("Provide a definition for a `main` function")
+                
+            }
         }
     }
 }
