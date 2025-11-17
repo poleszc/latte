@@ -94,10 +94,90 @@ impl Diagnostic {
                     .with_label(position.0..position.1, "Variable not found")
                     .with_note("This variable was not declared in the current scope")
             }
-            SemanticError::ZeroDivision { position } => Diagnostic::error("Division by zero")
+            SemanticError::UndefinedFunction { name, position } => {
+                Diagnostic::error(format!("Undefined function '{}'", name))
+                    .with_label(position.0..position.1, "Function not found")
+                    .with_note("This function was not declared in the current scope")
+            }
+            SemanticError::DuplicateSymbol {
+                name,
+                position,
+                previous_position,
+            } => {
+                Diagnostic::error(format!("Symbol '{}' is already defined", name))
+                .with_label(position.0..position.1, "Cannot redefine this symbol")
+                .with_secondary_label(
+                    previous_position.0..previous_position.1,
+                    format!("'{}' was originally defined here", name),
+                )
+                .with_help("Consider renaming this variable or using a different scope.")
+            },
+            SemanticError::TypeMismatch {
+                expected,
+                found,
+                position,
+            } => {
+                Diagnostic::error("Type mismatch")
+                .with_label(
+                    position.0..position.1,
+                    format!("Expected type `{}`, but found type `{}`", expected, found),
+                )
+                .with_note(format!(
+                    "Expected an expression of type `{}` here.",
+                    expected
+                ))
+            },
+            SemanticError::InvalidOperands {
+                operator,
+                operands,
+                position,
+            } => {
+                let op_str = operands.join(", ");
+                Diagnostic::error(format!("Invalid operands for operator '{}'", operator))
+                    .with_label(position.0..position.1, "Cannot apply this operator")
+                    .with_note(format!(
+                        "Operator '{}' is not defined for the type(s): {}",
+                        operator, op_str
+                    ))
+            },
+            SemanticError::WrongNumberOfArguments {
+                name,
+                expected,
+                found,
+                call_position,
+                function_position,
+            } => {
+                // TODO: Add where was the function defined.
+                Diagnostic::error(format!("Wrong number of arguments for function '{}'", name))
+                    .with_label(
+                        call_position.0..call_position.1,
+                        format!("Expected {} argument(s), but found {}", expected, found),
+                    )
+            }
+            SemanticError::InvalidReturnValue {
+                expected,
+                found,
+                position,
+            } => {
+            Diagnostic::error("Invalid return value").with_label(
+                position.0..position.1,
+                format!(
+                    "This function should return `{}`, but it returns `{}`",
+                    expected, found
+                ),
+            )
+            },
+            SemanticError::InvalidLValue { position } => {
+                Diagnostic::error("Invalid assignment")
+                    .with_label(position.0..position.1, "This expression cannot be assigned to")
+                    .with_help("Only variables, array elements, and object fields can be targets of an assignment.")
+            },
+            SemanticError::ZeroDivision { position } => {
+                Diagnostic::error("Division by zero")
                 .with_label(position.0..position.1, "Division by zero literal detected")
                 .with_note("Division by zero is undefined and will cause a runtime error")
-                .with_help("Use a non-zero value"),
+                .with_help("Use a non-zero value")
+            },
         }
     }
 }

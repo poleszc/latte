@@ -8,6 +8,7 @@ pub mod diagnostics;
 pub mod driver;
 pub mod llvm;
 pub mod parser;
+pub mod semantics;
 
 pub use crate::config::LatteArgs;
 pub use crate::diagnostics::{CompilerError, report_compiler_error};

@@ -21,5 +21,5 @@ impl From<(usize, usize)> for SourcePosition {
 }
 
 /// Identifier
-#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Hash)]
 pub struct Ident(pub String, pub SourcePosition);

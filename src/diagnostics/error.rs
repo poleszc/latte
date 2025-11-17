@@ -124,20 +124,78 @@ pub enum SemanticError {
         name: String,
         position: SourcePosition,
     },
+    UndefinedFunction {
+        name: String,
+        position: SourcePosition,
+    },
+    DuplicateSymbol {
+        name: String,
+        position: SourcePosition,
+        previous_position: SourcePosition,
+    },
+    TypeMismatch {
+        expected: String,
+        found: String,
+        position: SourcePosition,
+    },
+    InvalidOperands {
+        operator: String,
+        operands: Vec<String>,
+        position: SourcePosition,
+    },
+    WrongNumberOfArguments {
+        name: String,
+        expected: usize,
+        found: usize,
+        call_position: SourcePosition,
+        function_position: SourcePosition,
+    },
+    InvalidReturnValue {
+        expected: String,
+        found: String,
+        position: SourcePosition,
+    },
+    InvalidLValue {
+        position: SourcePosition,
+    },
     ZeroDivision {
         position: SourcePosition,
     },
+    // TODO: Class errors.
 }
-
+// TODO: Maybe not needed. Remove?
 impl fmt::Display for SemanticError {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SemanticError::UndefinedVariable { name, .. } => {
                 write!(fmt, "Undefined variable '{}'", name)
             }
-            SemanticError::ZeroDivision { .. } => {
-                write!(fmt, "Division by zero")
+            SemanticError::UndefinedFunction { name, .. } => {
+                write!(fmt, "Undefined function '{}'", name)
             }
+            SemanticError::DuplicateSymbol { name, .. } => {
+                write!(fmt, "Symbol '{}' is already defined", name)
+            }
+            SemanticError::TypeMismatch {
+                expected, found, ..
+            } => write!(
+                fmt,
+                "Mismatched types: expected {}, found {}",
+                expected, found
+            ),
+            SemanticError::InvalidOperands { operator, .. } => {
+                write!(fmt, "Invalid operands for operator '{}'", operator)
+            }
+            SemanticError::WrongNumberOfArguments { name, .. } => {
+                write!(fmt, "Wrong number of arguments for function '{}'", name)
+            }
+            SemanticError::InvalidReturnValue { .. } => {
+                write!(fmt, "Invalid return value for function")
+            }
+            SemanticError::InvalidLValue { .. } => {
+                write!(fmt, "Invalid left-hand side of assignment")
+            }
+            SemanticError::ZeroDivision { .. } => write!(fmt, "Division by a zero literal"),
         }
     }
 }
