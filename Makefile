@@ -22,6 +22,7 @@ clean:
 	rm -rf tests/extensions/struct/*.json
 	rm -rf tests/extensions/virtual/*.json
 	rm -rf tests/bad/*.json
+	rm -rf tests/bad/lexical/*.json
 
 .PHONY:
 	all build build-llvm test clean clean-all

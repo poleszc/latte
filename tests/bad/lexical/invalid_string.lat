@@ -1,0 +1,4 @@
+int main() {
+    string message = "this string has no end;
+    return 1;
+}

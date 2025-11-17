@@ -1,4 +1,5 @@
-use crate::parser::tokens::{Token, LexicalError};
+use crate::parser::tokens::Token;
+use crate::diagnostics::LexicalError;
 use crate::parser::utils;
 use crate::parser::ast;
 use crate::SourcePosition;
@@ -8,11 +9,11 @@ grammar;
 
 extern {
     type Location = usize;
-    type Error = LexicalError;
+    type Error = (LexicalError, std::ops::Range<usize>);
       
     enum Token {
         // Literals.
-        "ident" => Token::Identifier(<String>),
+        "Identifier" => Token::Identifier(<String>),
         "integer_lit" => Token::LiteralInteger(<i32>),
         "string_lit" => Token::LiteralString(<String>),
         
@@ -73,7 +74,7 @@ extern {
 /// MISC ///
 ////////////
 PositionedIdent: ast::Ident = {
-    <start: @L> <i: "ident"> <end: @R> => ast::Ident(i, SourcePosition(start, end)),
+    <start: @L> <i: "Identifier"> <end: @R> => ast::Ident(i, SourcePosition(start, end)),
 };
 
 Comma<T>: Vec<T> = {

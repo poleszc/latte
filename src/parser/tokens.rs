@@ -1,33 +1,9 @@
 // File containing the token definitions for the custom lexer implementation.
+use crate::diagnostics::LexicalError;
 use logos::Logos;
-use std::{fmt, num::ParseIntError};
+use std::fmt;
 
-#[derive(Default, Debug, Clone, PartialEq)]
-pub enum LexicalError {
-    InvalidInteger(ParseIntError),
-    InvalidString,
-    UnterminatedComment,
-    #[default]
-    InvalidToken,
-}
-
-impl fmt::Display for LexicalError {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            LexicalError::InvalidInteger(err) => write!(fmt, "Invalid integer literal: {}", err),
-            LexicalError::InvalidString => write!(fmt, "Unterminated or invalid string literal"),
-            LexicalError::InvalidToken => write!(fmt, "Invalid token"),
-            LexicalError::UnterminatedComment => write!(fmt, "Unterminated multi-line comment"),
-        }
-    }
-}
-
-impl From<ParseIntError> for LexicalError {
-    fn from(err: ParseIntError) -> Self {
-        LexicalError::InvalidInteger(err)
-    }
-}
-
+/// Lexes a string literal.
 fn string_literal(lex: &mut logos::Lexer<Token>) -> Result<String, LexicalError> {
     let slice = lex.slice();
     let inner = &slice[1..slice.len() - 1];
@@ -55,7 +31,8 @@ fn string_literal(lex: &mut logos::Lexer<Token>) -> Result<String, LexicalError>
     Ok(s)
 }
 
-fn skip_multiline_comment(lex: &mut logos::Lexer<Token>) -> Result<(), LexicalError> {
+/// Lexes a multiline comment.
+fn multiline_comment(lex: &mut logos::Lexer<Token>) -> Result<(), LexicalError> {
     let remainder = lex.remainder();
 
     match remainder.find("*/") {
@@ -69,8 +46,8 @@ fn skip_multiline_comment(lex: &mut logos::Lexer<Token>) -> Result<(), LexicalEr
 
 #[derive(Logos, Clone, Debug, PartialEq)]
 #[logos(skip r"[ \t\n\f\r]+", error = LexicalError)] // Skip whitespaces.
-#[logos(skip r"//[^\n]*")] // Skip one line comments.
-#[logos(skip r"#[^\n]*")] // Skip one line comments.
+#[logos(skip r"//[^\n]*")] // Skip one line comments starting with //.
+#[logos(skip r"#[^\n]*")] // Skip one line comments starting with #.
 pub enum Token {
     // Keywords.
     #[token("class")]
@@ -173,7 +150,7 @@ pub enum Token {
 
     #[regex(r#""([^"\\]|\\.)*""#, string_literal)]
     LiteralString(String),
-    #[token("/*", skip_multiline_comment)]
+    #[token("/*", multiline_comment)]
     Comment,
 }
 
