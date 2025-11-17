@@ -166,6 +166,15 @@ pub enum SemanticError {
         position: SourcePosition,
     },
     UndefinedMain,
+    WrongMainReturnType {
+        expected: String,
+        found: String,
+        position: SourcePosition,
+    },
+    WrongNumberOfMainArguments {
+        found: usize,
+        position: SourcePosition,
+    }
     // TODO: Class errors.
 }
 // TODO: Maybe not needed. Remove?
