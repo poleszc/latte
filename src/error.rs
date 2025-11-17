@@ -2,6 +2,7 @@
 use crate::parser::ast::SourcePosition;
 use crate::parser::tokens::{LexicalError, Token};
 use lalrpop_util::ParseError;
+use logos::Span;
 
 /// Errors returned on the lowering stage.
 #[derive(Debug)]

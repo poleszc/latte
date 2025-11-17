@@ -1,0 +1,460 @@
+use crate::parser::tokens::{Token, LexicalError};
+use crate::parser::utils;
+use crate::parser::ast;
+use crate::SourcePosition;
+use crate::latte::utils::{make_unary, make_binary};
+
+grammar;
+
+extern {
+    type Location = usize;
+    type Error = LexicalError;
+      
+    enum Token {
+        // Literals.
+        "ident" => Token::Identifier(<String>),
+        "integer_lit" => Token::LiteralInteger(<i32>),
+        "string_lit" => Token::LiteralString(<String>),
+        
+        // Keywords.
+        "class" => Token::KWClass,
+        "extends" => Token::KWExtends,
+        "int" => Token::KWInt,
+        "string" => Token::KWString,
+        "boolean" => Token::KWBool,
+        "void" => Token::KWVoid,
+        "if" => Token::KWIf,
+        "else" => Token::KWElse,
+        "while" => Token::KWWhile,
+        "for" => Token::KWFor,
+        "return" => Token::KWReturn,
+        "true" => Token::KWTrue,
+        "false" => Token::KWFalse,
+        "new" => Token::KWNew,
+        "null" => Token::KWNull,
+
+        // Operators.
+        "+" => Token::OPAdd,
+        "-" => Token::OPSub,
+        "*" => Token::OPMul,
+        "/" => Token::OPDiv,
+        "%" => Token::OPMod,
+        "<" => Token::OPLt,
+        "<=" => Token::OPLe,
+        ">" => Token::OPGt,
+        ">=" => Token::OPGe,
+        "==" => Token::OPEq,
+        "!=" => Token::OPNeq,
+        "&&" => Token::OPAnd,
+        "||" => Token::OPOr,
+        "!" => Token::OPNot,
+        "=" => Token::OPAssign,
+        "++" => Token::OPIncr,
+        "--" => Token::OPDecr,
+
+        // Misc.
+        "(" => Token::LParen,
+        ")" => Token::RParen,
+        "{" => Token::LBrace,
+        "}" => Token::RBrace,
+        "[" => Token::LBracket,
+        "]" => Token::RBracket,
+        ";" => Token::Semicolon,
+        ":" => Token::Colon,
+        "," => Token::Comma,
+        "." => Token::Dot,
+        // TODO: This is an ugly hack to distinguish between array access 
+        // and array type. int[ ] won't work. Try to fix that.
+        "[]" => Token::Dims,
+    }
+}
+
+////////////
+/// MISC ///
+////////////
+PositionedIdent: ast::Ident = {
+    <start: @L> <i: "ident"> <end: @R> => ast::Ident(i, SourcePosition(start, end)),
+};
+
+Comma<T>: Vec<T> = {
+    <v:(<T> ",")*> <e:T?> => match e {
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
+}
+
+CommaNonEmpty<T>: Vec<T> = {
+    <mut v:(<T> ",")*> <e:T> => {
+        v.push(e);
+        v
+    }
+};
+///////////////
+/// PROGRAM ///
+///////////////
+pub Program: ast::Program = {
+    <start: @L> <defs: TopDef*> <end: @R> => ast::Program {
+        defs,
+        position: SourcePosition(start, end),
+    }
+};
+
+/////////////////////////////
+/// TOP-LEVEL DEFINITIONS ///
+/////////////////////////////
+TopDef: ast::TopDef = {
+    <start: @L> <f: FuncDef> <end: @R> => ast::TopDef {
+        kind: ast::TopDefKind::Func(f),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <c: ClassDef> <end: @R> => ast::TopDef {
+        kind: ast::TopDefKind::Class(c),
+        position: SourcePosition(start, end),
+    },
+};
+
+FuncDef: ast::FuncDef = {
+    <start: @L> <return_type: Type> <name: PositionedIdent> "(" <args: Comma<Arg>> ")" <body: Block> <end: @R> => ast::FuncDef {
+        name,
+        return_type,
+        args,
+        body,
+        position: SourcePosition(start, end),
+    },
+};
+
+Arg: ast::Arg = {
+    <start: @L> <arg_type: Type> <name: PositionedIdent> <end: @R> => ast::Arg {
+        arg_type,
+        name,
+        position: SourcePosition(start, end),
+    }
+};
+
+ClassDef: ast::ClassDef = {
+    <start: @L> "class" <name: PositionedIdent> <extends: ("extends" <PositionedIdent>)?> "{" <entries: ClassEntry*> "}" <end: @R> => ast::ClassDef {
+        name,
+        extends,
+        entries,
+        position: SourcePosition(start, end),
+    },
+}
+
+ClassEntry: ast::ClassEntry = {
+    <start: @L> <typ: Type> <name: PositionedIdent> ";" <end: @R> => ast::ClassEntry {
+        kind: ast::ClassEntryKind::Field(typ, name),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <method: FuncDef> <end: @R> => ast::ClassEntry {
+        kind: ast::ClassEntryKind::Method(method),
+        position: SourcePosition(start, end),
+    },
+}
+
+///////////////////
+/// STATEMENTS ///
+//////////////////
+Block: ast::Block = {
+    <start: @L> "{" <stmts: Stmt*> "}" <end: @R> => ast::Block {
+        stmts,
+        position: SourcePosition(start, end),
+    },
+}
+
+Stmt: ast::Stmt = {
+    OpenStmt,
+    ClosedStmt,
+}
+
+ClosedStmt: ast::Stmt = {
+    SimpleStmt,
+    <start: @L> "if" "(" <cond: Expr> ")" <if_true: ClosedStmt> "else" <if_false: ClosedStmt> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::If{
+            cond,
+            if_true: Box::new(if_true),
+            if_false: Some(Box::new(if_false)),
+        },
+        position: SourcePosition(start, end),
+    },
+    <start: @L> "while" "(" <cond: Expr> ")" <body: ClosedStmt> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::While{ cond, body: Box::new(body) },
+        position: SourcePosition(start, end),
+    },
+    <start: @L> "for" "(" <element_type: Type> <item_name: PositionedIdent> ":" <collection: Expr> ")" <body: ClosedStmt> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::ForEach{
+            element_type,
+            item_name,
+            collection,
+            body: Box::new(body),
+        },
+        position: SourcePosition(start, end),
+    },
+};
+
+OpenStmt: ast::Stmt = {
+    <start: @L> "if" "(" <cond: Expr> ")" <if_true: Stmt> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::If {
+            cond,
+            if_true: Box::new(if_true),
+            if_false: None,
+        },
+        position: SourcePosition(start, end),
+    },
+    <start: @L> "if" "(" <cond: Expr> ")" <if_true: ClosedStmt> "else" <if_false: OpenStmt> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::If {
+            cond,
+            if_true: Box::new(if_true),
+            if_false: Some(Box::new(if_false)),
+        },
+        position: SourcePosition(start, end),
+    },
+    <start: @L> "while" "(" <cond: Expr> ")" <body: OpenStmt> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::While { 
+            cond, 
+            body: Box::new(body) 
+        },
+        position: SourcePosition(start, end),
+    },
+    <start: @L> "for" "(" <element_type: Type> <item_name: PositionedIdent> ":" <collection: Expr> ")" <body: OpenStmt> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::ForEach {
+            element_type,
+            item_name,
+            collection,
+            body: Box::new(body),
+        },
+        position: SourcePosition(start, end),
+    },
+};
+
+SimpleStmt: ast::Stmt = {
+    <start: @L> ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Empty,
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <block: Block> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Block(block),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <t: Type> <items: CommaNonEmpty<DeclItem>> ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Decl(t, items),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <target: Expr7> "=" <value: Expr> ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Assign {
+            target, 
+            value,
+        },
+        position: SourcePosition(start, end),
+    },
+    <start: @L> "return" <expr: Expr?> ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Return { expr },
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <expr: Expr7> "++" ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Incr(expr),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <expr: Expr7> "--" ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Decr(expr),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <expr: Expr> ";" <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::Expr(expr),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <f: FuncDef> <end: @R> => ast::Stmt {
+        kind: ast::StmtKind::FuncDef(f),
+        position: SourcePosition(start, end),
+    },
+};
+
+DeclItem: ast::Item = {
+    <start: @L> <name: PositionedIdent> <end: @R> => ast::Item {
+        kind: ast::ItemKind::NoInit(name),
+        position: SourcePosition(start, end),
+    },
+    <start: @L> <name: PositionedIdent> "=" <expr: Expr> <end: @R> => ast::Item {
+        kind: ast::ItemKind::Init(name, expr),
+        position: SourcePosition(start, end),
+    },
+};
+
+/////////////
+/// TYPES ///
+/////////////
+PrimitiveType: ast::Type = {
+    <start: @L> "int" <end: @R> => ast::Type {
+        kind: ast::TypeKind::Int,
+        position: SourcePosition(start, end)
+    },
+    <start: @L> "string" <end: @R> => ast::Type {
+        kind: ast::TypeKind::String,
+        position: SourcePosition(start, end)
+    },
+    <start: @L> "boolean" <end: @R> => ast::Type {
+        kind: ast::TypeKind::Bool,
+        position: SourcePosition(start, end)
+    },
+    // TODO: Array of voids is possible. Check for that in frontend.
+    <start: @L> "void" <end: @R> => ast::Type {
+        kind: ast::TypeKind::Void,
+        position: SourcePosition(start, end)
+    },
+};
+
+ClassType: ast::Type = {
+    <start: @L> <id: PositionedIdent> <end: @R> => ast::Type {
+        kind: ast::TypeKind::Class(id),
+        position: SourcePosition(start, end)
+    },
+};
+
+ComplexType: ast::Type = {
+    ClassType,
+    ArrayType,
+};
+
+ArrayType: ast::Type = {
+    <base: PrimitiveType> "[]" <end: @R> => {
+        let start_pos = base.position.0;
+        ast::Type {
+            kind: ast::TypeKind::Array(Box::new(base)),
+            position: SourcePosition(start_pos, end),
+        }
+    },
+    <base: ClassType> "[]" <end: @R> => {
+        let start_pos = base.position.0;
+        ast::Type {
+            kind: ast::TypeKind::Array(Box::new(base)),
+            position: SourcePosition(start_pos, end),
+        }
+    },
+};
+
+Type: ast::Type = {
+    PrimitiveType,
+    ComplexType,
+};
+
+///////////////////
+/// EXPRESSIONS ///
+///////////////////
+Expr: Box<ast::Expr> = {
+    <l: Expr> "||" <r: Expr1> => make_binary(ast::BinaryOp::Or, l, r),
+    Expr1,
+};
+
+Expr1: Box<ast::Expr> = {
+    <l: Expr1> "&&" <r: Expr2> => make_binary(ast::BinaryOp::And, l, r),
+    Expr2,
+};
+
+Expr2: Box<ast::Expr> = {
+    <l: Expr2> "==" <r: Expr3> => make_binary(ast::BinaryOp::Eq, l, r),
+    <l: Expr2> "!=" <r: Expr3> => make_binary(ast::BinaryOp::Neq, l, r),
+    Expr3,
+};
+
+Expr3: Box<ast::Expr> = {
+    <l: Expr3> "<" <r: Expr4> => make_binary(ast::BinaryOp::Lt, l, r),
+    <l: Expr3> "<=" <r: Expr4> => make_binary(ast::BinaryOp::Le, l, r),
+    <l: Expr3> ">" <r: Expr4> => make_binary(ast::BinaryOp::Gt, l, r),
+    <l: Expr3> ">=" <r: Expr4> => make_binary(ast::BinaryOp::Ge, l, r),
+    Expr4,
+};
+
+Expr4: Box<ast::Expr> = {
+    <l: Expr4> "+" <r: Expr5> => make_binary(ast::BinaryOp::Add, l, r),
+    <l: Expr4> "-" <r: Expr5> => make_binary(ast::BinaryOp::Sub, l, r),
+    Expr5,
+};
+
+Expr5: Box<ast::Expr> = {
+    <l: Expr5> "*" <r: Expr6> => make_binary(ast::BinaryOp::Mul, l, r),
+    <l: Expr5> "/" <r: Expr6> => make_binary(ast::BinaryOp::Div, l, r),
+    <l: Expr5> "%" <r: Expr6> => make_binary(ast::BinaryOp::Mod, l, r),
+    Expr6,
+};
+
+Expr6: Box<ast::Expr> = {
+    <start: @L> "-" <e: Expr6> <end: @R> => make_unary(start, ast::UnaryOp::Neg, e, end),
+    <start: @L> "!" <e: Expr6> <end: @R> => make_unary(start, ast::UnaryOp::Not, e, end),
+    Expr7
+}
+
+Expr7: Box<ast::Expr> = {
+    <callee: Expr7> "(" <args: Comma<Expr>> ")" <end: @R> => {
+        let start_pos = callee.position.0;
+        Box::new(ast::Expr {
+            kind: ast::ExprKind::App { callee, args },
+            position: SourcePosition(start_pos, end),
+        })
+    },
+    
+    <expr: Expr7> "." <field_name: PositionedIdent> => {
+        let start_pos = expr.position.0;
+        Box::new(ast::Expr {
+            kind: ast::ExprKind::FieldAccess { expr, field_name: field_name.clone() },
+            position: SourcePosition(start_pos, field_name.1.1)
+        })
+    },
+    
+    <array: Expr7> "[" <index: Expr> "]" <end: @R> => {
+        let start_pos = array.position.0;
+        Box::new(ast::Expr {
+            kind: ast::ExprKind::ArrayAccess { array, index },
+            position: SourcePosition(start_pos, end)
+        })
+    },
+
+    <start: @L> "new" <typ: ClassType> <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::NewObject(typ),
+        position: SourcePosition(start, end)
+    }),
+
+    <start: @L> "new" <typ: PrimitiveType> "[" <expr: Expr> "]" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::NewArray { 
+            element_type: typ,
+            size: expr,
+        },
+        position: SourcePosition(start, end)
+    }),
+    Expr8,
+};
+
+Expr8: Box<ast::Expr> = {
+    <start: @L> <i: "integer_lit"> <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::LiteralInt(i),
+        position: SourcePosition(start, end),
+    }),
+    <start: @L> "true" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::LiteralTrue,
+        position: SourcePosition(start, end),
+    }),
+    <start: @L> "false" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::LiteralFalse,
+        position: SourcePosition(start, end),
+    }),
+    <start: @L> <s: "string_lit"> <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::LiteralString(s),
+        position: SourcePosition(start, end),
+    }),
+    <start: @L> "null" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::LiteralNull,
+        position: SourcePosition(start, end),
+    }),
+    // TODO: Add null casts.
+    // <start: @L> "(" <typ: PositionedIdent> ")" "null" <end: @R> => Box::new(ast::Expr {
+    //     kind: ast::ExprKind::TypedNull(ast::t),
+    //     position: SourcePosition(start, end),
+    // }),
+    <id: PositionedIdent> => Box::new(ast::Expr {
+        kind: ast::ExprKind::Var(id.clone()),
+        position: id.1,
+    }),
+    "(" <Expr> ")",
+};
