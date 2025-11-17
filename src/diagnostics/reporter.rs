@@ -93,29 +93,61 @@ impl Diagnostic {
                 Diagnostic::error(format!("Undefined variable '{}'", name))
                     .with_label(position.0..position.1, "Variable not found")
                     .with_note("This variable was not declared in the current scope")
-            }
+            },
             SemanticError::UndefinedFunction { name, position } => {
                 Diagnostic::error(format!("Undefined function '{}'", name))
                     .with_label(position.0..position.1, "Function not found")
                     .with_note("This function was not declared in the current scope")
-            }
+            },
             SemanticError::UndefinedClass { name, position } => {
                 Diagnostic::error(format!("Undefined class '{}'", name))
                     .with_label(position.0..position.1, "Class not found")
                     .with_note("This class was not declared in the current scope")
-            }
-            SemanticError::DuplicateSymbol {
-                name,
-                position,
-                previous_position,
-            } => {
-                Diagnostic::error(format!("Symbol '{}' is already defined", name))
-                .with_label(position.0..position.1, "Cannot redefine this symbol")
+            },
+            SemanticError::DuplicateVariable { name, position, previous_position } => {
+                Diagnostic::error(format!("Variable '{}' is already defined", name))
+                .with_label(position.0..position.1, "Cannot redefine this variable")
                 .with_secondary_label(
                     previous_position.0..previous_position.1,
                     format!("'{}' was originally defined here", name),
                 )
                 .with_help("Consider renaming this variable or using a different scope.")
+            },
+            SemanticError::DuplicateFunction { name, position, previous_position } => {
+                Diagnostic::error(format!("Function '{}' is already defined", name))
+                .with_label(position.0..position.1, "Cannot redefine this function")
+                .with_secondary_label(
+                    previous_position.0..previous_position.1,
+                    format!("'{}' was originally defined here", name),
+                )
+                .with_help("Consider renaming this function or using a different scope.")
+            },
+            SemanticError::DuplicateClass { name, position, previous_position } => {
+                Diagnostic::error(format!("Class '{}' is already defined", name))
+                .with_label(position.0..position.1, "Cannot redefine this class")
+                .with_secondary_label(
+                    previous_position.0..previous_position.1,
+                    format!("'{}' was originally defined here", name),
+                )
+                .with_help("Consider renaming this class.")
+            },
+            SemanticError::DuplicateClassField { class_name, field_name, position, previous_position } => {
+                Diagnostic::error(format!("Field '{}' is already defined for class '{}'", field_name, class_name))
+                .with_label(position.0..position.1, "Cannot redefine this field")
+                .with_secondary_label(
+                    previous_position.0..previous_position.1,
+                    format!("'{}' was originally defined here", field_name),
+                )
+                .with_help("Consider renaming this field.")
+            },
+            SemanticError::DuplicateMethod { class_name, method_name, position, previous_position } => {
+                Diagnostic::error(format!("Method '{}' is already defined for class '{}'", method_name, class_name))
+                .with_label(position.0..position.1, "Cannot redefine this method")
+                .with_secondary_label(
+                    previous_position.0..previous_position.1,
+                    format!("'{}' was originally defined here", method_name),
+                )
+                .with_help("Consider renaming this method.")
             },
             SemanticError::TypeMismatch {
                 expected,
@@ -152,25 +184,26 @@ impl Diagnostic {
                 call_position,
                 function_position,
             } => {
-                // TODO: Add where was the function defined.
                 Diagnostic::error(format!("Wrong number of arguments for function '{}'", name))
+                    .with_label(function_position.0..function_position.1, format!("`{}` was defined here and expects {} arguments", name, expected)
+                    )
                     .with_label(
                         call_position.0..call_position.1,
-                        format!("Expected {} argument(s), but found {}", expected, found),
+                        format!("`{}` was called here and provided with {} arguments", name, found),
                     )
-            }
+            },
             SemanticError::InvalidReturnValue {
                 expected,
                 found,
                 position,
             } => {
-            Diagnostic::error("Invalid return value").with_label(
-                position.0..position.1,
-                format!(
-                    "This function should return `{}`, but it returns `{}`",
-                    expected, found
-                ),
-            )
+                Diagnostic::error("Invalid return value").with_label(
+                    position.0..position.1,
+                    format!(
+                        "This function should return `{}`, but it returns `{}`",
+                        expected, found
+                    ),
+                )
             },
             SemanticError::InvalidLValue { position } => {
                 Diagnostic::error("Invalid assignment")
@@ -187,8 +220,34 @@ impl Diagnostic {
                 Diagnostic::error("This program doesn't provide a `main` function")
                 .with_label(0..0, "No `main` function in this program")
                 .with_help("Provide a definition for a `main` function")
-                
-            }
+            },
+            SemanticError::WrongMainReturnType { expected, found, position } => {
+                Diagnostic::error(format!("Wrong return type for `main`"))
+                    .with_label(position.0..position.1, format!("`main` was defined here and returns {}, but is expected to return {}", found, expected)
+                    )
+                .with_help(format!("Change the main return type to {}", expected))
+            },
+            SemanticError::WrongNumberOfMainArguments { found, position } => {
+                Diagnostic::error(format!("Wrong number of arguments for `main`"))
+                    .with_label(position.0..position.1, format!("`main` was defined here and expects {} arguments, but is expected to take in 0 arguments", found)
+                    )
+                .with_help("Change the `main` definition to expect no arguments")
+            },
+            SemanticError::InvalidVariableType { found, expected, position } => {
+                Diagnostic::error("Invalid variable type")
+                .with_label(position.0..position.1, format!("`{}` is not a valid type for a variable or class field", found))
+                .with_help(format!("Try using one of: {}", expected.join(", ")))
+            },
+            SemanticError::InvalidFunctionReturnType { found, expected, position } => {
+                Diagnostic::error("Invalid function return type")
+                .with_label(position.0..position.1, format!("`{}` is not a valid return type", found))
+                .with_help(format!("Try using one of: {}", expected.join(", ")))
+            },
+            SemanticError::InvalidVoidArrayType { expected, position } => {
+                Diagnostic::error("Invalid array type")
+                .with_label(position.0..position.1, "`void` is not a valid base type for an array type")
+                .with_help(format!("Try using one of: {}", expected.join(", ")))
+            },
         }
     }
 }

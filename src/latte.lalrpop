@@ -150,7 +150,7 @@ ClassDef: ast::ClassDef = {
 
 ClassEntry: ast::ClassEntry = {
     <start: @L> <typ: Type> <name: PositionedIdent> ";" <end: @R> => ast::ClassEntry {
-        kind: ast::ClassEntryKind::Field(typ, name),
+        kind: ast::ClassEntryKind::Field(name, typ),
         position: SourcePosition(start, end),
     },
     <start: @L> <method: FuncDef> <end: @R> => ast::ClassEntry {
@@ -290,6 +290,7 @@ DeclItem: ast::Item = {
 /////////////
 /// TYPES ///
 /////////////
+// TODO: Filter out void types from class fields and variable names
 PrimitiveType: ast::Type = {
     <start: @L> "int" <end: @R> => ast::Type {
         kind: ast::TypeKind::Int,

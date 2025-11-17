@@ -31,7 +31,6 @@ pub struct ClassInfo {
 pub enum SymbolKind {
     Variable(VariableInfo),
     Function(FunctionInfo),
-    Class(ClassInfo),
 }
 
 impl SymbolKind {
@@ -40,7 +39,6 @@ impl SymbolKind {
         match self {
             SymbolKind::Variable(info) => info.ident.position,
             SymbolKind::Function(info) => info.ident.position,
-            SymbolKind::Class(info) => info.ident.position,
         }
     }
 }

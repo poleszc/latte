@@ -1,3 +1,6 @@
+// TODO: Remove those eventually.
+#![allow(dead_code)]
+#![allow(unused_variables)]
 use crate::{
     diagnostics::SemanticError,
     parser::ast::*,
@@ -113,7 +116,7 @@ impl SymbolTable {
 
         if let Some(symbol) = scope.get(&ident.name) {
             let previous_position = symbol.get_source_position();
-            return Err(SemanticError::DuplicateSymbol {
+            return Err(SemanticError::DuplicateVariable {
                 name: ident.name,
                 position: ident.position,
                 previous_position: previous_position,
@@ -141,7 +144,7 @@ impl SymbolTable {
 
         if let Some(symbol) = scope.get(&ident.name) {
             let previous_position = symbol.get_source_position();
-            return Err(SemanticError::DuplicateSymbol {
+            return Err(SemanticError::DuplicateFunction {
                 name: ident.name,
                 position: ident.position,
                 previous_position: previous_position,
@@ -157,7 +160,7 @@ impl SymbolTable {
         let ident = class_info.ident.clone();
         if let Some(symbol) = self.classes.get(&ident.name) {
             let previous_position = symbol.position;
-            return Err(SemanticError::DuplicateSymbol {
+            return Err(SemanticError::DuplicateClass {
                 name: ident.name,
                 position: ident.position,
                 previous_position: previous_position,

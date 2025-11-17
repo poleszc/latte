@@ -13,7 +13,7 @@ pub enum TypeKind {
     Class(Ident),
     Array(Box<Type>), // TODO: Box?
     // TODO: Think about that. Maybe it will be used internally by the type checker.
-    Fun(Box<Type>, Vec<Type>),
+    Fun(Box<Type>, Vec<Type>), // TODO: Probably remove it.
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize)]
@@ -21,7 +21,6 @@ pub struct Type {
     pub kind: TypeKind,
     pub position: SourcePosition,
 }
-
 
 impl Type {
     pub fn to_string(&self) -> String {

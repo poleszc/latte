@@ -11,7 +11,8 @@ use crate::{
     parser::{
         self,
         ast::{self, Program},
-    }, semantics::SemanticChecker,
+    },
+    semantics::SemanticChecker,
 };
 
 /// Main driver for the compiler. Performs all the generic operations for both backends.
@@ -51,11 +52,10 @@ pub fn run_compiler<
             ))
         })?;
     dump_ast_to_json(&output_dir, file_stem, &parsed_program)?;
-    
+
     eprintln!("[Semantic] Running semantic analysis...");
     SemanticChecker::check(&parsed_program)?;
     eprintln!("[Semantic] Semantic analysis completed successful");
-
 
     // backend_compile(&mut parsed_program, &output_dir, file_stem, &args)?;
 

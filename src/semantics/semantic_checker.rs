@@ -1,8 +1,13 @@
-use std::thread::panicking;
+// TODO: Remove those eventually.
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
+use std::collections::HashMap;
 
 use crate::diagnostics::SemanticError;
 use crate::parser::ast::*;
 use crate::semantics::symbol_table::SymbolTable;
+use crate::semantics::{ClassInfo, FunctionInfo, VariableInfo};
 
 pub struct SemanticChecker {
     symbol_table: SymbolTable,
@@ -100,15 +105,210 @@ impl SemanticChecker {
 }
 
 impl SemanticChecker {
+    /// Forward declare a class and validate correctness of class definition.
+    /// This function does not validate the inheritance hierarchy. This is done in validate_class.
     fn add_class(&mut self, class_def: &ClassDef) -> Result<(), Vec<SemanticError>> {
-        todo!()
+        let mut fields: HashMap<String, (Type, SourcePosition)> = HashMap::new();
+        let mut methods: HashMap<String, FunctionInfo> = HashMap::new();
+
+        // Check for duplicate fields and methods. Extends are not validated yet since we don't know the hierarchy.
+        // TODO: Can fields be overridden from a superclass?
+        for entry in &class_def.entries {
+            match &entry.kind {
+                ClassEntryKind::Field(ident, typ) => {
+                    if fields.contains_key(&ident.name) {
+                        self.add_error(SemanticError::DuplicateClassField {
+                            class_name: class_def.name.name.clone(),
+                            field_name: ident.name.clone(),
+                            position: ident.position,
+                            previous_position: fields[&ident.name].1,
+                        });
+                    } else {
+                        fields.insert(ident.name.clone(), (typ.clone(), ident.position));
+                    }
+                }
+                ClassEntryKind::Method(func_def) => {
+                    let method_ident = func_def.name.clone();
+                    let signature = FunctionInfo {
+                        ident: method_ident.clone(),
+                        return_type: func_def.return_type.clone(),
+                        params: func_def
+                            .args
+                            .iter()
+                            .map(|arg| arg.arg_type.clone())
+                            .collect(),
+                        position: func_def.position,
+                    };
+                    if methods.contains_key(&method_ident.name) {
+                        self.add_error(SemanticError::DuplicateMethod {
+                            class_name: class_def.name.name.clone(),
+                            method_name: method_ident.name.clone(),
+                            position: method_ident.position,
+                            previous_position: methods[&method_ident.name].ident.position,
+                        });
+                    } else {
+                        methods.insert(method_ident.name.clone(), signature);
+                    }
+                }
+            }
+        }
+
+        // Build class metadata and define the class in the symbol table.
+        let class_info = ClassInfo {
+            ident: class_def.name.clone(),
+            parent: class_def.extends.clone(),
+            fields,
+            methods,
+            position: class_def.position,
+        };
+        self.symbol_table.define_class(class_info)?;
+
+        Ok(())
     }
+
+    /// Forward declare a function.
     fn add_function(&mut self, func_def: &FuncDef) -> Result<(), Vec<SemanticError>> {
-        todo!()
+        let signature = FunctionInfo {
+            ident: func_def.name.clone(),
+            return_type: func_def.return_type.clone(),
+            // TODO: We may need arg names as well. Not only types.
+            params: func_def
+                .args
+                .iter()
+                .map(|arg| arg.arg_type.clone())
+                .collect(),
+            position: func_def.position,
+        };
+        self.symbol_table.define_function(signature)?;
+        Ok(())
     }
+
     fn validate_class(&mut self, class_def: &ClassDef) -> Result<(), Vec<SemanticError>> {
-        todo!()
+        // TODO: Add inheritance hierarchy cycles detection.
+
+        // Undefined superclass.
+        if let Some(parent) = &class_def.extends {
+            if !self.symbol_table.class_exists(&parent.name) {
+                self.add_error(SemanticError::UndefinedClass {
+                    name: parent.name.clone(),
+                    position: parent.position,
+                });
+            }
+        }
+
+        for entry in &class_def.entries {
+            if let ClassEntryKind::Field(_, typ) = &entry.kind {
+                self.validate_variable_type(&typ)?;
+            }
+        }
+
+        Ok(())
     }
+
+    /// TODO: Try to unify the validate_type functions.
+    /// Validates the types assuming the type is used to declare a variable of a class field.
+    /// This means void and null type will be treated as an error.
+    fn validate_variable_type(&mut self, typ: &Type) -> Result<(), Vec<SemanticError>> {
+        let expected_types = vec![
+            "int".to_string(),
+            "bool".to_string(),
+            "string".to_string(),
+            "{ClassType}".to_string(),
+            "{ArrayType}".to_string(),
+        ];
+        match &typ.kind {
+            TypeKind::Void => {
+                self.add_error(SemanticError::InvalidVariableType {
+                    found: typ.to_string(),
+                    expected: expected_types,
+                    position: typ.position,
+                });
+            }
+            TypeKind::Null => {
+                self.add_error(SemanticError::InvalidVariableType {
+                    found: typ.to_string(),
+                    expected: expected_types,
+                    position: typ.position,
+                });
+            }
+            TypeKind::Class(ident) => {
+                if !self.symbol_table.class_exists(&ident.name) {
+                    self.add_error(SemanticError::UndefinedClass {
+                        name: ident.name.clone(),
+                        position: ident.position,
+                    });
+                }
+            }
+            TypeKind::Array(inner) => {
+                if let TypeKind::Void = inner.kind {
+                    self.add_error(SemanticError::InvalidVoidArrayType {
+                        expected: vec![
+                            "int".to_string(),
+                            "bool".to_string(),
+                            "string".to_string(),
+                            "{ClassType}".to_string(),
+                            "{ArrayType}".to_string(),
+                        ],
+                        position: inner.position,
+                    });
+                } else {
+                    self.validate_variable_type(&inner)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Validates the types assuming the type is used to declare a functions return type.
+    /// This means void and null type will be treated as an error.
+    fn validate_functions_return_type(&mut self, typ: &Type) -> Result<(), Vec<SemanticError>> {
+        let expected_types = vec![
+            "void".to_string(),
+            "int".to_string(),
+            "bool".to_string(),
+            "string".to_string(),
+            "{ClassType}".to_string(),
+            "{ArrayType}".to_string(),
+        ];
+        match &typ.kind {
+            TypeKind::Null => {
+                self.add_error(SemanticError::InvalidVariableType {
+                    found: typ.to_string(),
+                    expected: expected_types,
+                    position: typ.position,
+                });
+            }
+            TypeKind::Class(ident) => {
+                if !self.symbol_table.class_exists(&ident.name) {
+                    self.add_error(SemanticError::UndefinedClass {
+                        name: ident.name.clone(),
+                        position: ident.position,
+                    });
+                }
+            }
+            TypeKind::Array(inner) => {
+                if let TypeKind::Void = inner.kind {
+                    self.add_error(SemanticError::InvalidVoidArrayType {
+                        expected: vec![
+                            "void".to_string(),
+                            "int".to_string(),
+                            "bool".to_string(),
+                            "string".to_string(),
+                            "{ClassType}".to_string(),
+                            "{ArrayType}".to_string(),
+                        ],
+                        position: inner.position,
+                    });
+                } else {
+                    self.validate_variable_type(&inner)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     fn validate_main(&mut self) -> Result<(), Vec<SemanticError>> {
         let main_ident = Ident {
             name: "main".to_string(),
@@ -165,10 +365,7 @@ impl SemanticChecker {
 
         // Now we type check the functions and methods.
         for top_def in &program.defs {
-            match &top_def.kind {
-                TopDefKind::Func(func_def) => self.visit_function_definition(func_def)?,
-                TopDefKind::Class(class_def) => self.visit_class_definition(class_def)?,
-            }
+            self.visit_top_def(&top_def)?;
         }
 
         self.validate_main()?;
@@ -176,20 +373,60 @@ impl SemanticChecker {
         Ok(())
     }
 
-    pub fn visit_top_level(&mut self, top_def: &TopDef) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_top_def(&mut self, top_def: &TopDef) -> Result<(), Vec<SemanticError>> {
+        match &top_def.kind {
+            TopDefKind::Func(func_def) => self.visit_function_definition(func_def)?,
+            TopDefKind::Class(class_def) => self.visit_class_definition(class_def)?,
+        }
         todo!();
     }
 
     pub fn visit_function_definition(&mut self, func: &FuncDef) -> Result<(), Vec<SemanticError>> {
-        todo!();
+        self.symbol_table.enter_scope();
+        // TODO: Try to use parametrized lifetime here to avoid cloning?
+        self.current_return_type = Some(func.return_type.clone());
+
+        // Add arguments to scope.
+        for arg in &func.args {
+            self.validate_variable_type(&arg.arg_type)?;
+            self.symbol_table.define_variable(VariableInfo {
+                ident: arg.name.clone(),
+                typ: arg.arg_type.clone(),
+            })?;
+        }
+
+        self.visit_block(&func.body)?;
+        // TODO: This is bugged in nested functions.
+        self.current_return_type = None;
+        self.symbol_table.leave_scope();
+
+        Ok(())
     }
 
     pub fn visit_class_definition(&mut self, class: &ClassDef) -> Result<(), Vec<SemanticError>> {
-        todo!();
-    }
+        self.current_class = Some(class.name.name.clone());
+        for entry in &class.entries {
+            if let ClassEntryKind::Method(method) = &entry.kind {
+                self.symbol_table.enter_scope();
 
-    pub fn visit_class_entry(&mut self, entry: ClassEntry) -> Result<(), Vec<SemanticError>> {
-        todo!();
+                // Define class fields in scope.
+                let class_info = self.symbol_table.lookup_class(&class.name)?;
+                for (name, (typ, position)) in &class_info.fields {
+                    self.symbol_table.define_variable(VariableInfo {
+                        ident: Ident {
+                            name: name.clone(),
+                            position: *position,
+                        },
+                        typ: typ.clone(),
+                    })?;
+                }
+
+                self.visit_function_definition(method)?;
+                self.symbol_table.leave_scope();
+            }
+        }
+        self.current_class = None;
+        Ok(())
     }
 }
 
@@ -198,54 +435,130 @@ impl SemanticChecker {
 // ======================
 impl SemanticChecker {
     pub fn visit_statement(&mut self, stmt: &Stmt) -> Result<(), Vec<SemanticError>> {
-        todo!();
-    }
-
-    pub fn visit_empty(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
-        todo!();
+        let position = stmt.position;
+        match &stmt.kind {
+            StmtKind::Empty => Ok(()),
+            StmtKind::Block(block) => self.visit_block(block),
+            StmtKind::Decl(typ, items) => self.visit_declaration(typ, items, position),
+            StmtKind::Assign { target, value } => self.visit_assign(target, value, position),
+            StmtKind::Return { expr } => self.visit_return(expr, position),
+            StmtKind::Incr(expr) => self.visit_increment(expr, position),
+            StmtKind::Decr(expr) => self.visit_decrement(expr, position),
+            StmtKind::If {
+                cond,
+                if_true,
+                if_false,
+            } => self.visit_if(cond, if_true, if_false, position),
+            StmtKind::While { cond, body } => self.visit_while(cond, body, position),
+            StmtKind::For {
+                init,
+                cond,
+                post,
+                body,
+            } => self.visit_for(init, cond, post, body, position),
+            StmtKind::ForEach {
+                element_type,
+                item_name,
+                collection,
+                body,
+            } => self.visit_for_each(element_type, item_name, collection, body, position),
+            StmtKind::Expr(expr) => self.visit_expr_statement(expr, position),
+            StmtKind::FuncDef(func_def) => self.visit_function_definition(func_def),
+        }
     }
 
     pub fn visit_block(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
         todo!();
     }
 
-    pub fn visit_declaration(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_declaration(
+        &mut self,
+        typ: &Type,
+        items: &Vec<Item>,
+        position: SourcePosition,
+    ) -> Result<(), Vec<SemanticError>> {
         todo!();
     }
 
-    pub fn visit_assign(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_assign(
+        &mut self,
+        target: &Box<Expr>,
+        value: &Box<Expr>,
+        position: SourcePosition,
+    ) -> Result<(), Vec<SemanticError>> {
         todo!();
     }
 
-    pub fn visit_return(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_return(
+        &mut self,
+        block: &Option<Box<Expr>>,
+        position: SourcePosition,
+    ) -> Result<(), Vec<SemanticError>> {
         todo!();
     }
 
-    pub fn visit_increment(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_increment(
+        &mut self,
+        expr: &Box<Expr>,
+        position: SourcePosition,
+    ) -> Result<(), Vec<SemanticError>> {
         todo!();
     }
 
-    pub fn visit_decrement(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_decrement(
+        &mut self,
+        expr: &Box<Expr>,
+        position: SourcePosition,
+    ) -> Result<(), Vec<SemanticError>> {
         todo!();
     }
 
-    pub fn visit_if(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_if(
+        &mut self,
+        cond: &Box<Expr>,
+        if_true: &Box<Stmt>,
+        if_false: &Option<Box<Stmt>>,
+        position: SourcePosition,
+    ) -> Result<(), Vec<SemanticError>> {
         todo!();
     }
 
-    pub fn visit_while(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_while(
+        &mut self,
+        cond: &Box<Expr>,
+        body: &Box<Stmt>,
+        position: SourcePosition,
+    ) -> Result<(), Vec<SemanticError>> {
         todo!();
     }
 
-    pub fn visit_for(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_for(
+        &mut self,
+        init: &Option<Box<Stmt>>,
+        cond: &Option<Box<Expr>>,
+        post: &Option<Box<Expr>>,
+        body: &Box<Stmt>,
+        position: SourcePosition,
+    ) -> Result<(), Vec<SemanticError>> {
         todo!();
     }
 
-    pub fn visit_each(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_for_each(
+        &mut self,
+        element_type: &Type,
+        item_name: &Ident,
+        collection: &Box<Expr>,
+        body: &Box<Stmt>,
+        position: SourcePosition,
+    ) -> Result<(), Vec<SemanticError>> {
         todo!();
     }
 
-    pub fn visit_expr_statement(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_expr_statement(
+        &mut self,
+        expr: &Box<Expr>,
+        position: SourcePosition,
+    ) -> Result<(), Vec<SemanticError>> {
         todo!();
     }
 
@@ -262,7 +575,7 @@ impl SemanticChecker {
 // ======================
 impl SemanticChecker {
     // Checks an expression and returns it's type.
-    pub fn visit_expr(&mut self, block: &Expr) -> Result<Type, Vec<SemanticError>> {
+    pub fn visit_expr(&mut self, expr: &Box<Expr>) -> Result<Type, Vec<SemanticError>> {
         todo!();
     }
 }

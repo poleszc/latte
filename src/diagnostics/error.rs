@@ -132,8 +132,30 @@ pub enum SemanticError {
         name: String,
         position: SourcePosition,
     },
-    DuplicateSymbol {
+    DuplicateVariable {
         name: String,
+        position: SourcePosition,
+        previous_position: SourcePosition,
+    },
+    DuplicateFunction {
+        name: String,
+        position: SourcePosition,
+        previous_position: SourcePosition,
+    },
+    DuplicateClass {
+        name: String,
+        position: SourcePosition,
+        previous_position: SourcePosition,
+    },
+    DuplicateClassField {
+        class_name: String,
+        field_name: String,
+        position: SourcePosition,
+        previous_position: SourcePosition,
+    },
+    DuplicateMethod {
+        class_name: String,
+        method_name: String,
         position: SourcePosition,
         previous_position: SourcePosition,
     },
@@ -174,8 +196,21 @@ pub enum SemanticError {
     WrongNumberOfMainArguments {
         found: usize,
         position: SourcePosition,
-    }
-    // TODO: Class errors.
+    },
+    InvalidVariableType {
+        found: String,
+        expected: Vec<String>,
+        position: SourcePosition,
+    },
+    InvalidFunctionReturnType {
+        found: String,
+        expected: Vec<String>,
+        position: SourcePosition,
+    },
+    InvalidVoidArrayType {
+        expected: Vec<String>,
+        position: SourcePosition,
+    },
 }
 // TODO: Maybe not needed. Remove?
 impl fmt::Display for SemanticError {
@@ -190,8 +225,36 @@ impl fmt::Display for SemanticError {
             SemanticError::UndefinedClass { name, .. } => {
                 write!(fmt, "Undefined class '{}'", name)
             }
-            SemanticError::DuplicateSymbol { name, .. } => {
-                write!(fmt, "Symbol '{}' is already defined", name)
+            SemanticError::DuplicateVariable { name, .. } => {
+                write!(fmt, "Duplicate variable '{}'", name)
+            }
+            SemanticError::DuplicateFunction { name, .. } => {
+                write!(fmt, "Duplicate function '{}'", name)
+            }
+            SemanticError::DuplicateClass { name, .. } => {
+                write!(fmt, "Duplicate class '{}'", name)
+            }
+            SemanticError::DuplicateClassField {
+                class_name,
+                field_name,
+                ..
+            } => {
+                write!(
+                    fmt,
+                    "Duplicate field '{}' in class '{}'",
+                    field_name, class_name
+                )
+            }
+            SemanticError::DuplicateMethod {
+                class_name,
+                method_name,
+                ..
+            } => {
+                write!(
+                    fmt,
+                    "Duplicate method '{}' in class '{}'",
+                    method_name, class_name
+                )
             }
             SemanticError::TypeMismatch {
                 expected, found, ..
@@ -213,7 +276,34 @@ impl fmt::Display for SemanticError {
                 write!(fmt, "Invalid left-hand side of assignment")
             }
             SemanticError::ZeroDivision { .. } => write!(fmt, "Division by a zero literal"),
-            SemanticError::UndefinedMain => write!(fmt, "Program doesn't provide a `main` function"),
+            SemanticError::UndefinedMain => {
+                write!(fmt, "Program doesn't provide a `main` function")
+            }
+            SemanticError::WrongMainReturnType {
+                expected, found, ..
+            } => {
+                write!(
+                    fmt,
+                    "Wrong `main` return type: expected '{}', got '{}'",
+                    expected, found
+                )
+            }
+            SemanticError::WrongNumberOfMainArguments { found, .. } => {
+                write!(
+                    fmt,
+                    "Wrong `main` argument count: expected '{}', got '{}'",
+                    0, found
+                )
+            }
+            SemanticError::InvalidVariableType { found, .. } => {
+                write!(fmt, "Invalid variable type: {}", found)
+            }
+            SemanticError::InvalidFunctionReturnType { found, .. } => {
+                write!(fmt, "Invalid function return type: {}", found)
+            }
+            SemanticError::InvalidVoidArrayType { .. } => {
+                write!(fmt, "Invalid void array type")
+            }
         }
     }
 }
@@ -293,5 +383,12 @@ impl From<Vec<SemanticError>> for CompilerError {
         } else {
             CompilerError::Other("Unknown semantic error".to_string())
         }
+    }
+}
+
+// TODO: Try to remove that.
+impl From<SemanticError> for Vec<SemanticError> {
+    fn from(value: SemanticError) -> Self {
+        vec![value]
     }
 }
