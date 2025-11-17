@@ -67,7 +67,7 @@ impl Diagnostic {
     }
 
     pub fn with_help(mut self, note: impl Into<String>) -> Self {
-        self.notes.push(note.into());
+        self.help = Some(note.into());
         self
     }
 }
