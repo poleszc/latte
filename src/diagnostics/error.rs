@@ -275,3 +275,14 @@ impl From<&str> for CompilerError {
         CompilerError::Other(err.to_string())
     }
 }
+
+// TODO: For now we just return the first error. Change this in the future.
+impl From<Vec<SemanticError>> for CompilerError {
+    fn from(errors: Vec<SemanticError>) -> Self {
+        if let Some(first_error) = errors.into_iter().next() {
+            CompilerError::Semantic(first_error)
+        } else {
+            CompilerError::Other("Unknown semantic error".to_string())
+        }
+    }
+}
