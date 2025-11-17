@@ -72,6 +72,7 @@ fn skip_multiline_comment(lex: &mut logos::Lexer<Token>) -> Result<(), LexicalEr
 #[derive(Logos, Clone, Debug, PartialEq)]
 #[logos(skip r"[ \t\n\f\r]+", error = LexicalError)] // Skip whitespaces.
 #[logos(skip r"//[^\n]*")] // Skip one line comments.
+#[logos(skip r"#[^\n]*")] // Skip one line comments.
 pub enum Token {
     // Keywords.
     #[token("class")]
@@ -162,6 +163,8 @@ pub enum Token {
     Comma,
     #[token(".")]
     Dot,
+    #[token("[]")]
+    Dims,
 
     // Identifiers and literals.
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_string())]
@@ -226,6 +229,7 @@ impl fmt::Display for Token {
             Token::Colon => write!(f, "':'"),
             Token::Comma => write!(f, "','"),
             Token::Dot => write!(f, "'.'"),
+            Token::Dims => write!(f, "[]"),
 
             // Identifiers and Literals
             Token::Identifier(s) => write!(f, "identifier '{}'", s),

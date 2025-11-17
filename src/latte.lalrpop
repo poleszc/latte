@@ -62,6 +62,9 @@ extern {
         ":" => Token::Colon,
         "," => Token::Comma,
         "." => Token::Dot,
+        // TODO: This is an ugly hack to distinguish between array access 
+        // and array type. int[ ] won't work. Try to fix that.
+        "[]" => Token::Dims,
     }
 }
 
@@ -315,14 +318,14 @@ ComplexType: ast::Type = {
 };
 
 ArrayType: ast::Type = {
-    <base: PrimitiveType> "[" "]" <end: @R> => {
+    <base: PrimitiveType> "[]" <end: @R> => {
         let start_pos = base.position.0;
         ast::Type {
             kind: ast::TypeKind::Array(Box::new(base)),
             position: SourcePosition(start_pos, end),
         }
     },
-    <base: ClassType> "[" "]" <end: @R> => {
+    <base: ClassType> "[]" <end: @R> => {
         let start_pos = base.position.0;
         ast::Type {
             kind: ast::TypeKind::Array(Box::new(base)),
@@ -399,12 +402,13 @@ Expr7: Box<ast::Expr> = {
         })
     },
     
-    // TODO: For now removed cause I don't know how to handle it.
-    // <array: Expr7> "["<index: Expr> "]" <end: @R> => Box::new(ast::Expr {
-    //     let start_pos = expr.position.0;
-    //     kind: ast::ExprKind::ArrayAccess { array, index },
-    //     position: SourcePosition(start_pos, end)
-    // }),
+    <array: Expr7> "[" <index: Expr> "]" <end: @R> => {
+        let start_pos = array.position.0;
+        Box::new(ast::Expr {
+            kind: ast::ExprKind::ArrayAccess { array, index },
+            position: SourcePosition(start_pos, end)
+        })
+    },
 
     <start: @L> "new" <typ: ClassType> <end: @R> => Box::new(ast::Expr {
         kind: ast::ExprKind::NewObject(typ),
@@ -440,6 +444,14 @@ Expr8: Box<ast::Expr> = {
         kind: ast::ExprKind::LiteralString(s),
         position: SourcePosition(start, end),
     }),
+    <start: @L> "null" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::LiteralNull,
+        position: SourcePosition(start, end),
+    }),
+    // <start: @L> "(" <typ: PositionedIdent> ")" "null" <end: @R> => Box::new(ast::Expr {
+    //     kind: ast::ExprKind::TypedNull(ast::t),
+    //     position: SourcePosition(start, end),
+    // }),
     <id: PositionedIdent> => Box::new(ast::Expr {
         kind: ast::ExprKind::Var(id.clone()),
         position: id.1,
