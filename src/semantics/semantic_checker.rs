@@ -344,6 +344,22 @@ impl SemanticChecker {
 
         Ok(())
     }
+
+    fn type_legal_for_bin_op(&mut self, op: &BinaryOp, typ: &Type) -> bool {
+        match op {
+            BinaryOp::Add => matches!(typ.kind, TypeKind::Int | TypeKind::String),
+            BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
+                matches!(typ.kind, TypeKind::Int)
+            }
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+                matches!(typ.kind, TypeKind::Bool)
+            }
+            BinaryOp::Eq | BinaryOp::Neq => true,
+            BinaryOp::And | BinaryOp::Or => {
+                matches!(typ.kind, TypeKind::Bool)
+            }
+        }
+    }
 }
 
 // ======================
@@ -851,7 +867,32 @@ impl SemanticChecker {
         index: &Box<Expr>,
         position: SourcePosition,
     ) -> Result<Type, Vec<SemanticError>> {
-        todo!()
+        let array_type = self.visit_expr(&array)?;
+        let index_type = self.visit_expr(&array)?;
+
+        if !matches!(index_type.kind, TypeKind::Int) {
+            self.add_error(SemanticError::TypeMismatch {
+                expected: "int".to_string(),
+                found: index_type.to_string(),
+                position: index.position,
+            });
+        }
+
+        match &array_type.kind {
+            TypeKind::Array(elem_type) => Ok((**elem_type).clone()),
+            _ => {
+                self.add_error(SemanticError::InvalidOperands {
+                    operator: "[]".to_string(),
+                    operands: vec![array_type.to_string()],
+                    position,
+                });
+                // TODO: For now we return void. We should change that to an error to support error recovery.
+                Ok(Type {
+                    kind: TypeKind::Void,
+                    position,
+                })
+            }
+        }
     }
 
     fn visit_field_access(
@@ -860,6 +901,38 @@ impl SemanticChecker {
         field_name: &Ident,
         position: SourcePosition,
     ) -> Result<Type, Vec<SemanticError>> {
+        let obj_type = self.visit_expr(&object)?;
+        if let TypeKind::Class(class_name) = obj_type.kind {
+            let all_fields = self.symbol_table.get_all_class_fields(&class_name.name);
+
+            if let Some((field_type, _)) = all_fields.get(&field_name.name) {
+                return Ok(field_type.clone());
+            } else {
+                self.add_error(SemanticError::UndefinedField {
+                    class_name: class_name.name,
+                    field_name: field_name.name.clone(),
+                    position,
+                    class_position: class_name.position,
+                });
+                return Ok(Type {
+                    kind: TypeKind::Error,
+                    position,
+                });
+            }
+        } else if let TypeKind::String = obj_type.kind {
+            todo!()
+        } else {
+            self.add_error(SemanticError::InvalidOperands {
+                operator: ".".to_string(),
+                operands: vec![obj_type.to_string()],
+                position: position,
+            });
+            return Ok(Type {
+                kind: TypeKind::Error,
+                position: position,
+            });
+        }
+
         todo!()
     }
 
@@ -906,22 +979,6 @@ impl SemanticChecker {
                     kind: TypeKind::Bool,
                     position: expr.position,
                 })
-            }
-        }
-    }
-
-    fn type_legal_for_bin_op(&mut self, op: &BinaryOp, typ: &Type) -> bool {
-        match op {
-            BinaryOp::Add => matches!(typ.kind, TypeKind::Int | TypeKind::String),
-            BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
-                matches!(typ.kind, TypeKind::Int)
-            }
-            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
-                matches!(typ.kind, TypeKind::Bool)
-            }
-            BinaryOp::Eq | BinaryOp::Neq => true,
-            BinaryOp::And | BinaryOp::Or => {
-                matches!(typ.kind, TypeKind::Bool)
             }
         }
     }

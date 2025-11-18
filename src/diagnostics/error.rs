@@ -132,6 +132,18 @@ pub enum SemanticError {
         name: String,
         position: SourcePosition,
     },
+    UndefinedField {
+        class_name: String,
+        field_name: String,
+        position: SourcePosition,
+        class_position: SourcePosition,
+    },
+    UndefinedMethod {
+        class_name: String,
+        method_name: String,
+        position: SourcePosition,
+        class_position: SourcePosition,
+    },
     DuplicateVariable {
         name: String,
         position: SourcePosition,
@@ -224,6 +236,28 @@ impl fmt::Display for SemanticError {
             }
             SemanticError::UndefinedClass { name, .. } => {
                 write!(fmt, "Undefined class '{}'", name)
+            }
+            SemanticError::UndefinedField {
+                class_name,
+                field_name,
+                ..
+            } => {
+                write!(
+                    fmt,
+                    "Undefined field '{}' in class '{}'",
+                    field_name, class_name
+                )
+            }
+            SemanticError::UndefinedMethod {
+                class_name,
+                method_name,
+                ..
+            } => {
+                write!(
+                    fmt,
+                    "Undefined method '{}' in class '{}'",
+                    field_name, class_name
+                )
             }
             SemanticError::DuplicateVariable { name, .. } => {
                 write!(fmt, "Duplicate variable '{}'", name)
