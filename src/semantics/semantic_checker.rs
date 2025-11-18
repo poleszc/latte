@@ -463,7 +463,10 @@ impl SemanticChecker {
                 collection,
                 body,
             } => self.visit_for_each(element_type, item_name, collection, body, position),
-            StmtKind::Expr(expr) => self.visit_expr_statement(expr, position),
+            StmtKind::Expr(expr) => {
+                self.visit_expr(expr)?;
+                Ok(())
+            }
             StmtKind::FuncDef(func_def) => self.visit_function_definition(func_def),
         }
     }
@@ -745,14 +748,6 @@ impl SemanticChecker {
         Ok(())
     }
 
-    pub fn visit_expr_statement(
-        &mut self,
-        expr: &Box<Expr>,
-        position: SourcePosition,
-    ) -> Result<(), Vec<SemanticError>> {
-        todo!();
-    }
-
     pub fn visit_function_definition_expr(
         &mut self,
         block: &Block,
@@ -766,7 +761,76 @@ impl SemanticChecker {
 // ======================
 impl SemanticChecker {
     // Checks an expression and returns it's type.
-    pub fn visit_expr(&mut self, expr: &Box<Expr>) -> Result<Type, Vec<SemanticError>> {
-        todo!();
+    pub fn visit_expr(&mut self, outer_expr: &Box<Expr>) -> Result<Type, Vec<SemanticError>> {
+        match &outer_expr.kind {
+            ExprKind::Var(ident) => self.symbol_table.lookup_variable(ident),
+            ExprKind::LiteralInt(_) => Ok(Type {
+                kind: TypeKind::Int,
+                position: outer_expr.position,
+            }),
+            ExprKind::LiteralTrue => Ok(Type {
+                kind: TypeKind::Bool,
+                position: outer_expr.position,
+            }),
+            ExprKind::LiteralFalse => Ok(Type {
+                kind: TypeKind::Bool,
+                position: outer_expr.position,
+            }),
+            ExprKind::LiteralString(_) => Ok(Type {
+                kind: TypeKind::String,
+                position: outer_expr.position,
+            }),
+            // TODO: Fix the situation with nulls.
+            ExprKind::LiteralNull => Ok(Type {
+                kind: TypeKind::Null,
+                position: outer_expr.position,
+            }),
+            ExprKind::App { callee, args } => {
+                self.visit_application(callee, args, outer_expr.position)
+            }
+            ExprKind::ArrayAccess { array, index } => {
+                self.visit_array_access(array, index, outer_expr.position)
+            }
+            ExprKind::FieldAccess { object, field_name } => {
+                self.visit_field_access(object, field_name, outer_expr.position)
+            }
+            ExprKind::Method {
+                object,
+                method_name,
+                args,
+            } => self.visit_method_call(object, method_name, args, outer_expr.position),
+            ExprKind::Paren(inner) => self.visit_expr(inner),
+            ExprKind::UnaryOp { op, expr } => {
+                self.visit_unary_operator(op, expr, outer_expr.position)
+            }
+            ExprKind::BinaryOp { op, lhs, rhs } => {
+                self.visit_binary_operator(op, lhs, rhs, outer_expr.position)
+            }
+            ExprKind::NewObject(typ) => {
+                self.validate_variable_type(typ)?;
+                Ok(typ.clone())
+            }
+            ExprKind::NewArray { element_type, size } => {
+                self.validate_variable_type(element_type)?;
+                let size_type = self.visit_expr(&size)?;
+                // TODO: Save the array size somewhere to static check the array access.
+                if !matches!(size_type.kind, TypeKind::Int) {
+                    self.add_error(SemanticError::TypeMismatch {
+                        expected: "int".to_string(),
+                        found: size_type.to_string(),
+                        position: size.position,
+                    });
+                }
+
+                Ok(Type {
+                    kind: TypeKind::Array(Box::new(element_type.clone())),
+                    position: outer_expr.position,
+                })
+            }
+            ExprKind::TypedNull(typ) => {
+                self.validate_variable_type(&typ)?;
+                Ok(typ.clone())
+            }
+        }
     }
 }

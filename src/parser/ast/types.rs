@@ -14,6 +14,7 @@ pub enum TypeKind {
     Array(Box<Type>), // TODO: Box?
     // TODO: Think about that. Maybe it will be used internally by the type checker.
     Fun(Box<Type>, Vec<Type>), // TODO: Probably remove it.
+    Error,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize)]
@@ -29,7 +30,6 @@ impl Type {
             TypeKind::String => "string".to_string(),
             TypeKind::Bool => "bool".to_string(),
             TypeKind::Void => "void".to_string(),
-            // TODO: Think about that. Null is not a type
             TypeKind::Null => "null".to_string(),
             TypeKind::Class(ident) => ident.name.clone(),
             TypeKind::Array(inner) => format!("{}[]", inner.to_string()),
@@ -41,6 +41,7 @@ impl Type {
                     .join(", ");
                 format!("({}) -> {}", param_str, ret.to_string())
             }
+            TypeKind::Error => "error".to_string(),
         }
     }
 }

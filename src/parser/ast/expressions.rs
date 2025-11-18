@@ -27,11 +27,11 @@ pub enum ExprKind {
         index: Box<Expr>,
     }, // arr [i]
     FieldAccess {
-        expr: Box<Expr>,
+        object: Box<Expr>,
         field_name: Ident,
     }, // class.field
     Method {
-        expr: Box<Expr>,
+        object: Box<Expr>,
         method_name: Ident,
         args: Vec<Expr>,
     }, // class.method(1, 2)
