@@ -6,13 +6,10 @@ use std::{
 use clap::Parser;
 
 use crate::{
-    LatteArgs,
-    diagnostics::CompilerError,
-    parser::{
+    LatteArgs, diagnostics::CompilerError, parser::{
         self,
         ast::{self, Program},
-    },
-    semantics::SemanticChecker,
+    }, report_compiler_error, semantics::SemanticChecker
 };
 
 /// Main driver for the compiler. Performs all the generic operations for both backends.

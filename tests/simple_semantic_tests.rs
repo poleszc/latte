@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod semantic_tests {
-    use crate::parser;
-    use crate::semantics::SemanticChecker;
+    use latte::parser;
+    use latte::semantics::SemanticChecker;
 
     #[test]
     fn test_simple_program() {

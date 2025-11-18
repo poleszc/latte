@@ -392,3 +392,10 @@ impl From<SemanticError> for Vec<SemanticError> {
         vec![value]
     }
 }
+
+// TODO: Try to remove that.
+impl From<CompilerError> for Vec<CompilerError> {
+    fn from(value: CompilerError) -> Self {
+        vec![value]
+    }
+}

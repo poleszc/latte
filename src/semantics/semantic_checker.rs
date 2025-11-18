@@ -34,7 +34,9 @@ impl SemanticChecker {
     /// Main function to call which performs the semantic checks.
     pub fn check(program: &Program) -> Result<(), Vec<SemanticError>> {
         let mut checker = SemanticChecker::new();
-        checker.visit_program(program)
+        checker.visit_program(program)?;
+        // TODO: Do the error handling nicely.
+        Err(checker.errors)
     }
 
     fn add_error(&mut self, error: SemanticError) {
@@ -375,10 +377,9 @@ impl SemanticChecker {
 
     pub fn visit_top_def(&mut self, top_def: &TopDef) -> Result<(), Vec<SemanticError>> {
         match &top_def.kind {
-            TopDefKind::Func(func_def) => self.visit_function_definition(func_def)?,
-            TopDefKind::Class(class_def) => self.visit_class_definition(class_def)?,
+            TopDefKind::Func(func_def) => Ok(self.visit_function_definition(func_def)?),
+            TopDefKind::Class(class_def) => Ok(self.visit_class_definition(class_def)?),
         }
-        todo!();
     }
 
     pub fn visit_function_definition(&mut self, func: &FuncDef) -> Result<(), Vec<SemanticError>> {
@@ -395,7 +396,7 @@ impl SemanticChecker {
             })?;
         }
 
-        self.visit_block(&func.body)?;
+        // self.visit_block(&func.body)?;
         // TODO: This is bugged in nested functions.
         self.current_return_type = None;
         self.symbol_table.leave_scope();
@@ -468,7 +469,12 @@ impl SemanticChecker {
     }
 
     pub fn visit_block(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
-        todo!();
+        self.symbol_table.enter_scope();
+        for stmt in &block.stmts {
+            self.visit_statement(&stmt)?;
+        }
+        self.symbol_table.leave_scope();
+        Ok(())
     }
 
     pub fn visit_declaration(
@@ -477,7 +483,33 @@ impl SemanticChecker {
         items: &Vec<Item>,
         position: SourcePosition,
     ) -> Result<(), Vec<SemanticError>> {
-        todo!();
+        self.validate_variable_type(typ)?;
+        for item in items {
+            match &item.kind {
+                ItemKind::NoInit(ident) => {
+                    let var_info = VariableInfo {
+                        ident: ident.clone(),
+                        typ: typ.clone(),
+                    };
+                    self.symbol_table.define_variable(var_info)?;
+                }
+                ItemKind::Init(ident, expr) => {
+                    let expr_type = self.visit_expr(expr)?;
+                    if !self.is_subtype(&expr_type, typ) {
+                        self.add_error(SemanticError::TypeMismatch {
+                            expected: typ.to_string(),
+                            found: expr_type.to_string(),
+                            position: expr.position,
+                        });
+                    }
+                    self.symbol_table.define_variable(VariableInfo {
+                        ident: ident.clone(),
+                        typ: typ.clone(),
+                    })?;
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn visit_assign(
@@ -486,15 +518,65 @@ impl SemanticChecker {
         value: &Box<Expr>,
         position: SourcePosition,
     ) -> Result<(), Vec<SemanticError>> {
-        todo!();
+        let is_lvalue = matches!(
+            target.kind,
+            ExprKind::Var(_) | ExprKind::ArrayAccess { .. } | ExprKind::FieldAccess { .. }
+        );
+
+        if !is_lvalue {
+            self.add_error(SemanticError::InvalidLValue {
+                position: target.position,
+            });
+            return Ok(());
+        }
+
+        let target_type = self.visit_expr(&target)?;
+        let value_type = self.visit_expr(&value)?;
+
+        if !self.is_subtype(&value_type, &target_type) {
+            self.add_error(SemanticError::TypeMismatch {
+                expected: target_type.to_string(),
+                found: value_type.to_string(),
+                position: value.position,
+            });
+        }
+
+        Ok(())
     }
 
     pub fn visit_return(
         &mut self,
-        block: &Option<Box<Expr>>,
+        expr: &Option<Box<Expr>>,
         position: SourcePosition,
     ) -> Result<(), Vec<SemanticError>> {
-        todo!();
+        let return_type = self
+            .current_return_type
+            .clone()
+            .expect("Internal error: visit_return() with no expected return type");
+
+        match expr {
+            Some(expr) => {
+                let expr_type = self.visit_expr(&expr)?;
+
+                if !self.is_subtype(&expr_type, &return_type) {
+                    self.add_error(SemanticError::InvalidReturnValue {
+                        expected: return_type.to_string(),
+                        found: expr_type.to_string(),
+                        position: expr.position,
+                    });
+                }
+            }
+            None => {
+                if !matches!(return_type.kind, TypeKind::Void) {
+                    self.add_error(SemanticError::InvalidReturnValue {
+                        expected: return_type.to_string(),
+                        found: "void".to_string(),
+                        position,
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn visit_increment(
@@ -502,7 +584,26 @@ impl SemanticChecker {
         expr: &Box<Expr>,
         position: SourcePosition,
     ) -> Result<(), Vec<SemanticError>> {
-        todo!();
+        let expr_type = self.visit_expr(expr)?;
+        if !matches!(expr_type.kind, TypeKind::Int) {
+            self.add_error(SemanticError::InvalidOperands {
+                operator: "++".to_string(),
+                operands: vec![expr_type.to_string()],
+                position: expr.position,
+            });
+        }
+
+        let is_lvalue = matches!(
+            expr.kind,
+            ExprKind::Var(_) | ExprKind::ArrayAccess { .. } | ExprKind::FieldAccess { .. }
+        );
+        if !is_lvalue {
+            self.add_error(SemanticError::InvalidLValue {
+                position: expr.position,
+            });
+        }
+
+        Ok(())
     }
 
     pub fn visit_decrement(
@@ -510,7 +611,26 @@ impl SemanticChecker {
         expr: &Box<Expr>,
         position: SourcePosition,
     ) -> Result<(), Vec<SemanticError>> {
-        todo!();
+        let expr_type = self.visit_expr(expr)?;
+        if !matches!(expr_type.kind, TypeKind::Int) {
+            self.add_error(SemanticError::InvalidOperands {
+                operator: "--".to_string(),
+                operands: vec![expr_type.to_string()],
+                position: expr.position,
+            });
+        }
+
+        let is_lvalue = matches!(
+            expr.kind,
+            ExprKind::Var(_) | ExprKind::ArrayAccess { .. } | ExprKind::FieldAccess { .. }
+        );
+        if !is_lvalue {
+            self.add_error(SemanticError::InvalidLValue {
+                position: expr.position,
+            });
+        }
+
+        Ok(())
     }
 
     pub fn visit_if(
@@ -520,7 +640,21 @@ impl SemanticChecker {
         if_false: &Option<Box<Stmt>>,
         position: SourcePosition,
     ) -> Result<(), Vec<SemanticError>> {
-        todo!();
+        let cond_type = self.visit_expr(cond)?;
+        if !matches!(cond_type.kind, TypeKind::Bool) {
+            self.add_error(SemanticError::TypeMismatch {
+                expected: "boolean".to_string(),
+                found: cond_type.to_string(),
+                position: cond.position,
+            });
+        }
+
+        self.visit_statement(&if_true)?;
+        if let Some(if_false) = if_false {
+            self.visit_statement(&if_false)?;
+        }
+
+        Ok(())
     }
 
     pub fn visit_while(
@@ -529,7 +663,16 @@ impl SemanticChecker {
         body: &Box<Stmt>,
         position: SourcePosition,
     ) -> Result<(), Vec<SemanticError>> {
-        todo!();
+        let cond_type = self.visit_expr(cond)?;
+        if !matches!(cond_type.kind, TypeKind::Bool) {
+            self.add_error(SemanticError::TypeMismatch {
+                expected: "boolean".to_string(),
+                found: cond_type.to_string(),
+                position: cond.position,
+            });
+        }
+        self.visit_statement(&body)?;
+        Ok(())
     }
 
     pub fn visit_for(
@@ -540,7 +683,31 @@ impl SemanticChecker {
         body: &Box<Stmt>,
         position: SourcePosition,
     ) -> Result<(), Vec<SemanticError>> {
-        todo!();
+        self.symbol_table.enter_scope();
+
+        if let Some(init_stmt) = init {
+            // The init variable will be defined in `visit_statement`.
+            self.visit_statement(&init_stmt)?;
+        }
+
+        if let Some(cond_expr) = cond {
+            let cond_type = self.visit_expr(&cond_expr)?;
+            if !matches!(cond_type.kind, TypeKind::Bool) {
+                self.add_error(SemanticError::TypeMismatch {
+                    expected: "boolean".to_string(),
+                    found: cond_type.to_string(),
+                    position: cond_expr.position,
+                });
+            }
+        }
+
+        if let Some(post_expr) = post {
+            self.visit_expr(&post_expr)?;
+        }
+
+        self.visit_statement(&body)?;
+        self.symbol_table.leave_scope();
+        Ok(())
     }
 
     pub fn visit_for_each(
@@ -551,7 +718,31 @@ impl SemanticChecker {
         body: &Box<Stmt>,
         position: SourcePosition,
     ) -> Result<(), Vec<SemanticError>> {
-        todo!();
+        let collection_type = self.visit_expr(&collection)?;
+        if let TypeKind::Array(inner) = collection_type.kind {
+            if !self.types_equal(&element_type, &inner) {
+                self.add_error(SemanticError::TypeMismatch {
+                    expected: inner.to_string(),
+                    found: element_type.to_string(),
+                    position: inner.position,
+                });
+            }
+        } else {
+            self.add_error(SemanticError::TypeMismatch {
+                expected: format!("{}[]", element_type.to_string()),
+                found: collection_type.to_string(),
+                position: collection.position,
+            });
+        }
+
+        self.symbol_table.enter_scope();
+        self.symbol_table.define_variable(VariableInfo {
+            ident: item_name.clone(),
+            typ: element_type.clone(),
+        })?;
+        self.visit_statement(body)?;
+        self.symbol_table.leave_scope();
+        Ok(())
     }
 
     pub fn visit_expr_statement(
