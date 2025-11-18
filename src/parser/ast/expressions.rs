@@ -59,6 +59,14 @@ pub enum UnaryOp {
     Neg, // -
     Not, // !
 }
+impl UnaryOp {
+    pub fn to_string(&self) -> String {
+        match self {
+            UnaryOp::Neg => "-".to_string(),
+            UnaryOp::Not => "!".to_string(),
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum BinaryOp {
@@ -80,4 +88,24 @@ pub enum BinaryOp {
     // Logical
     And, // &&
     Or,  // ||
+}
+
+impl BinaryOp {
+    pub fn to_string(&self) -> String {
+        match self {
+            BinaryOp::Add => "+".to_string(),
+            BinaryOp::Sub => "-".to_string(),
+            BinaryOp::Mul => "*".to_string(),
+            BinaryOp::Div => "/".to_string(),
+            BinaryOp::Mod => "%".to_string(),
+            BinaryOp::Eq => "==".to_string(),
+            BinaryOp::Neq => "!=".to_string(),
+            BinaryOp::Lt => "<".to_string(),
+            BinaryOp::Le => "<=".to_string(),
+            BinaryOp::Gt => ">".to_string(),
+            BinaryOp::Ge => ">=".to_string(),
+            BinaryOp::And => "&&".to_string(),
+            BinaryOp::Or => "||".to_string(),
+        }
+    }
 }

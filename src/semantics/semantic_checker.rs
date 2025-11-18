@@ -3,6 +3,8 @@
 #![allow(unused_variables)]
 
 use std::collections::HashMap;
+use std::f32::consts::E;
+use std::vec;
 
 use crate::diagnostics::SemanticError;
 use crate::parser::ast::*;
@@ -877,7 +879,51 @@ impl SemanticChecker {
         expr: &Box<Expr>,
         position: SourcePosition,
     ) -> Result<Type, Vec<SemanticError>> {
-        todo!()
+        let expr_type = self.visit_expr(&expr)?;
+        match op {
+            UnaryOp::Neg => {
+                if !matches!(expr_type.kind, TypeKind::Int) {
+                    self.add_error(SemanticError::InvalidOperands {
+                        operator: op.to_string(),
+                        operands: vec![expr_type.to_string()],
+                        position: expr.position,
+                    });
+                }
+                Ok(Type {
+                    kind: TypeKind::Int,
+                    position: expr.position,
+                })
+            }
+            UnaryOp::Not => {
+                if !matches!(expr_type.kind, TypeKind::Bool) {
+                    self.add_error(SemanticError::InvalidOperands {
+                        operator: "!".to_string(),
+                        operands: vec![expr_type.to_string()],
+                        position: expr.position,
+                    });
+                }
+                Ok(Type {
+                    kind: TypeKind::Bool,
+                    position: expr.position,
+                })
+            }
+        }
+    }
+
+    fn type_legal_for_bin_op(&mut self, op: &BinaryOp, typ: &Type) -> bool {
+        match op {
+            BinaryOp::Add => matches!(typ.kind, TypeKind::Int | TypeKind::String),
+            BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
+                matches!(typ.kind, TypeKind::Int)
+            }
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+                matches!(typ.kind, TypeKind::Bool)
+            }
+            BinaryOp::Eq | BinaryOp::Neq => true,
+            BinaryOp::And | BinaryOp::Or => {
+                matches!(typ.kind, TypeKind::Bool)
+            }
+        }
     }
 
     fn visit_binary_operator(
@@ -887,6 +933,64 @@ impl SemanticChecker {
         rhs: &Box<Expr>,
         position: SourcePosition,
     ) -> Result<Type, Vec<SemanticError>> {
-        todo!()
+        let lhs_type = self.visit_expr(&lhs)?;
+        let rhs_type = self.visit_expr(&rhs)?;
+
+        // Check if left operand if valid for this op.
+        if !self.type_legal_for_bin_op(op, &lhs_type) {
+            self.add_error(SemanticError::InvalidOperands {
+                operator: op.to_string(),
+                operands: vec![lhs_type.to_string()],
+                position: lhs.position,
+            });
+        }
+        // Check if right operand if valid for this op.
+        if !self.type_legal_for_bin_op(op, &rhs_type) {
+            self.add_error(SemanticError::InvalidOperands {
+                operator: op.to_string(),
+                operands: vec![rhs_type.to_string()],
+                position: rhs.position,
+            });
+        }
+        // Check if both types are equal.
+        if !self.types_equal(&lhs_type, &rhs_type) {
+            // TODO: Better error here.
+            self.add_error(SemanticError::TypeMismatch {
+                expected: lhs_type.to_string(),
+                found: rhs_type.to_string(),
+                position: rhs_type.position,
+            });
+        }
+
+        match op {
+            // Result of this binary is the same as the operands type.
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul => Ok(Type {
+                kind: lhs_type.kind,
+                position,
+            }),
+            // Result of this binary is the same as the operands type.
+            BinaryOp::Div | BinaryOp::Mod => {
+                if let ExprKind::LiteralInt(0) = rhs.kind {
+                    self.add_error(SemanticError::ZeroDivision {
+                        position: rhs.position,
+                    });
+                }
+                Ok(Type {
+                    kind: lhs_type.kind,
+                    position,
+                })
+            }
+            BinaryOp::Lt
+            | BinaryOp::Le
+            | BinaryOp::Gt
+            | BinaryOp::Ge
+            | BinaryOp::Eq // TODO: Maybe we should check if rhs is a subtype of lhs or other way around in case of Neq and Eq.
+            | BinaryOp::Neq
+            | BinaryOp::And
+            | BinaryOp::Or => Ok(Type {
+                kind: TypeKind::Bool,
+                position,
+            }),
+        }
     }
 }
