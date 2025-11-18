@@ -403,7 +403,7 @@ Expr7: Box<ast::Expr> = {
     <expr: Expr7> "." <field_name: PositionedIdent> => {
         let start_pos = expr.position.0;
         Box::new(ast::Expr {
-            kind: ast::ExprKind::FieldAccess { expr, field_name: field_name.clone() },
+            kind: ast::ExprKind::FieldAccess { object: expr, field_name: field_name.clone() },
             position: SourcePosition(start_pos, field_name.position.1)
         })
     },

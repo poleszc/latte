@@ -763,7 +763,7 @@ impl SemanticChecker {
     // Checks an expression and returns it's type.
     pub fn visit_expr(&mut self, outer_expr: &Box<Expr>) -> Result<Type, Vec<SemanticError>> {
         match &outer_expr.kind {
-            ExprKind::Var(ident) => self.symbol_table.lookup_variable(ident),
+            ExprKind::Var(ident) => Ok(self.symbol_table.lookup_variable(ident)?),
             ExprKind::LiteralInt(_) => Ok(Type {
                 kind: TypeKind::Int,
                 position: outer_expr.position,
