@@ -833,4 +833,60 @@ impl SemanticChecker {
             }
         }
     }
+
+    fn visit_application(
+        &mut self,
+        callee: &Box<Expr>,
+        args: &Vec<Box<Expr>>, // TODO: Remove box expr.
+        position: SourcePosition,
+    ) -> Result<Type, Vec<SemanticError>> {
+        todo!()
+    }
+
+    fn visit_array_access(
+        &mut self,
+        array: &Box<Expr>,
+        index: &Box<Expr>,
+        position: SourcePosition,
+    ) -> Result<Type, Vec<SemanticError>> {
+        todo!()
+    }
+
+    fn visit_field_access(
+        &mut self,
+        object: &Box<Expr>,
+        field_name: &Ident,
+        position: SourcePosition,
+    ) -> Result<Type, Vec<SemanticError>> {
+        todo!()
+    }
+
+    fn visit_method_call(
+        &mut self,
+        callee: &Box<Expr>,
+        method_name: &Ident,
+        args: &Vec<Expr>,
+        position: SourcePosition,
+    ) -> Result<Type, Vec<SemanticError>> {
+        todo!()
+    }
+
+    fn visit_unary_operator(
+        &mut self,
+        op: &UnaryOp,
+        expr: &Box<Expr>,
+        position: SourcePosition,
+    ) -> Result<Type, Vec<SemanticError>> {
+        todo!()
+    }
+
+    fn visit_binary_operator(
+        &mut self,
+        op: &BinaryOp,
+        lhs: &Box<Expr>,
+        rhs: &Box<Expr>,
+        position: SourcePosition,
+    ) -> Result<Type, Vec<SemanticError>> {
+        todo!()
+    }
 }

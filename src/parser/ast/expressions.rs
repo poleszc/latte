@@ -20,6 +20,7 @@ pub enum ExprKind {
     LiteralNull,
     App {
         callee: Box<Expr>,
+        // TODO: Try to remove Vec<Box<_>>
         args: Vec<Box<Expr>>,
     }, // obj.foo(1, 2)
     ArrayAccess {
