@@ -55,7 +55,19 @@ pub fn run_compiler<
     dump_ast_to_json(&output_dir, file_stem, &parsed_program)?;
 
     eprintln!("[Semantic] Running semantic analysis...");
-    SemanticChecker::check(&parsed_program)?;
+    match SemanticChecker::check(&parsed_program) {
+        Ok(_) => return Ok(()),
+        Err(errors) => {
+            for err in errors  {
+                let comp_error = CompilerError::Semantic(err);
+                report_compiler_error(&args.input_file.to_str().unwrap(), &source_code, &comp_error);
+            }
+            return Err(CompilerError::Other("Kajak".to_string()));
+        }
+    }
+    
+
+
     eprintln!("[Semantic] Semantic analysis completed successful");
 
     // backend_compile(&mut parsed_program, &output_dir, file_stem, &args)?;

@@ -37,7 +37,11 @@ impl SemanticChecker {
         let mut checker = SemanticChecker::new();
         checker.visit_program(program)?;
         // TODO: Do the error handling nicely.
-        Err(checker.errors)
+        if checker.errors.is_empty() {
+            Ok(())
+        } else {
+            Err(checker.errors)
+        }
     }
 
     fn add_error(&mut self, error: SemanticError) {
@@ -353,7 +357,7 @@ impl SemanticChecker {
                 matches!(typ.kind, TypeKind::Int)
             }
             BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
-                matches!(typ.kind, TypeKind::Bool)
+                matches!(typ.kind, TypeKind::Int)
             }
             BinaryOp::Eq | BinaryOp::Neq => true,
             BinaryOp::And | BinaryOp::Or => {
@@ -623,7 +627,7 @@ impl SemanticChecker {
                 operator: "++".to_string(),
                 operand: expr_type.to_string(),
                 position: expr.position,
-                type_position: expr_type.position
+                type_position: expr_type.position,
             });
         }
 
@@ -683,11 +687,12 @@ impl SemanticChecker {
                 position: cond.position,
             });
         }
-
+        self.symbol_table.enter_scope();
         self.visit_statement(&if_true)?;
         if let Some(if_false) = if_false {
             self.visit_statement(&if_false)?;
         }
+        self.symbol_table.leave_scope();
 
         Ok(())
     }
@@ -706,7 +711,9 @@ impl SemanticChecker {
                 position: cond.position,
             });
         }
+        self.symbol_table.enter_scope();
         self.visit_statement(&body)?;
+        self.symbol_table.leave_scope();
         Ok(())
     }
 
@@ -1039,11 +1046,11 @@ impl SemanticChecker {
                     position,
                 });
             }
-        } else if let TypeKind::String = obj_type.kind {
+        } else if let TypeKind::String | TypeKind::Array(_) = obj_type.kind {
             // TODO: Extract the legal type field into a module.
             if field_name.name != "length" {
                 self.add_error(SemanticError::UndefinedField {
-                    class_name: "string".to_string(),
+                    class_name: obj_type.to_string(),
                     field_name: field_name.name.clone(),
                     position,
                     class_position: SourcePosition(0, 0),
@@ -1141,7 +1148,7 @@ impl SemanticChecker {
                         operator: "!".to_string(),
                         operand: expr_type.to_string(),
                         position: expr.position,
-                        type_position: expr_type.position
+                        type_position: expr_type.position,
                     });
                 }
                 Ok(Type {
@@ -1168,7 +1175,7 @@ impl SemanticChecker {
                 operator: op.to_string(),
                 operand: lhs_type.to_string(),
                 position: lhs.position,
-                type_position: lhs_type.position
+                type_position: lhs_type.position,
             });
         }
         // Check if right operand if valid for this op.
