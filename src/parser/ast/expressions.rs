@@ -31,6 +31,7 @@ pub enum ExprKind {
         object: Box<Expr>,
         field_name: Ident,
     }, // class.field
+    // TODO: This is probably unneded.
     Method {
         object: Box<Expr>,
         method_name: Ident,

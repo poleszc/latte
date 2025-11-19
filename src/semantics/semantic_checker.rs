@@ -416,7 +416,7 @@ impl SemanticChecker {
         }
 
         self.visit_block(&func.body)?;
-        
+
         // TODO: This is bugged in nested functions.
         self.current_return_type = None;
         self.symbol_table.leave_scope();
@@ -493,6 +493,8 @@ impl SemanticChecker {
 
     pub fn visit_block(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
         self.symbol_table.enter_scope();
+        // TODO: Here we should:
+        // - Look for defined functions
         for stmt in &block.stmts {
             self.visit_statement(&stmt)?;
         }
@@ -1002,6 +1004,7 @@ impl SemanticChecker {
         }
     }
 
+    // TODO: Probably remove that
     fn visit_method_call(
         &mut self,
         callee: &Box<Expr>,
@@ -1015,11 +1018,11 @@ impl SemanticChecker {
             let all_methods = self.symbol_table.get_all_class_methods(&class_name.name);
 
             if let Some(method_info) = all_methods.get(&method_name.name) {
-                self.validate_function_call(&method_info, args, position)?;
+                // self.validate_function_call(&method_info, args, position)?;
 
                 // Function call okay.
                 return Ok(Type {
-                    kind: method_info.return_type.kind,
+                    kind: method_info.return_type.kind.clone(),
                     position,
                 });
             } else {

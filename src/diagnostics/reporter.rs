@@ -104,6 +104,20 @@ impl Diagnostic {
                     .with_label(position.0..position.1, "Class not found")
                     .with_note("This class was not declared in the current scope")
             },
+            SemanticError::UndefinedField { class_name, field_name, position, class_position } => {
+                Diagnostic::error(format!("Undefined field '{}'", field_name))
+                    .with_label(class_position.0..class_position.1, "In this class")
+                    .with_label(position.0..position.1, format!("Field '{}' was not declared", field_name))
+                    .with_note(format!("Class field '{}' was not declared in class '{}'", field_name, class_name))
+                .with_help("Consider declaring this field.")
+            }
+            SemanticError::UndefinedMethod { class_name, method_name, position, class_position } => {
+                Diagnostic::error(format!("Undefined method '{}'", method_name))
+                    .with_label(class_position.0..class_position.1, "In this class")
+                    .with_label(position.0..position.1, format!("Method '{}' was not declared", method_name))
+                    .with_note(format!("Method '{}' was not declared in class '{}'", method_name, class_name))
+                .with_help("Consider implementing this method.")
+            }
             SemanticError::DuplicateVariable { name, position, previous_position } => {
                 Diagnostic::error(format!("Variable '{}' is already defined", name))
                 .with_label(position.0..position.1, "Cannot redefine this variable")

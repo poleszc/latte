@@ -256,7 +256,7 @@ impl fmt::Display for SemanticError {
                 write!(
                     fmt,
                     "Undefined method '{}' in class '{}'",
-                    field_name, class_name
+                    method_name, class_name
                 )
             }
             SemanticError::DuplicateVariable { name, .. } => {
