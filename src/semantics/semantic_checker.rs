@@ -804,7 +804,6 @@ impl SemanticChecker {
                 kind: TypeKind::String,
                 position: outer_expr.position,
             }),
-            // TODO: Fix the situation with nulls.
             ExprKind::LiteralNull => Ok(Type {
                 kind: TypeKind::Null,
                 position: outer_expr.position,
@@ -853,7 +852,64 @@ impl SemanticChecker {
             }
             ExprKind::TypedNull(typ) => {
                 self.validate_variable_type(&typ)?;
+
+                // TODO: Test for (null)null
+                if matches!(typ.kind, TypeKind::Bool | TypeKind::Int | TypeKind::Void) {
+                    let expected = vec![
+                        "{ClassType}".to_string(),
+                        "{ArrayType}".to_string(),
+                        "{string}".to_string(),
+                    ];
+                    self.add_error(SemanticError::InvalidNullCast {
+                        found: typ.to_string(),
+                        expected,
+                        type_position: typ.position,
+                        expr_position: outer_expr.position,
+                    });
+                }
+
                 Ok(typ.clone())
+            }
+            ExprKind::ExprTypedNull(expr) => {
+                let expected = vec![
+                    "{ClassType}".to_string(),
+                    "{ArrayType}".to_string(),
+                    "{string}".to_string(),
+                ];
+                match &expr.kind {
+                    ExprKind::Var(ident) => {
+                        if !self.symbol_table.class_exists(&ident.name) {
+                            self.add_error(SemanticError::UndefinedClass {
+                                name: ident.name.clone(),
+                                position: ident.position,
+                            });
+                            Ok(Type {
+                                kind: TypeKind::Error,
+                                position: outer_expr.position,
+                            })
+                        } else {
+                            Ok(Type {
+                                kind: TypeKind::Class(ident.clone()),
+                                position: ident.position,
+                            })
+                        }
+                    }
+                    ExprKind::LiteralString(_) => Ok(Type {
+                        kind: TypeKind::String,
+                        position: outer_expr.position,
+                    }),
+                    _ => {
+                        self.add_error(SemanticError::InvalidNullCastExpr {
+                            expected,
+                            cast_position: expr.position,
+                            expr_position: outer_expr.position,
+                        });
+                        Ok(Type {
+                            kind: TypeKind::Error,
+                            position: outer_expr.position,
+                        })
+                    }
+                }
             }
         }
     }

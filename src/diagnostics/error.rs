@@ -223,6 +223,17 @@ pub enum SemanticError {
         expected: Vec<String>,
         position: SourcePosition,
     },
+    InvalidNullCast {
+        found: String,
+        expected: Vec<String>,
+        type_position: SourcePosition,
+        expr_position: SourcePosition,
+    },
+    InvalidNullCastExpr {
+        expected: Vec<String>,
+        cast_position: SourcePosition,
+        expr_position: SourcePosition,
+    },
 }
 // TODO: Maybe not needed. Remove?
 impl fmt::Display for SemanticError {
@@ -337,6 +348,12 @@ impl fmt::Display for SemanticError {
             }
             SemanticError::InvalidVoidArrayType { .. } => {
                 write!(fmt, "Invalid void array type")
+            }
+            SemanticError::InvalidNullCast { found, .. } => {
+                write!(fmt, "Invalid null cast to: '{}'", found)
+            }
+            SemanticError::InvalidNullCastExpr { .. } => {
+                write!(fmt, "Null cast to invalid expression")
             }
         }
     }

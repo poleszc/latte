@@ -375,6 +375,21 @@ Expr3: Box<ast::Expr> = {
 Expr4: Box<ast::Expr> = {
     <l: Expr4> "+" <r: Expr5> => make_binary(ast::BinaryOp::Add, l, r),
     <l: Expr4> "-" <r: Expr5> => make_binary(ast::BinaryOp::Sub, l, r),
+
+    <start: @L> "(" <typ: PrimitiveType> ")" "null" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::TypedNull(typ),
+        position: SourcePosition(start, end),
+    }),
+
+    <start: @L> "(" <typ: ArrayType> ")" "null" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::TypedNull(typ),
+        position: SourcePosition(start, end),
+    }),
+
+    <start: @L> "(" <expr: Expr> ")" "null" <end: @R> => Box::new(ast::Expr {
+            kind: ast::ExprKind::ExprTypedNull(expr),
+            position: SourcePosition(start, end),
+    }),
     Expr5,
 };
 
@@ -428,6 +443,7 @@ Expr7: Box<ast::Expr> = {
         },
         position: SourcePosition(start, end)
     }),
+    // TODO: Add null casts.
     Expr8,
 };
 
@@ -452,11 +468,6 @@ Expr8: Box<ast::Expr> = {
         kind: ast::ExprKind::LiteralNull,
         position: SourcePosition(start, end),
     }),
-    // TODO: Add null casts.
-    // <start: @L> "(" <typ: PositionedIdent> ")" "null" <end: @R> => Box::new(ast::Expr {
-    //     kind: ast::ExprKind::TypedNull(ast::t),
-    //     position: SourcePosition(start, end),
-    // }),
     <id: PositionedIdent> => Box::new(ast::Expr {
         kind: ast::ExprKind::Var(id.clone()),
         position: id.position,

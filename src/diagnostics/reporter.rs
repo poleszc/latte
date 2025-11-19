@@ -262,6 +262,19 @@ impl Diagnostic {
                 .with_label(position.0..position.1, "`void` is not a valid base type for an array type")
                 .with_help(format!("Try using one of: {}", expected.join(", ")))
             },
+            SemanticError::InvalidNullCast { found, expected, type_position, expr_position } => {
+                Diagnostic::error("Invalid 'null' cast")
+                .with_label(expr_position.0..expr_position.1, "In this expression")
+                .with_label(type_position.0..type_position.1, format!("`{}` is not a valid type for a null cast", found))
+                .with_help(format!("Try using one of: {}", expected.join(", ")))
+            }
+            SemanticError::InvalidNullCastExpr { expected, cast_position, expr_position } => {
+                Diagnostic::error("Invalid 'null' cast")
+                .with_label(expr_position.0..expr_position.1, "In this expression")
+                .with_label(cast_position.0..cast_position.1, "This is not a valid expression for a null cast")
+                .with_help(format!("Try using one of: {}", expected.join(", ")))
+                
+            }
         }
     }
 }

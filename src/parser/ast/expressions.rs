@@ -53,6 +53,7 @@ pub enum ExprKind {
         size: Box<Expr>,
     }, // new int[10]
     TypedNull(Type),
+    ExprTypedNull(Box<Expr>),
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize)]
