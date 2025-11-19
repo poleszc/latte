@@ -1,3 +1,5 @@
+use crate::SourcePosition;
+
 use super::error::{CompilerError, LexicalError, ParseError, SemanticError};
 use super::{Diagnostic, DiagnosticKind};
 use ariadne::{ColorGenerator, Config, Label, Report, ReportKind, Source};
@@ -34,7 +36,7 @@ impl Diagnostic {
             LexicalError::InvalidString => Diagnostic::error("Invalid string literal")
                 .with_label(span, "This string literal is malformed")
                 .with_note("String literals must be properly terminated with quotes")
-                .with_note("Valid escape sequences: \\n, \\t, \\r, \\\\, \\\"")
+                .with_note("Valid escape sequences: '\\n', '\\t', '\\r', '\\\\', '\\\"'")
                 .with_help(
                     "Make sure to close the string with a \" and use valid escape sequences",
                 ),
@@ -178,17 +180,59 @@ impl Diagnostic {
                     expected
                 ))
             },
+            SemanticError::AssignTypeMismatch { lhs_type, rhs_type, lhs_position, rhs_position } => {
+                Diagnostic::error("Type mismatch")
+                .with_label(
+                    lhs_position.0..lhs_position.1,
+                    format!("Left side of assignment is of type `{}`", lhs_type),
+                )
+                .with_label(
+                    rhs_position.0..rhs_position.1,
+                    format!("Right side of assignment is of type `{}`", rhs_type),
+                )
+                .with_note("Expected both sides of the assignment to have the same type")
+            }
+            SemanticError::BinaryOpTypeMismatch {
+                lhs_type,
+                lhs_position,
+                rhs_type,
+                rhs_position,
+            } => {
+                Diagnostic::error("Type mismatch")
+                .with_label(
+                    lhs_position.0..lhs_position.1,
+                    format!("Left side of expression is of type `{}`", lhs_type),
+                )
+                .with_label(
+                    rhs_position.0..rhs_position.1,
+                    format!("Right side of expression is of type `{}`", rhs_type),
+                )
+                .with_note("Expected both sides of the expression to have the same type")
+            },
+            SemanticError::DeclarationTypeMismatch { var_name,expected, decl_type_position, found, expr_position } => {
+                Diagnostic::error("Type mismatch")
+                .with_label(
+                    decl_type_position.0..decl_type_position.1,
+                    format!("Variable '{}' was declared with type '{}'", var_name, expected),
+                )
+                .with_label(
+                    expr_position.0..expr_position.1,
+                    format!("The initializing expression is of type '{}'", found),
+                )
+                .with_help("Consider changing the type of this variable or change the initializing expression.")
+            }
             SemanticError::InvalidOperands {
                 operator,
-                operands,
+                operand,
                 position,
+                type_position
             } => {
-                let op_str = operands.join(", ");
                 Diagnostic::error(format!("Invalid operands for operator '{}'", operator))
-                    .with_label(position.0..position.1, "Cannot apply this operator")
+                    .with_label(type_position.0..type_position.1, format!("Operand is of type '{}'", operand))
+                    .with_label(position.0..position.1, format!("Cannot apply '{}' to a value of type '{}'", operator, operand))
                     .with_note(format!(
                         "Operator '{}' is not defined for the type(s): {}",
-                        operator, op_str
+                        operator, operand
                     ))
             },
             SemanticError::WrongNumberOfArguments {
@@ -199,25 +243,31 @@ impl Diagnostic {
                 function_position,
             } => {
                 Diagnostic::error(format!("Wrong number of arguments for function '{}'", name))
-                    .with_label(function_position.0..function_position.1, format!("`{}` was defined here and expects {} arguments", name, expected)
+                    .with_label(function_position.0..function_position.1, format!("`{}` was defined here and expects {} argument(s)", name, expected)
                     )
                     .with_label(
                         call_position.0..call_position.1,
-                        format!("`{}` was called here and provided with {} arguments", name, found),
+                        format!("But `{}` was called here and provided with {} argument(s)", name, found),
                     )
+                .with_help("Make sure the function call is provided with the same number of arguments as in the definition")
             },
             SemanticError::InvalidReturnValue {
                 expected,
                 found,
                 position,
+                ret_type_position,
+    
             } => {
-                Diagnostic::error("Invalid return value").with_label(
-                    position.0..position.1,
-                    format!(
-                        "This function should return `{}`, but it returns `{}`",
-                        expected, found
-                    ),
+                Diagnostic::error("Invalid return value")
+                .with_label(
+                    ret_type_position.0..ret_type_position.1,
+                    format!("This function returns `{}`", expected),
                 )
+                .with_label(
+                    position.0..position.1,
+                    format!("But here a value of type `{}` was provided", found),
+                )
+                .with_help("Consider changing the return type or the return statement")
             },
             SemanticError::InvalidLValue { position } => {
                 Diagnostic::error("Invalid assignment")
@@ -245,11 +295,12 @@ impl Diagnostic {
                 Diagnostic::error(format!("Wrong number of arguments for `main`"))
                     .with_label(position.0..position.1, format!("`main` was defined here and expects {} arguments, but is expected to take in 0 arguments", found)
                     )
+                .with_note("Main is expected to have 0 arguments in a valid program")
                 .with_help("Change the `main` definition to expect no arguments")
             },
             SemanticError::InvalidVariableType { found, expected, position } => {
                 Diagnostic::error("Invalid variable type")
-                .with_label(position.0..position.1, format!("`{}` is not a valid type for a variable or class field", found))
+                .with_label(position.0..position.1, format!("`{}` is not a valid type for a variable, function argument or a class field", found))
                 .with_help(format!("Try using one of: {}", expected.join(", ")))
             },
             SemanticError::InvalidFunctionReturnType { found, expected, position } => {
@@ -273,7 +324,7 @@ impl Diagnostic {
                 .with_label(expr_position.0..expr_position.1, "In this expression")
                 .with_label(cast_position.0..cast_position.1, "This is not a valid expression for a null cast")
                 .with_help(format!("Try using one of: {}", expected.join(", ")))
-                
+    
             }
         }
     }

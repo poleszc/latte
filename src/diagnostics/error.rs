@@ -2,6 +2,7 @@
 use crate::parser::ast::SourcePosition;
 use crate::parser::tokens::Token;
 use lalrpop_util::ParseError as LalrpopParseError;
+use logos::source;
 use std::fmt;
 use std::num::ParseIntError;
 
@@ -176,10 +177,30 @@ pub enum SemanticError {
         found: String,
         position: SourcePosition,
     },
+    AssignTypeMismatch {
+        lhs_type: String,
+        rhs_type: String,
+        lhs_position: SourcePosition,
+        rhs_position: SourcePosition,
+    },
+    BinaryOpTypeMismatch {
+        lhs_type: String,
+        lhs_position: SourcePosition,
+        rhs_type: String,
+        rhs_position: SourcePosition,
+    },
+    DeclarationTypeMismatch {
+        var_name: String,
+        expected: String,
+        decl_type_position: SourcePosition,
+        found: String,
+        expr_position: SourcePosition,
+    },
     InvalidOperands {
         operator: String,
-        operands: Vec<String>,
+        operand: String,
         position: SourcePosition,
+        type_position: SourcePosition,
     },
     WrongNumberOfArguments {
         name: String,
@@ -190,6 +211,7 @@ pub enum SemanticError {
     },
     InvalidReturnValue {
         expected: String,
+        ret_type_position: SourcePosition,
         found: String,
         position: SourcePosition,
     },
@@ -236,6 +258,7 @@ pub enum SemanticError {
     },
 }
 // TODO: Maybe not needed. Remove?
+
 impl fmt::Display for SemanticError {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -308,6 +331,13 @@ impl fmt::Display for SemanticError {
                 "Mismatched types: expected {}, found {}",
                 expected, found
             ),
+            SemanticError::DeclarationTypeMismatch {
+                expected, found, ..
+            } => write!(
+                fmt,
+                "Mismatched types: expected {}, found {}",
+                expected, found
+            ),
             SemanticError::InvalidOperands { operator, .. } => {
                 write!(fmt, "Invalid operands for operator '{}'", operator)
             }
@@ -355,6 +385,8 @@ impl fmt::Display for SemanticError {
             SemanticError::InvalidNullCastExpr { .. } => {
                 write!(fmt, "Null cast to invalid expression")
             }
+            SemanticError::BinaryOpTypeMismatch { lhs_type, lhs_position, rhs_type, rhs_position } => todo!(),
+            SemanticError::AssignTypeMismatch { lhs_type, rhs_type, lhs_position, rhs_position } => todo!(),
         }
     }
 }

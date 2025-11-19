@@ -1,4 +1,7 @@
 int main() {
+        int y = true;
+
+
         int x;
         x = true;
         return 1;

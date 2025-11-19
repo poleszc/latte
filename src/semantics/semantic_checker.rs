@@ -523,10 +523,12 @@ impl SemanticChecker {
                 ItemKind::Init(ident, expr) => {
                     let expr_type = self.visit_expr(expr)?;
                     if !self.is_subtype(&expr_type, typ) {
-                        self.add_error(SemanticError::TypeMismatch {
+                        self.add_error(SemanticError::DeclarationTypeMismatch {
+                            var_name: ident.name.clone(),
                             expected: typ.to_string(),
+                            decl_type_position: typ.position,
                             found: expr_type.to_string(),
-                            position: expr.position,
+                            expr_position: expr.position,
                         });
                     }
                     self.symbol_table.define_variable(VariableInfo {
@@ -560,11 +562,13 @@ impl SemanticChecker {
         let target_type = self.visit_expr(&target)?;
         let value_type = self.visit_expr(&value)?;
 
+        // TODO: Would be nice to seek where was the lhs defined
         if !self.is_subtype(&value_type, &target_type) {
-            self.add_error(SemanticError::TypeMismatch {
-                expected: target_type.to_string(),
-                found: value_type.to_string(),
-                position: value.position,
+            self.add_error(SemanticError::AssignTypeMismatch {
+                lhs_type: target_type.to_string(),
+                rhs_type: value_type.to_string(),
+                lhs_position: target_type.position,
+                rhs_position: value_type.position,
             });
         }
 
@@ -588,6 +592,7 @@ impl SemanticChecker {
                 if !self.is_subtype(&expr_type, &return_type) {
                     self.add_error(SemanticError::InvalidReturnValue {
                         expected: return_type.to_string(),
+                        ret_type_position: return_type.position,
                         found: expr_type.to_string(),
                         position: expr.position,
                     });
@@ -597,6 +602,7 @@ impl SemanticChecker {
                 if !matches!(return_type.kind, TypeKind::Void) {
                     self.add_error(SemanticError::InvalidReturnValue {
                         expected: return_type.to_string(),
+                        ret_type_position: return_type.position,
                         found: "void".to_string(),
                         position,
                     });
@@ -615,8 +621,9 @@ impl SemanticChecker {
         if !matches!(expr_type.kind, TypeKind::Int) {
             self.add_error(SemanticError::InvalidOperands {
                 operator: "++".to_string(),
-                operands: vec![expr_type.to_string()],
+                operand: expr_type.to_string(),
                 position: expr.position,
+                type_position: expr_type.position
             });
         }
 
@@ -642,8 +649,9 @@ impl SemanticChecker {
         if !matches!(expr_type.kind, TypeKind::Int) {
             self.add_error(SemanticError::InvalidOperands {
                 operator: "--".to_string(),
-                operands: vec![expr_type.to_string()],
+                operand: expr_type.to_string(),
                 position: expr.position,
+                type_position: expr_type.position,
             });
         }
 
@@ -939,7 +947,7 @@ impl SemanticChecker {
                 self.add_error(SemanticError::TypeMismatch {
                     expected: param.to_string(),
                     found: arg_type.to_string(),
-                    position: expr_position,
+                    position: expr.position,
                 });
                 return Ok(false);
             }
@@ -979,7 +987,7 @@ impl SemanticChecker {
         position: SourcePosition,
     ) -> Result<Type, Vec<SemanticError>> {
         let array_type = self.visit_expr(&array)?;
-        let index_type = self.visit_expr(&array)?;
+        let index_type = self.visit_expr(&index)?;
 
         if !matches!(index_type.kind, TypeKind::Int) {
             self.add_error(SemanticError::TypeMismatch {
@@ -994,8 +1002,9 @@ impl SemanticChecker {
             _ => {
                 self.add_error(SemanticError::InvalidOperands {
                     operator: "[]".to_string(),
-                    operands: vec![array_type.to_string()],
+                    operand: array_type.to_string(),
                     position,
+                    type_position: array_type.position,
                 });
                 Ok(Type {
                     kind: TypeKind::Error,
@@ -1052,8 +1061,9 @@ impl SemanticChecker {
         } else {
             self.add_error(SemanticError::InvalidOperands {
                 operator: ".".to_string(),
-                operands: vec![obj_type.to_string()],
+                operand: obj_type.to_string(),
                 position: position,
+                type_position: obj_type.position,
             });
             return Ok(Type {
                 kind: TypeKind::Error,
@@ -1115,8 +1125,9 @@ impl SemanticChecker {
                 if !matches!(expr_type.kind, TypeKind::Int) {
                     self.add_error(SemanticError::InvalidOperands {
                         operator: op.to_string(),
-                        operands: vec![expr_type.to_string()],
+                        operand: expr_type.to_string(),
                         position: expr.position,
+                        type_position: expr_type.position,
                     });
                 }
                 Ok(Type {
@@ -1128,8 +1139,9 @@ impl SemanticChecker {
                 if !matches!(expr_type.kind, TypeKind::Bool) {
                     self.add_error(SemanticError::InvalidOperands {
                         operator: "!".to_string(),
-                        operands: vec![expr_type.to_string()],
+                        operand: expr_type.to_string(),
                         position: expr.position,
+                        type_position: expr_type.position
                     });
                 }
                 Ok(Type {
@@ -1154,25 +1166,27 @@ impl SemanticChecker {
         if !self.type_legal_for_bin_op(op, &lhs_type) {
             self.add_error(SemanticError::InvalidOperands {
                 operator: op.to_string(),
-                operands: vec![lhs_type.to_string()],
+                operand: lhs_type.to_string(),
                 position: lhs.position,
+                type_position: lhs_type.position
             });
         }
         // Check if right operand if valid for this op.
         if !self.type_legal_for_bin_op(op, &rhs_type) {
             self.add_error(SemanticError::InvalidOperands {
                 operator: op.to_string(),
-                operands: vec![rhs_type.to_string()],
+                operand: rhs_type.to_string(),
                 position: rhs.position,
+                type_position: rhs_type.position,
             });
         }
         // Check if both types are equal.
         if !self.types_equal(&lhs_type, &rhs_type) {
-            // TODO: Better error here.
-            self.add_error(SemanticError::TypeMismatch {
-                expected: lhs_type.to_string(),
-                found: rhs_type.to_string(),
-                position: rhs_type.position,
+            self.add_error(SemanticError::BinaryOpTypeMismatch {
+                lhs_type: lhs_type.to_string(),
+                lhs_position: lhs_type.position,
+                rhs_type: rhs_type.to_string(),
+                rhs_position: rhs_type.position,
             });
         }
 
