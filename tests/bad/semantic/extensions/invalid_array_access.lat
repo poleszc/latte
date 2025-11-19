@@ -1,0 +1,5 @@
+int main() {
+	int[] a = new int[1];
+	int b = a[true];
+	return 0;
+}

@@ -1,4 +1,4 @@
-use latte::{CompilerError, parser};
+use latte::{CompilerError, diagnostics::SemanticError, parser, semantics::SemanticChecker};
 
 pub fn assert_parsing_succeeds(input_path: &str) {
     let source_code = std::fs::read_to_string(input_path)
@@ -21,6 +21,39 @@ pub fn assert_parsing_fails(input_path: &str) {
     assert!(
         matches!(result, Err(CompilerError::Parsing(_))),
         "Expected parsing to fail for '{}', but it succeeded",
+        input_path
+    );
+}
+
+pub fn assert_semantic_analysis_pass(input_path: &str) {
+    let source_code = std::fs::read_to_string(input_path)
+        .unwrap_or_else(|err| panic!("Failed to read a test file '{}': {}", input_path, err));
+
+    let ast = parser::parse(&source_code).expect("Expected parsing to succeed, but it failed");
+    match SemanticChecker::check(&ast) {
+        Ok(_) => return,
+        Err(err) => assert!(
+            err.len() == 0,
+            "Expected semantic analysis to succeed for '{}' but it failed with: {:#?}",
+            input_path,
+            err
+        ),
+    }
+}
+
+pub fn assert_semantic_analysis_fail(input_path: &str) {
+    let source_code = std::fs::read_to_string(input_path)
+        .unwrap_or_else(|err| panic!("Failed to read a test file '{}': {}", input_path, err));
+
+    let ast = match parser::parse(&source_code) {
+        Ok(ast) => ast,
+        Err(_) => return, // Test passes if parsing failed.
+    };
+
+    let result = SemanticChecker::check(&ast);
+    assert!(
+        result.is_err(),
+        "Expected semantic analysis to fail for '{}', but it succeeded",
         input_path
     );
 }

@@ -118,16 +118,18 @@ impl SemanticChecker {
         // TODO: Can fields be overridden from a superclass?
         for entry in &class_def.entries {
             match &entry.kind {
-                ClassEntryKind::Field(ident, typ) => {
-                    if fields.contains_key(&ident.name) {
-                        self.add_error(SemanticError::DuplicateClassField {
-                            class_name: class_def.name.name.clone(),
-                            field_name: ident.name.clone(),
-                            position: ident.position,
-                            previous_position: fields[&ident.name].1,
-                        });
-                    } else {
-                        fields.insert(ident.name.clone(), (typ.clone(), ident.position));
+                ClassEntryKind::Field(identifiers, typ) => {
+                    for ident in identifiers {
+                        if fields.contains_key(&ident.name) {
+                            self.add_error(SemanticError::DuplicateClassField {
+                                class_name: class_def.name.name.clone(),
+                                field_name: ident.name.clone(),
+                                position: ident.position,
+                                previous_position: fields[&ident.name].1,
+                            });
+                        } else {
+                            fields.insert(ident.name.clone(), (typ.clone(), ident.position));
+                        }
                     }
                 }
                 ClassEntryKind::Method(func_def) => {

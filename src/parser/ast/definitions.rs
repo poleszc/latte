@@ -58,6 +58,6 @@ pub struct ClassEntry {
 
 #[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum ClassEntryKind {
-    Field(Ident, Type),
+    Field(Vec<Ident>, Type),
     Method(FuncDef),
 }

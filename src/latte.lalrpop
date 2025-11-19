@@ -149,8 +149,8 @@ ClassDef: ast::ClassDef = {
 }
 
 ClassEntry: ast::ClassEntry = {
-    <start: @L> <typ: Type> <name: PositionedIdent> ";" <end: @R> => ast::ClassEntry {
-        kind: ast::ClassEntryKind::Field(name, typ),
+    <start: @L> <typ: Type> <names: CommaNonEmpty<PositionedIdent>> ";" <end: @R> => ast::ClassEntry {
+        kind: ast::ClassEntryKind::Field(names, typ),
         position: SourcePosition(start, end),
     },
     <start: @L> <method: FuncDef> <end: @R> => ast::ClassEntry {

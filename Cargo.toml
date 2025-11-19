@@ -2,6 +2,10 @@
 name = "latte"
 version = "0.1.0"
 edition = "2024"
+[[bin]]
+name = "latc_llvm"
+path = "src/bin/latc_llvm.rs"
+test = false
 
 [build-dependencies]
 lalrpop = "0.22.2"

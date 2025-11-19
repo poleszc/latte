@@ -138,7 +138,7 @@ pub enum Token {
     Comma,
     #[token(".")]
     Dot,
-    #[token("[]")]
+    #[regex(r"\[\s*\]")]
     Dims,
 
     // Identifiers and literals.
