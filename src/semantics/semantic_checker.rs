@@ -3,7 +3,6 @@
 #![allow(unused_variables)]
 
 use std::collections::HashMap;
-use std::f32::consts::E;
 use std::vec;
 
 use crate::diagnostics::SemanticError;
@@ -405,6 +404,8 @@ impl SemanticChecker {
         // TODO: Try to use parametrized lifetime here to avoid cloning?
         self.current_return_type = Some(func.return_type.clone());
 
+        // TODO: Here we should look for all function definitions and handle them.
+
         // Add arguments to scope.
         for arg in &func.args {
             self.validate_variable_type(&arg.arg_type)?;
@@ -414,7 +415,8 @@ impl SemanticChecker {
             })?;
         }
 
-        // self.visit_block(&func.body)?;
+        self.visit_block(&func.body)?;
+        
         // TODO: This is bugged in nested functions.
         self.current_return_type = None;
         self.symbol_table.leave_scope();
@@ -852,13 +854,62 @@ impl SemanticChecker {
         }
     }
 
+    fn validate_function_call(
+        &mut self,
+        func_info: &FunctionInfo,
+        args: &Vec<Box<Expr>>,
+        expr_position: SourcePosition,
+    ) -> Result<bool, Vec<SemanticError>> {
+        let func_ident = func_info.ident.clone();
+        if args.len() != func_info.params.len() {
+            self.add_error(SemanticError::WrongNumberOfArguments {
+                name: func_ident.name.clone(),
+                expected: func_info.params.len(),
+                found: args.len(),
+                call_position: expr_position,
+                function_position: func_info.position,
+            });
+            return Ok(false);
+        }
+
+        // Type check arguments.
+        for (expr, param) in args.iter().zip(&func_info.params) {
+            let arg_type = self.visit_expr(expr)?;
+            if !self.types_equal(&arg_type, &param) {
+                self.add_error(SemanticError::TypeMismatch {
+                    expected: param.to_string(),
+                    found: arg_type.to_string(),
+                    position: expr_position,
+                });
+                return Ok(false);
+            }
+        }
+        return Ok(true);
+    }
+
     fn visit_application(
         &mut self,
         callee: &Box<Expr>,
         args: &Vec<Box<Expr>>, // TODO: Remove box expr.
         position: SourcePosition,
     ) -> Result<Type, Vec<SemanticError>> {
-        todo!()
+        // TODO: For now we only support direct calls on function names. Change that to use function types.
+        if let ExprKind::Var(name) = &callee.kind {
+            let func_info = self.symbol_table.lookup_function(&name)?;
+
+            self.validate_function_call(&func_info, &args, position)?;
+
+            // Function call okay.
+            return Ok(Type {
+                kind: func_info.return_type.kind,
+                position,
+            });
+        }
+
+        Ok(Type {
+            kind: TypeKind::Error,
+            position,
+        })
     }
 
     fn visit_array_access(
@@ -886,9 +937,8 @@ impl SemanticChecker {
                     operands: vec![array_type.to_string()],
                     position,
                 });
-                // TODO: For now we return void. We should change that to an error to support error recovery.
                 Ok(Type {
-                    kind: TypeKind::Void,
+                    kind: TypeKind::Error,
                     position,
                 })
             }
@@ -902,6 +952,7 @@ impl SemanticChecker {
         position: SourcePosition,
     ) -> Result<Type, Vec<SemanticError>> {
         let obj_type = self.visit_expr(&object)?;
+
         if let TypeKind::Class(class_name) = obj_type.kind {
             let all_fields = self.symbol_table.get_all_class_fields(&class_name.name);
 
@@ -920,7 +971,24 @@ impl SemanticChecker {
                 });
             }
         } else if let TypeKind::String = obj_type.kind {
-            todo!()
+            // TODO: Extract the legal type field into a module.
+            if field_name.name != "length" {
+                self.add_error(SemanticError::UndefinedField {
+                    class_name: "string".to_string(),
+                    field_name: field_name.name.clone(),
+                    position,
+                    class_position: SourcePosition(0, 0),
+                });
+                return Ok(Type {
+                    kind: TypeKind::Error,
+                    position: position,
+                });
+            } else {
+                return Ok(Type {
+                    kind: TypeKind::Int,
+                    position: position,
+                });
+            }
         } else {
             self.add_error(SemanticError::InvalidOperands {
                 operator: ".".to_string(),
@@ -932,8 +1000,6 @@ impl SemanticChecker {
                 position: position,
             });
         }
-
-        todo!()
     }
 
     fn visit_method_call(
@@ -943,7 +1009,37 @@ impl SemanticChecker {
         args: &Vec<Expr>,
         position: SourcePosition,
     ) -> Result<Type, Vec<SemanticError>> {
-        todo!()
+        let obj_type = self.visit_expr(callee)?;
+
+        if let TypeKind::Class(class_name) = obj_type.kind {
+            let all_methods = self.symbol_table.get_all_class_methods(&class_name.name);
+
+            if let Some(method_info) = all_methods.get(&method_name.name) {
+                self.validate_function_call(&method_info, args, position)?;
+
+                // Function call okay.
+                return Ok(Type {
+                    kind: method_info.return_type.kind,
+                    position,
+                });
+            } else {
+                self.add_error(SemanticError::UndefinedMethod {
+                    class_name: class_name.name,
+                    method_name: method_name.name.clone(),
+                    position,
+                    class_position: class_name.position,
+                });
+                return Ok(Type {
+                    kind: TypeKind::Error,
+                    position,
+                });
+            }
+        }
+
+        Ok(Type {
+            kind: TypeKind::Error,
+            position,
+        })
     }
 
     fn visit_unary_operator(

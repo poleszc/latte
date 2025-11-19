@@ -249,6 +249,7 @@ impl SymbolTable {
 
     /// Recursively collects all method from the parent classes.
     pub fn get_all_class_methods(&self, class_name: &str) -> HashMap<String, FunctionInfo> {
+        // TODO: Error if class undefined?
         let mut all_methods = HashMap::new();
         let mut current_class = class_name;
 
