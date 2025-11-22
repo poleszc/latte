@@ -86,7 +86,7 @@ ELitTrue.  Expr9 ::= "true" ;
 
 ELitFalse. Expr9 ::= "false" ;
 
-ECast . Expr8 ::= "(" Expr ")" Expr8 ;
+ECast .    Expr8 ::= "(" Expr ")" Expr8 ;
 
 EApp.      Expr6 ::= Ident "(" [Expr] ")" ;
 

@@ -1,0 +1,20 @@
+class Node {
+    int val;
+    
+    int return_2() {
+        return 2;
+    }
+}
+
+int main() {
+    Node n;
+    n = null;
+    n = new Node;
+    n.return_2();
+
+    return 0;
+}
+
+Node getNull() {
+    return null;
+}

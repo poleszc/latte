@@ -1,0 +1,9 @@
+class A {
+    int x;
+}
+
+int main() {
+    int i = 10;
+    i.x = 5;
+    return 0;
+}

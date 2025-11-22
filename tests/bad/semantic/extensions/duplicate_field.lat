@@ -1,0 +1,8 @@
+class A {
+    int a;
+    boolean a;
+}
+
+int main() {
+    return 1;
+}

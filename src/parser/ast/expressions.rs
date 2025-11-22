@@ -16,10 +16,12 @@ pub enum ExprKind {
     LiteralInt(i32),
     LiteralTrue,
     LiteralFalse,
+    This,
     LiteralString(String),
     LiteralNull,
     App {
         callee: Box<Expr>,
+        // TODO: Try to remove Vec<Box<_>>
         args: Vec<Box<Expr>>,
     }, // obj.foo(1, 2)
     ArrayAccess {
@@ -27,13 +29,13 @@ pub enum ExprKind {
         index: Box<Expr>,
     }, // arr [i]
     FieldAccess {
-        expr: Box<Expr>,
+        object: Box<Expr>,
         field_name: Ident,
     }, // class.field
     Method {
-        expr: Box<Expr>,
+        object: Box<Expr>,
         method_name: Ident,
-        args: Vec<Expr>,
+        args: Vec<Box<Expr>>,
     }, // class.method(1, 2)
     Paren(Box<Expr>),
     UnaryOp {
@@ -51,12 +53,21 @@ pub enum ExprKind {
         size: Box<Expr>,
     }, // new int[10]
     TypedNull(Type),
+    ExprTypedNull(Box<Expr>),
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum UnaryOp {
     Neg, // -
     Not, // !
+}
+impl UnaryOp {
+    pub fn to_string(&self) -> String {
+        match self {
+            UnaryOp::Neg => "-".to_string(),
+            UnaryOp::Not => "!".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize)]
@@ -79,4 +90,24 @@ pub enum BinaryOp {
     // Logical
     And, // &&
     Or,  // ||
+}
+
+impl BinaryOp {
+    pub fn to_string(&self) -> String {
+        match self {
+            BinaryOp::Add => "+".to_string(),
+            BinaryOp::Sub => "-".to_string(),
+            BinaryOp::Mul => "*".to_string(),
+            BinaryOp::Div => "/".to_string(),
+            BinaryOp::Mod => "%".to_string(),
+            BinaryOp::Eq => "==".to_string(),
+            BinaryOp::Neq => "!=".to_string(),
+            BinaryOp::Lt => "<".to_string(),
+            BinaryOp::Le => "<=".to_string(),
+            BinaryOp::Gt => ">".to_string(),
+            BinaryOp::Ge => ">=".to_string(),
+            BinaryOp::And => "&&".to_string(),
+            BinaryOp::Or => "||".to_string(),
+        }
+    }
 }

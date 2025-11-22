@@ -1,0 +1,64 @@
+class GrandParent {
+    int x;
+}
+
+class Parent extends GrandParent {
+    int y;
+}
+
+class Child extends Parent {
+    int z;
+}
+
+int main() {
+    // Simple.
+    int i = 10;
+    int i2 = i;
+    boolean b = true;
+    boolean b2 = false;
+    b = b2;
+    string s = "hello";
+    string s2 = s;
+
+
+    // Inheritance.
+    Parent p1 = new Parent;
+    Parent p2 = p1;
+    Parent pNull = null;
+    Child c = new Child;
+    Parent p3 = c;
+    GrandParent gp1 = c;
+    GrandParent gp2 = p3;
+
+    // Arrays
+    int[] intArr = new int[5];
+    int[] intArr2 = intArr;
+    intArr = null; 
+    Parent[] pArr = new Parent[3];
+    pArr = null;
+
+    // Arrays of objects.
+    Child[] cArr = new Child[3];
+    Parent[] pArr2 = cArr; 
+    GrandParent[] gpArr = cArr;
+
+    GrandParent generic = new GrandParent;
+    generic = new Parent; // OK
+    generic = new Child;  // OK
+    generic = null;       // OK
+    GrandParent temp = getChild();
+    Parent[] tempArr = getChildArray();
+
+    return 0;
+}
+
+Child getChild() {
+    return new Child;
+}
+
+Child[] getChildArray() {
+    return new Child[5];
+}
+
+void takeParent(Parent p) {
+}

@@ -1,0 +1,17 @@
+class Parent {
+    int x;
+}
+
+class Child extends Parent {
+    int y;
+    void childMethod() {}
+}
+
+int main() {
+    Parent p = new Child;
+    p.x = 10;
+    p.y = 20;
+    p.childMethod();
+
+    return 0;
+}

@@ -1,0 +1,7 @@
+// Author: Tomasz Wysocki 277696
+int main() {
+    while(true)
+        int a;
+    a = 2;
+    return 0;
+}

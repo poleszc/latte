@@ -1,0 +1,7 @@
+class A {
+    void a;
+}
+
+int main() {
+    return 1;
+}

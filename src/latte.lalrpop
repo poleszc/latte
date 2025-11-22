@@ -33,6 +33,7 @@ extern {
         "false" => Token::KWFalse,
         "new" => Token::KWNew,
         "null" => Token::KWNull,
+        "this" => Token::KWThis,
 
         // Operators.
         "+" => Token::OPAdd,
@@ -64,8 +65,6 @@ extern {
         ":" => Token::Colon,
         "," => Token::Comma,
         "." => Token::Dot,
-        // TODO: This is an ugly hack to distinguish between array access 
-        // and array type. int[ ] won't work. Try to fix that.
         "[]" => Token::Dims,
     }
 }
@@ -74,7 +73,10 @@ extern {
 /// MISC ///
 ////////////
 PositionedIdent: ast::Ident = {
-    <start: @L> <i: "Identifier"> <end: @R> => ast::Ident(i, SourcePosition(start, end)),
+    <start: @L> <i: "Identifier"> <end: @R> => ast::Ident {
+        name: i,
+        position: SourcePosition(start, end)
+    },
 };
 
 Comma<T>: Vec<T> = {
@@ -146,8 +148,8 @@ ClassDef: ast::ClassDef = {
 }
 
 ClassEntry: ast::ClassEntry = {
-    <start: @L> <typ: Type> <name: PositionedIdent> ";" <end: @R> => ast::ClassEntry {
-        kind: ast::ClassEntryKind::Field(typ, name),
+    <start: @L> <typ: Type> <names: CommaNonEmpty<PositionedIdent>> ";" <end: @R> => ast::ClassEntry {
+        kind: ast::ClassEntryKind::Field(names, typ),
         position: SourcePosition(start, end),
     },
     <start: @L> <method: FuncDef> <end: @R> => ast::ClassEntry {
@@ -300,7 +302,6 @@ PrimitiveType: ast::Type = {
         kind: ast::TypeKind::Bool,
         position: SourcePosition(start, end)
     },
-    // TODO: Array of voids is possible. Check for that in frontend.
     <start: @L> "void" <end: @R> => ast::Type {
         kind: ast::TypeKind::Void,
         position: SourcePosition(start, end)
@@ -371,6 +372,21 @@ Expr3: Box<ast::Expr> = {
 Expr4: Box<ast::Expr> = {
     <l: Expr4> "+" <r: Expr5> => make_binary(ast::BinaryOp::Add, l, r),
     <l: Expr4> "-" <r: Expr5> => make_binary(ast::BinaryOp::Sub, l, r),
+
+    <start: @L> "(" <typ: PrimitiveType> ")" "null" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::TypedNull(typ),
+        position: SourcePosition(start, end),
+    }),
+
+    <start: @L> "(" <typ: ArrayType> ")" "null" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::TypedNull(typ),
+        position: SourcePosition(start, end),
+    }),
+
+    <start: @L> "(" <expr: Expr> ")" "null" <end: @R> => Box::new(ast::Expr {
+            kind: ast::ExprKind::ExprTypedNull(expr),
+            position: SourcePosition(start, end),
+    }),
     Expr5,
 };
 
@@ -390,27 +406,72 @@ Expr6: Box<ast::Expr> = {
 Expr7: Box<ast::Expr> = {
     <callee: Expr7> "(" <args: Comma<Expr>> ")" <end: @R> => {
         let start_pos = callee.position.0;
-        Box::new(ast::Expr {
-            kind: ast::ExprKind::App { callee, args },
-            position: SourcePosition(start_pos, end),
-        })
+
+        match callee.kind {
+            ast::ExprKind::FieldAccess { object, field_name } => {
+                Box::new(ast::Expr {
+                    kind: ast::ExprKind::Method {
+                        object,
+                        method_name: field_name,
+                        args,
+                    },
+                    position: SourcePosition(start_pos, end),
+                })
+            },
+
+            other_kind => {
+                let original_callee = Box::new(ast::Expr {
+                    kind: other_kind,
+                    position: callee.position,
+                });
+                
+                Box::new(ast::Expr {
+                    kind: ast::ExprKind::App { 
+                        callee: original_callee, 
+                        args 
+                    },
+                    position: SourcePosition(start_pos, end),
+                })
+            }
+        }
     },
     
     <expr: Expr7> "." <field_name: PositionedIdent> => {
         let start_pos = expr.position.0;
         Box::new(ast::Expr {
-            kind: ast::ExprKind::FieldAccess { expr, field_name: field_name.clone() },
-            position: SourcePosition(start_pos, field_name.1.1)
+            kind: ast::ExprKind::FieldAccess { object: expr, field_name: field_name.clone() },
+            position: SourcePosition(start_pos, field_name.position.1)
         })
     },
-    
+
     <array: Expr7> "[" <index: Expr> "]" <end: @R> => {
-        let start_pos = array.position.0;
-        Box::new(ast::Expr {
-            kind: ast::ExprKind::ArrayAccess { array, index },
-            position: SourcePosition(start_pos, end)
-        })
-    },
+            let start_pos = array.position.0;
+            match array.kind {
+                ast::ExprKind::NewObject(typ) => {
+                    Box::new(ast::Expr {
+                        kind: ast::ExprKind::NewArray {
+                            element_type: typ,
+                            size: index,
+                        },
+                        position: SourcePosition(start_pos, end)
+                    })
+                },
+                other_kind => {
+                    let original_array = Box::new(ast::Expr {
+                        kind: other_kind,
+                        position: array.position,
+                    });
+
+                    Box::new(ast::Expr {
+                        kind: ast::ExprKind::ArrayAccess { 
+                            array: original_array, 
+                            index 
+                        },
+                        position: SourcePosition(start_pos, end)
+                    })
+                }
+            }
+        },
 
     <start: @L> "new" <typ: ClassType> <end: @R> => Box::new(ast::Expr {
         kind: ast::ExprKind::NewObject(typ),
@@ -448,14 +509,13 @@ Expr8: Box<ast::Expr> = {
         kind: ast::ExprKind::LiteralNull,
         position: SourcePosition(start, end),
     }),
-    // TODO: Add null casts.
-    // <start: @L> "(" <typ: PositionedIdent> ")" "null" <end: @R> => Box::new(ast::Expr {
-    //     kind: ast::ExprKind::TypedNull(ast::t),
-    //     position: SourcePosition(start, end),
-    // }),
+    <start: @L> "this" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::This,
+        position: SourcePosition(start, end),
+    }),
     <id: PositionedIdent> => Box::new(ast::Expr {
         kind: ast::ExprKind::Var(id.clone()),
-        position: id.1,
+        position: id.position,
     }),
     "(" <Expr> ")",
 };

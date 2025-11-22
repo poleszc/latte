@@ -1,0 +1,47 @@
+class A {
+    int a;
+    int foo() {
+        return 1;
+    }
+
+}
+
+class B extends A {
+    int b;
+    int goo() {
+        return 1;
+    }
+}
+
+class C extends B {
+    int c;
+    int boo() {
+        return 1;
+    }
+}
+
+int main() {
+    A a = new A;
+    B b = new B;
+    C c = new C;
+    
+    int x;
+    x = a.foo();
+    x = a.a;
+    
+    x = b.foo();
+    x = b.goo();
+    x = b.a;
+    x = b.b;
+    
+    x = c.foo();
+    x = c.goo();
+    x = c.boo();
+    x = c.a;
+    x = c.b;
+    x = c.c;
+
+    
+    
+    return 0;
+}

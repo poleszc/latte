@@ -1,0 +1,19 @@
+class A {
+    int a;
+}
+
+class B extends A {
+    int b;
+}
+
+int main() {
+    A a = new A;
+    B b = new B;
+    
+    int x = a.a;
+    # x = a.b;
+    int y = b.a;
+    y = b.b;
+
+    return 0;
+}

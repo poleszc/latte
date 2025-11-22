@@ -1,0 +1,9 @@
+class A {
+    int x;
+}
+
+int main() {
+    string s = "hello";
+    s.foo();
+    return 0;
+}

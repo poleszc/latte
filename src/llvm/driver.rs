@@ -9,10 +9,10 @@ use crate::parser::ast::definitions::Program;
 use std::path::Path;
 
 pub fn compile_llvm(
-    program: &mut Program,
-    dir: &Path,
-    stem: &str,
-    args: &LatteArgs,
+    _program: &mut Program,
+    _dir: &Path,
+    _stem: &str,
+    _args: &LatteArgs,
 ) -> Result<(), CompilerError> {
     eprintln!("[LLVM] Skipping");
     // eprintln!("[LLVM] Generating LLVM IR code...");
