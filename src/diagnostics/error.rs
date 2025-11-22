@@ -412,18 +412,6 @@ impl fmt::Display for SemanticError {
             SemanticError::InvalidNullCastExpr { .. } => {
                 write!(fmt, "Null cast to invalid expression")
             }
-            SemanticError::BinaryOpTypeMismatch {
-                lhs_type,
-                lhs_position,
-                rhs_type,
-                rhs_position,
-            } => todo!(),
-            SemanticError::AssignTypeMismatch {
-                lhs_type,
-                rhs_type,
-                lhs_position,
-                rhs_position,
-            } => todo!(),
             SemanticError::MissingReturn { function_name, .. } => {
                 write!(
                     fmt,
@@ -431,24 +419,70 @@ impl fmt::Display for SemanticError {
                     function_name
                 )
             }
-            SemanticError::InvalidVoidReturn { ret_type_position } => todo!(),
+            SemanticError::ThisUsedOutsideClass { .. } => {
+                write!(fmt, "This used outside of class")
+            }
+            SemanticError::BinaryOpTypeMismatch {
+                lhs_type, rhs_type, ..
+            } => {
+                write!(
+                    fmt,
+                    "Type mismatch in assignment: cannot assign value of type '{}' to variable of type '{}'",
+                    rhs_type, lhs_type
+                )
+            }
+
+            SemanticError::AssignTypeMismatch {
+                lhs_type, rhs_type, ..
+            } => {
+                write!(
+                    fmt,
+                    "Type mismatch in binary operation: left side is '{}', right side is '{}'",
+                    lhs_type, rhs_type
+                )
+            }
+            SemanticError::InvalidVoidReturn { .. } => {
+                write!(
+                    fmt,
+                    "Invalid return: cannot return an expression of type 'void'"
+                )
+            }
             SemanticError::ArgumentTypeMismatch {
                 expected,
                 found,
-                position,
                 function_name,
-                argument_position,
-            } => todo!(),
+                ..
+            } => {
+                write!(
+                    fmt,
+                    "Type mismatch for argument in call to '{}': expected '{}', found '{}'",
+                    function_name, expected, found
+                )
+            }
             SemanticError::ForEachTypeMismatch {
                 variable_type,
                 collection_item_type,
-                variable_position,
-                collection_position,
-            } => todo!(),
-            SemanticError::ThisUsedOutsideClass { position } => {
-                write!(fmt, "This used outside of class")
+                ..
+            } => {
+                write!(
+                    fmt,
+                    "Type mismatch in for-each loop: collection contains elements of type '{}', but variable is declared as '{}'",
+                    collection_item_type, variable_type
+                )
             }
-            SemanticError::InheritanceCycle { cycle } => todo!(),
+            SemanticError::InheritanceCycle { cycle } => {
+                let path = cycle
+                    .iter()
+                    .map(|(cls, _, _)| cls.as_str())
+                    .collect::<Vec<&str>>()
+                    .join(" -> ");
+
+                write!(
+                    fmt,
+                    "Inheritance cycle detected: {} -> (back to start)",
+                    path
+                )
+            }
         }
     }
 }
