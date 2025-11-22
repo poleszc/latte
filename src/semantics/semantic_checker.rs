@@ -236,6 +236,20 @@ impl SemanticChecker {
             }
         }
     }
+    
+    /// Checks if an expression is a LValue. Logs error otherwise.
+    fn check_lvalue(&mut self, expr: &Expr) {
+        let is_lvalue = matches!(
+            expr.kind,
+            ExprKind::Var(_) | ExprKind::ArrayAccess { .. } | ExprKind::FieldAccess { .. }
+        );
+
+        if !is_lvalue {
+            self.add_error(SemanticError::InvalidLValue {
+                position: expr.position,
+            });
+        }
+    }
 }
 
 // ======================
@@ -632,17 +646,8 @@ impl SemanticChecker {
     }
 
     fn visit_assign(&mut self, target: &Box<Expr>, value: &Box<Expr>, position: SourcePosition) {
-        let is_lvalue = matches!(
-            target.kind,
-            ExprKind::Var(_) | ExprKind::ArrayAccess { .. } | ExprKind::FieldAccess { .. }
-        );
-
-        if !is_lvalue {
-            self.add_error(SemanticError::InvalidLValue {
-                position: target.position,
-            });
-            // Continue checking rhs even if lhs is invalid lvalue
-        }
+        // Continue checking rhs even if lhs is invalid lvalue
+        self.check_lvalue(&target); 
 
         let target_type = self.visit_expr(&target);
         let value_type = self.visit_expr(&value);
@@ -706,16 +711,7 @@ impl SemanticChecker {
                 type_position: expr_type.position,
             });
         }
-
-        let is_lvalue = matches!(
-            expr.kind,
-            ExprKind::Var(_) | ExprKind::ArrayAccess { .. } | ExprKind::FieldAccess { .. }
-        );
-        if !is_lvalue {
-            self.add_error(SemanticError::InvalidLValue {
-                position: expr.position,
-            });
-        }
+        self.check_lvalue(&expr); 
     }
 
     fn visit_decrement(&mut self, expr: &Box<Expr>, position: SourcePosition) {
@@ -729,15 +725,7 @@ impl SemanticChecker {
             });
         }
 
-        let is_lvalue = matches!(
-            expr.kind,
-            ExprKind::Var(_) | ExprKind::ArrayAccess { .. } | ExprKind::FieldAccess { .. }
-        );
-        if !is_lvalue {
-            self.add_error(SemanticError::InvalidLValue {
-                position: expr.position,
-            });
-        }
+        self.check_lvalue(&expr); 
     }
 
     fn visit_if(
