@@ -72,7 +72,7 @@ impl SemanticChecker {
 
     fn validate_function_return_type(&mut self, typ: &Type) {
         let type_checker = TypeChecker::new(&self.symbol_table);
-        if let Err(e) = type_checker.validate_variable_type(typ) {
+        if let Err(e) = type_checker.validate_function_return_type(typ) {
             self.add_error(e);
         }
     }
@@ -169,7 +169,6 @@ impl SemanticChecker {
 
     /// Forward declare a function.
     fn add_function(&mut self, func_def: &FuncDef) {
-        // TODO: Validate argument types, validate return types.
         let signature = FunctionInfo {
             ident: func_def.name.clone(),
             return_type: func_def.return_type.clone(),
@@ -374,6 +373,8 @@ impl SemanticChecker {
 
     pub fn visit_function_definition(&mut self, func: &FuncDef) {
         self.symbol_table.enter_scope();
+
+        self.validate_function_return_type(&func.return_type);
         // TODO: Try to use parametrized lifetime here to avoid cloning?
         self.current_return_type = Some(func.return_type.clone());
 
