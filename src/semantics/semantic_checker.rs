@@ -69,6 +69,11 @@ impl SemanticChecker {
     /// TODO: Change that.
     /// TODO: This should do something more. Take two types and say if they can be assigned to.
     fn is_subtype(&self, subtype: &Type, supertype: &Type) -> bool {
+        // Mute out the error types.
+        if matches!(subtype.kind, TypeKind::Error) || matches!(supertype.kind, TypeKind::Error) {
+            return true;
+        }
+
         // Null is a subtype of all classes and arrays.
         if matches!(subtype.kind, TypeKind::Null) {
             return matches!(supertype.kind, TypeKind::Class(_) | TypeKind::Array(_));
@@ -82,6 +87,12 @@ impl SemanticChecker {
             (&subtype.kind, &supertype.kind)
         {
             return self.is_class_subtype(&sub_class.name, &super_class.name);
+        }
+
+        if let (TypeKind::Array(sub_inner), TypeKind::Array(super_inner)) =
+            (&subtype.kind, &supertype.kind)
+        {
+            return self.is_subtype(sub_inner, super_inner);
         }
         false
     }
@@ -527,13 +538,6 @@ impl SemanticChecker {
             StmtKind::While { cond, body } => {
                 // TODO: This is temporary. We want to evaluate expressions in a smarter way than that.
                 return matches!(cond.kind, ExprKind::LiteralTrue);
-                let is_always_true = matches!(cond.kind, ExprKind::LiteralTrue);
-
-                // We will always enter here. If this block end with a return then The program is valid.
-                if is_always_true {
-                    return self.check_stmt_returns(body);
-                }
-                false
             }
             // TODO: For now it doesn't work for fors as it's not required. Change that
             StmtKind::For { .. } => false,
@@ -677,7 +681,9 @@ impl SemanticChecker {
 
                 // Can't return void expression.
                 if matches!(expr_type.kind, TypeKind::Void) {
-                    self.add_error(SemanticError::InvalidVoidReturn { ret_type_position: expr_type.position });
+                    self.add_error(SemanticError::InvalidVoidReturn {
+                        ret_type_position: expr_type.position,
+                    });
                 }
 
                 if !self.is_subtype(&expr_type, &return_type) {
@@ -848,12 +854,13 @@ impl SemanticChecker {
         position: SourcePosition,
     ) -> Result<(), Vec<SemanticError>> {
         let collection_type = self.visit_expr(&collection)?;
-        if let TypeKind::Array(inner) = collection_type.kind {
-            if !self.types_equal(&element_type, &inner) {
-                self.add_error(SemanticError::TypeMismatch {
-                    expected: inner.to_string(),
-                    found: element_type.to_string(),
-                    position: inner.position,
+        if let TypeKind::Array(inner) = &collection_type.kind {
+            if !self.is_subtype(&inner, &element_type) {
+                self.add_error(SemanticError::ForEachTypeMismatch {
+                    variable_type: element_type.to_string(),
+                    collection_item_type: inner.to_string(),
+                    variable_position: element_type.position,
+                    collection_position: collection.position,
                 });
             }
         } else {
@@ -1037,11 +1044,13 @@ impl SemanticChecker {
         // Type check arguments.
         for (expr, param) in args.iter().zip(&func_info.params) {
             let arg_type = self.visit_expr(expr)?;
-            if !self.types_equal(&arg_type, &param) {
-                self.add_error(SemanticError::TypeMismatch {
+            if !self.is_subtype(&arg_type, &param) {
+                self.add_error(SemanticError::ArgumentTypeMismatch {
                     expected: param.to_string(),
                     found: arg_type.to_string(),
                     position: expr.position,
+                    function_name: func_info.ident.name.clone(),
+                    argument_position: param.position,
                 });
                 return Ok(false);
             }
@@ -1171,7 +1180,7 @@ impl SemanticChecker {
         &mut self,
         callee: &Box<Expr>,
         method_name: &Ident,
-        args: &Vec<Expr>,
+        args: &Vec<Box<Expr>>,
         position: SourcePosition,
     ) -> Result<Type, Vec<SemanticError>> {
         let obj_type = self.visit_expr(callee)?;
@@ -1274,14 +1283,31 @@ impl SemanticChecker {
                 type_position: rhs_type.position,
             });
         }
-        // Check if both types are equal.
-        if !self.types_equal(&lhs_type, &rhs_type) {
-            self.add_error(SemanticError::BinaryOpTypeMismatch {
-                lhs_type: lhs_type.to_string(),
-                lhs_position: lhs_type.position,
-                rhs_type: rhs_type.to_string(),
-                rhs_position: rhs_type.position,
-            });
+
+        match op {
+            BinaryOp::Eq | BinaryOp::Neq => {
+                let compatible =
+                    self.is_subtype(&lhs_type, &rhs_type) || self.is_subtype(&rhs_type, &lhs_type);
+
+                if !compatible {
+                    self.add_error(SemanticError::BinaryOpTypeMismatch {
+                        lhs_type: lhs_type.to_string(),
+                        lhs_position: lhs_type.position,
+                        rhs_type: rhs_type.to_string(),
+                        rhs_position: rhs_type.position,
+                    });
+                }
+            }
+            _ => {
+                if !self.types_equal(&lhs_type, &rhs_type) {
+                    self.add_error(SemanticError::BinaryOpTypeMismatch {
+                        lhs_type: lhs_type.to_string(),
+                        lhs_position: lhs_type.position,
+                        rhs_type: rhs_type.to_string(),
+                        rhs_position: rhs_type.position,
+                    });
+                }
+            }
         }
 
         match op {

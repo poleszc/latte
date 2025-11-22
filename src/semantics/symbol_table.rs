@@ -4,7 +4,10 @@
 use crate::{
     diagnostics::SemanticError,
     parser::ast::*,
-    semantics::symbols::{ClassInfo, FunctionInfo, SymbolKind, VariableInfo},
+    semantics::{
+        builtins,
+        symbols::{ClassInfo, FunctionInfo, SymbolKind, VariableInfo},
+    },
 };
 use std::collections::HashMap;
 
@@ -31,69 +34,11 @@ impl SymbolTable {
 
     /// Adds builtin functions to the scope.
     fn add_builtin_functions(&mut self) {
-        let builtins = vec![
-            (
-                "printInt",
-                Type {
-                    kind: TypeKind::Void,
-                    position: SourcePosition(0, 0),
-                },
-                vec![Type {
-                    kind: TypeKind::Int,
-                    position: SourcePosition(0, 0),
-                }],
-            ),
-            (
-                "printString",
-                Type {
-                    kind: TypeKind::Void,
-                    position: SourcePosition(0, 0),
-                },
-                vec![Type {
-                    kind: TypeKind::String,
-                    position: SourcePosition(0, 0),
-                }],
-            ),
-            (
-                "error",
-                Type {
-                    kind: TypeKind::Void,
-                    position: SourcePosition(0, 0),
-                },
-                vec![],
-            ),
-            (
-                "readInt",
-                Type {
-                    kind: TypeKind::Int,
-                    position: SourcePosition(0, 0),
-                },
-                vec![],
-            ),
-            (
-                "readString",
-                Type {
-                    kind: TypeKind::String,
-                    position: SourcePosition(0, 0),
-                },
-                vec![],
-            ),
-        ];
-
-        for (name, ret_type, params) in builtins {
-            let ident = Ident {
-                name: name.to_string(),
-                position: SourcePosition(0, 0),
-            };
-
-            let signature = FunctionInfo {
-                ident: ident,
-                return_type: ret_type,
-                params,
-                // TODO: Check if SourcePosition is 0, 0 in dia and don't print labels then.
-                position: SourcePosition(0, 0),
-            };
-            self.scopes[0].insert(name.to_string(), SymbolKind::Function(signature));
+        for func_info in builtins::get_builtin_functions() {
+            self.scopes[0].insert(
+                func_info.ident.name.to_string(),
+                SymbolKind::Function(func_info),
+            );
         }
     }
 

@@ -177,6 +177,19 @@ pub enum SemanticError {
         found: String,
         position: SourcePosition,
     },
+    ForEachTypeMismatch {
+        variable_type: String,
+        collection_item_type: String,
+        variable_position: SourcePosition,
+        collection_position: SourcePosition,
+    },
+    ArgumentTypeMismatch {
+        expected: String,
+        found: String,
+        position: SourcePosition,
+        function_name: String,
+        argument_position: SourcePosition,
+    },
     AssignTypeMismatch {
         lhs_type: String,
         rhs_type: String,
@@ -412,6 +425,19 @@ impl fmt::Display for SemanticError {
                 )
             }
             SemanticError::InvalidVoidReturn { ret_type_position } => todo!(),
+            SemanticError::ArgumentTypeMismatch {
+                expected,
+                found,
+                position,
+                function_name,
+                argument_position,
+            } => todo!(),
+            SemanticError::ForEachTypeMismatch {
+                variable_type,
+                collection_item_type,
+                variable_position,
+                collection_position,
+            } => todo!(),
         }
     }
 }

@@ -22,6 +22,28 @@ pub struct Type {
     pub kind: TypeKind,
     pub position: SourcePosition,
 }
+impl TypeKind {
+    pub fn to_string(&self) -> String {
+        match &self {
+            TypeKind::Int => "int".to_string(),
+            TypeKind::String => "string".to_string(),
+            TypeKind::Bool => "bool".to_string(),
+            TypeKind::Void => "void".to_string(),
+            TypeKind::Null => "null".to_string(),
+            TypeKind::Class(ident) => ident.name.clone(),
+            TypeKind::Array(inner) => format!("{}[]", inner.to_string()),
+            TypeKind::Fun(ret, params) => {
+                let param_str = params
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                format!("({}) -> {}", param_str, ret.to_string())
+            }
+            TypeKind::Error => "error".to_string(),
+        }
+    }
+}
 
 impl Type {
     pub fn to_string(&self) -> String {

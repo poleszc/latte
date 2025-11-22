@@ -1,4 +1,5 @@
 use crate::SourcePosition;
+use crate::semantics::builtins;
 
 use super::error::{CompilerError, LexicalError, ParseError, SemanticError};
 use super::{Diagnostic, DiagnosticKind};
@@ -108,15 +109,15 @@ impl Diagnostic {
             },
             SemanticError::UndefinedField { class_name, field_name, position, class_position } => {
                 Diagnostic::error(format!("Undefined field '{}'", field_name))
-                    .with_label(class_position.0..class_position.1, "In this class")
                     .with_label(position.0..position.1, format!("Field '{}' was not declared", field_name))
+                    .with_label(class_position.0..class_position.1, "In this class")
                     .with_note(format!("Class field '{}' was not declared in class '{}'", field_name, class_name))
                 .with_help("Consider declaring this field.")
             }
             SemanticError::UndefinedMethod { class_name, method_name, position, class_position } => {
                 Diagnostic::error(format!("Undefined method '{}'", method_name))
-                    .with_label(class_position.0..class_position.1, "In this class")
                     .with_label(position.0..position.1, format!("Method '{}' was not declared", method_name))
+                    .with_label(class_position.0..class_position.1, "In this class")
                     .with_note(format!("Method '{}' was not declared in class '{}'", method_name, class_name))
                 .with_help("Consider implementing this method.")
             }
@@ -180,6 +181,44 @@ impl Diagnostic {
                     expected
                 ))
             },
+            SemanticError::ForEachTypeMismatch { variable_type, collection_item_type, variable_position, collection_position } => {
+                Diagnostic::error("Type mismatch in for-each loop")
+                .with_label(
+                    collection_position.0..collection_position.1,
+                    format!("This collection contains elements of type `{}`", collection_item_type),
+                )
+                .with_label(
+                    variable_position.0..variable_position.1,
+                    format!("But the loop variable is declared as type `{}`", variable_type),
+                )
+                .with_note(format!(
+                    "Type `{}` cannot be assigned to variable of type `{}`",
+                    collection_item_type, variable_type
+                ))
+            },
+            SemanticError::ArgumentTypeMismatch { expected, found, position, function_name, argument_position } => {
+                let mut diag = Diagnostic::error("Argument type mismatch")
+                    .with_label(
+                        position.0..position.1,
+                        format!("Expected type `{}`, but found type `{}`", expected, found),
+                    );
+
+                if let Some(signature) = builtins::get_builtin_signature(function_name) {
+                    diag = diag
+                        .with_note(format!("`{}` is a built-in function with signature: '{}'", function_name, signature))
+                } else {
+                    diag = diag
+                        .with_label(
+                            argument_position.0..argument_position.1,
+                            format!("Function `{}` declared here expecting `{}`", function_name, expected),
+                        )
+                        .with_note(format!(
+                            "Expected an expression of type `{}` here.",
+                            expected
+                        ));
+                }
+                diag
+            }
             SemanticError::AssignTypeMismatch { lhs_type, rhs_type, lhs_position, rhs_position } => {
                 Diagnostic::error("Type mismatch")
                 .with_label(
@@ -212,12 +251,12 @@ impl Diagnostic {
             SemanticError::DeclarationTypeMismatch { var_name,expected, decl_type_position, found, expr_position } => {
                 Diagnostic::error("Type mismatch")
                 .with_label(
-                    decl_type_position.0..decl_type_position.1,
-                    format!("Variable '{}' was declared with type '{}'", var_name, expected),
-                )
-                .with_label(
                     expr_position.0..expr_position.1,
                     format!("The initializing expression is of type '{}'", found),
+                )
+                .with_label(
+                    decl_type_position.0..decl_type_position.1,
+                    format!("Variable '{}' was declared with type '{}'", var_name, expected),
                 )
                 .with_help("Consider changing the type of this variable or change the initializing expression.")
             }
@@ -228,8 +267,8 @@ impl Diagnostic {
                 type_position
             } => {
                 Diagnostic::error(format!("Invalid operands for operator '{}'", operator))
-                    .with_label(type_position.0..type_position.1, format!("Operand is of type '{}'", operand))
                     .with_label(position.0..position.1, format!("Cannot apply '{}' to a value of type '{}'", operator, operand))
+                    .with_label(type_position.0..type_position.1, format!("Operand is of type '{}'", operand))
                     .with_note(format!(
                         "Operator '{}' is not defined for the type(s): {}",
                         operator, operand
@@ -243,11 +282,11 @@ impl Diagnostic {
                 function_position,
             } => {
                 Diagnostic::error(format!("Wrong number of arguments for function '{}'", name))
-                    .with_label(function_position.0..function_position.1, format!("`{}` was defined here and expects {} argument(s)", name, expected)
-                    )
                     .with_label(
                         call_position.0..call_position.1,
                         format!("But `{}` was called here and provided with {} argument(s)", name, found),
+                    )
+                    .with_label(function_position.0..function_position.1, format!("`{}` was defined here and expects {} argument(s)", name, expected)
                     )
                 .with_help("Make sure the function call is provided with the same number of arguments as in the definition")
             },
@@ -256,16 +295,15 @@ impl Diagnostic {
                 found,
                 position,
                 ret_type_position,
-    
             } => {
                 Diagnostic::error("Invalid return value")
                 .with_label(
-                    ret_type_position.0..ret_type_position.1,
-                    format!("This function returns `{}`", expected),
-                )
-                .with_label(
                     position.0..position.1,
                     format!("But here a value of type `{}` was provided", found),
+                )
+                .with_label(
+                    ret_type_position.0..ret_type_position.1,
+                    format!("This function returns `{}`", expected),
                 )
                 .with_help("Consider changing the return type or the return statement")
             },
@@ -287,14 +325,12 @@ impl Diagnostic {
             },
             SemanticError::WrongMainReturnType { expected, found, position } => {
                 Diagnostic::error(format!("Wrong return type for `main`"))
-                    .with_label(position.0..position.1, format!("`main` was defined here and returns {}, but is expected to return {}", found, expected)
-                    )
+                .with_label(position.0..position.1, format!("`main` was defined here and returns {}, but is expected to return {}", found, expected))
                 .with_help(format!("Change the main return type to {}", expected))
             },
             SemanticError::WrongNumberOfMainArguments { found, position } => {
                 Diagnostic::error(format!("Wrong number of arguments for `main`"))
-                    .with_label(position.0..position.1, format!("`main` was defined here and expects {} arguments, but is expected to take in 0 arguments", found)
-                    )
+                .with_label(position.0..position.1, format!("`main` was defined here and expects {} arguments, but is expected to take in 0 arguments", found))
                 .with_note("Main is expected to have 0 arguments in a valid program")
                 .with_help("Change the `main` definition to expect no arguments")
             },
@@ -324,7 +360,6 @@ impl Diagnostic {
                 .with_label(expr_position.0..expr_position.1, "In this expression")
                 .with_label(cast_position.0..cast_position.1, "This is not a valid expression for a null cast")
                 .with_help(format!("Try using one of: {}", expected.join(", ")))
-    
             }
             SemanticError::MissingReturn { function_name, position } => {
                 Diagnostic::error(format!("Function {} doesn't return on all paths", function_name))
@@ -350,7 +385,14 @@ impl Diagnostic {
             DiagnosticKind::Error => ReportKind::Error,
             DiagnosticKind::Warning => ReportKind::Warning,
         };
-        let mut report = Report::build(report_kind, file_path, 0)
+
+        // Location of the error is the position of the first label.
+        let offset = self
+            .labels
+            .first()
+            .map(|label| label.position.start)
+            .unwrap_or(0);
+        let mut report = Report::build(report_kind, file_path, offset)
             .with_config(config)
             .with_message(&self.message);
         let mut colors = ColorGenerator::new();

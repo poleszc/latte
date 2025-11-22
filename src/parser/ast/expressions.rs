@@ -35,7 +35,7 @@ pub enum ExprKind {
     Method {
         object: Box<Expr>,
         method_name: Ident,
-        args: Vec<Expr>,
+        args: Vec<Box<Expr>>,
     }, // class.method(1, 2)
     Paren(Box<Expr>),
     UnaryOp {

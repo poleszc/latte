@@ -409,10 +409,34 @@ Expr6: Box<ast::Expr> = {
 Expr7: Box<ast::Expr> = {
     <callee: Expr7> "(" <args: Comma<Expr>> ")" <end: @R> => {
         let start_pos = callee.position.0;
-        Box::new(ast::Expr {
-            kind: ast::ExprKind::App { callee, args },
-            position: SourcePosition(start_pos, end),
-        })
+
+        match callee.kind {
+            ast::ExprKind::FieldAccess { object, field_name } => {
+                Box::new(ast::Expr {
+                    kind: ast::ExprKind::Method {
+                        object,
+                        method_name: field_name,
+                        args,
+                    },
+                    position: SourcePosition(start_pos, end),
+                })
+            },
+
+            other_kind => {
+                let original_callee = Box::new(ast::Expr {
+                    kind: other_kind,
+                    position: callee.position,
+                });
+                
+                Box::new(ast::Expr {
+                    kind: ast::ExprKind::App { 
+                        callee: original_callee, 
+                        args 
+                    },
+                    position: SourcePosition(start_pos, end),
+                })
+            }
+        }
     },
     
     <expr: Expr7> "." <field_name: PositionedIdent> => {
@@ -422,14 +446,35 @@ Expr7: Box<ast::Expr> = {
             position: SourcePosition(start_pos, field_name.position.1)
         })
     },
-    
+
     <array: Expr7> "[" <index: Expr> "]" <end: @R> => {
-        let start_pos = array.position.0;
-        Box::new(ast::Expr {
-            kind: ast::ExprKind::ArrayAccess { array, index },
-            position: SourcePosition(start_pos, end)
-        })
-    },
+            let start_pos = array.position.0;
+            match array.kind {
+                ast::ExprKind::NewObject(typ) => {
+                    Box::new(ast::Expr {
+                        kind: ast::ExprKind::NewArray {
+                            element_type: typ,
+                            size: index,
+                        },
+                        position: SourcePosition(start_pos, end)
+                    })
+                },
+                other_kind => {
+                    let original_array = Box::new(ast::Expr {
+                        kind: other_kind,
+                        position: array.position,
+                    });
+
+                    Box::new(ast::Expr {
+                        kind: ast::ExprKind::ArrayAccess { 
+                            array: original_array, 
+                            index 
+                        },
+                        position: SourcePosition(start_pos, end)
+                    })
+                }
+            }
+        },
 
     <start: @L> "new" <typ: ClassType> <end: @R> => Box::new(ast::Expr {
         kind: ast::ExprKind::NewObject(typ),
@@ -443,7 +488,6 @@ Expr7: Box<ast::Expr> = {
         },
         position: SourcePosition(start, end)
     }),
-    // TODO: Add null casts.
     Expr8,
 };
 
