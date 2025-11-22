@@ -51,8 +51,9 @@ impl SemanticChecker {
 }
 
 /// TYPES
+// TODO: Try to move that and make Semantic analyzer store a reference?
 impl SemanticChecker {
-     fn types_equal(&self, t1: &Type, t2: &Type) -> bool {
+    fn types_equal(&self, t1: &Type, t2: &Type) -> bool {
         let type_checker = TypeChecker::new(&self.symbol_table);
         type_checker.types_equal(t1, t2)
     }
@@ -69,18 +70,38 @@ impl SemanticChecker {
         }
     }
 
+    fn validate_function_return_type(&mut self, typ: &Type) {
+        let type_checker = TypeChecker::new(&self.symbol_table);
+        if let Err(e) = type_checker.validate_variable_type(typ) {
+            self.add_error(e);
+        }
+    }
+
     fn type_legal_for_bin_op(&self, op: &BinaryOp, typ: &Type) -> bool {
         let type_checker = TypeChecker::new(&self.symbol_table);
         type_checker.type_legal_for_bin_op(op, typ)
-    }   
+    }
+
+    fn type_legal_for_unary_op(&self, op: &UnaryOp, typ: &Type) -> bool {
+        let type_checker = TypeChecker::new(&self.symbol_table);
+        type_checker.type_legal_for_unary_op(op, typ)
+    }
+
+    fn binary_op_result_type(&self, op: &BinaryOp, typ: &Type, position: SourcePosition) -> Type {
+        let type_checker = TypeChecker::new(&self.symbol_table);
+        type_checker.binary_op_result_type(op, typ, position)
+    }
+
+    fn unary_op_result_type(&self, op: &UnaryOp, typ: &Type, position: SourcePosition) -> Type {
+        let type_checker = TypeChecker::new(&self.symbol_table);
+        type_checker.unary_op_result_type(op, position)
+    }
 
     fn error_type(&self, pos: SourcePosition) -> Type {
         let type_checker = TypeChecker::new(&self.symbol_table);
         type_checker.error_type(pos)
-    }   
+    }
 }
-
-
 
 impl SemanticChecker {
     /// Forward declare a class and validate correctness of class definition.
@@ -148,6 +169,7 @@ impl SemanticChecker {
 
     /// Forward declare a function.
     fn add_function(&mut self, func_def: &FuncDef) {
+        // TODO: Validate argument types, validate return types.
         let signature = FunctionInfo {
             ident: func_def.name.clone(),
             return_type: func_def.return_type.clone(),
@@ -999,8 +1021,8 @@ impl SemanticChecker {
                 }
             }
         } else {
-             // Fallback for generic expr (not handled by this parser logic usually)
-             return self.error_type(position);
+            // Fallback for generic expr (not handled by this parser logic usually)
+            return self.error_type(position);
         }
     }
 
@@ -1149,36 +1171,18 @@ impl SemanticChecker {
         position: SourcePosition,
     ) -> Type {
         let expr_type = self.visit_expr(&expr);
-        match op {
-            UnaryOp::Neg => {
-                if !matches!(expr_type.kind, TypeKind::Int | TypeKind::Error) {
-                    self.add_error(SemanticError::InvalidOperands {
-                        operator: op.to_string(),
-                        operand: expr_type.to_string(),
-                        position: expr.position,
-                        type_position: expr_type.position,
-                    });
-                }
-                Type {
-                    kind: TypeKind::Int,
-                    position: expr.position,
-                }
-            }
-            UnaryOp::Not => {
-                if !matches!(expr_type.kind, TypeKind::Bool | TypeKind::Error) {
-                    self.add_error(SemanticError::InvalidOperands {
-                        operator: "!".to_string(),
-                        operand: expr_type.to_string(),
-                        position: expr.position,
-                        type_position: expr_type.position,
-                    });
-                }
-                Type {
-                    kind: TypeKind::Bool,
-                    position: expr.position,
-                }
-            }
+
+        if !self.type_legal_for_unary_op(op, &expr_type)
+            && !matches!(expr_type.kind, TypeKind::Error)
+        {
+            self.add_error(SemanticError::InvalidOperands {
+                operator: op.to_string(),
+                operand: expr_type.to_string(),
+                position: expr.position,
+                type_position: expr_type.position,
+            });
         }
+        self.unary_op_result_type(op, &expr_type, position)
     }
 
     fn visit_binary_operator(
@@ -1191,29 +1195,65 @@ impl SemanticChecker {
         let lhs_type = self.visit_expr(&lhs);
         let rhs_type = self.visit_expr(&rhs);
 
-        // Check if left operand if valid for this op.
-        if !self.type_legal_for_bin_op(op, &lhs_type) {
+        // Early return for error types to prevent cascading errors.
+        if matches!(lhs_type.kind, TypeKind::Error) || matches!(rhs_type.kind, TypeKind::Error) {
+            let type_checker = TypeChecker::new(&self.symbol_table);
+            return type_checker.binary_op_result_type(op, &lhs_type, position);
+        }
+
+        self.validate_binary_operands(op, &lhs_type, &rhs_type, lhs.position, rhs.position);
+
+        if matches!(op, BinaryOp::Div | BinaryOp::Mod) {
+            if let ExprKind::LiteralInt(0) = rhs.kind {
+                self.add_error(SemanticError::ZeroDivision {
+                    position: rhs.position,
+                });
+            }
+        }
+
+        self.binary_op_result_type(op, &lhs_type, position)
+    }
+
+    /// Validate that operands are valid for the binary operation.
+    fn validate_binary_operands(
+        &mut self,
+        op: &BinaryOp,
+        lhs_type: &Type,
+        rhs_type: &Type,
+        lhs_position: SourcePosition,
+        rhs_position: SourcePosition,
+    ) {
+        // Check if left operand is valid for this operation.
+        if !self.type_legal_for_bin_op(op, lhs_type) {
             self.add_error(SemanticError::InvalidOperands {
                 operator: op.to_string(),
                 operand: lhs_type.to_string(),
-                position: lhs.position,
+                position: lhs_position,
                 type_position: lhs_type.position,
             });
         }
-        // Check if right operand if valid for this op.
-        if !self.type_legal_for_bin_op(op, &rhs_type) {
+
+        // Check if right operand is valid for this operation.
+        if !self.type_legal_for_bin_op(op, rhs_type) {
             self.add_error(SemanticError::InvalidOperands {
                 operator: op.to_string(),
                 operand: rhs_type.to_string(),
-                position: rhs.position,
+                position: rhs_position,
                 type_position: rhs_type.position,
             });
         }
 
+        // Check type compatibility between operands.
+        self.validate_operand_compatibility(op, lhs_type, rhs_type);
+    }
+
+    /// Check that the two operands are compatible for the binary operation.
+    fn validate_operand_compatibility(&mut self, op: &BinaryOp, lhs_type: &Type, rhs_type: &Type) {
         match op {
+            // Equality operators allow subtype relationships.
             BinaryOp::Eq | BinaryOp::Neq => {
                 let compatible =
-                    self.is_subtype(&lhs_type, &rhs_type) || self.is_subtype(&rhs_type, &lhs_type);
+                    self.is_subtype(lhs_type, rhs_type) || self.is_subtype(rhs_type, lhs_type);
 
                 if !compatible {
                     self.add_error(SemanticError::BinaryOpTypeMismatch {
@@ -1224,8 +1264,9 @@ impl SemanticChecker {
                     });
                 }
             }
+            // All other operators require exact type match.
             _ => {
-                if !self.types_equal(&lhs_type, &rhs_type) {
+                if !self.types_equal(lhs_type, rhs_type) {
                     self.add_error(SemanticError::BinaryOpTypeMismatch {
                         lhs_type: lhs_type.to_string(),
                         lhs_position: lhs_type.position,
@@ -1234,37 +1275,6 @@ impl SemanticChecker {
                     });
                 }
             }
-        }
-
-        match op {
-            // Result of this binary is the same as the operands type.
-            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul => Type {
-                kind: lhs_type.kind,
-                position,
-            },
-            // Result of this binary is the same as the operands type.
-            BinaryOp::Div | BinaryOp::Mod => {
-                if let ExprKind::LiteralInt(0) = rhs.kind {
-                    self.add_error(SemanticError::ZeroDivision {
-                        position: rhs.position,
-                    });
-                }
-                Type {
-                    kind: lhs_type.kind,
-                    position,
-                }
-            }
-            BinaryOp::Lt
-            | BinaryOp::Le
-            | BinaryOp::Gt
-            | BinaryOp::Ge
-            | BinaryOp::Eq
-            | BinaryOp::Neq
-            | BinaryOp::And
-            | BinaryOp::Or => Type {
-                kind: TypeKind::Bool,
-                position,
-            },
         }
     }
 }

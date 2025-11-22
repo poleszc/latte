@@ -1,0 +1,8 @@
+void[] goo() {
+    return;
+}
+
+
+int main() {
+    return 1;
+}

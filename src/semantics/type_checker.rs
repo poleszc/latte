@@ -110,6 +110,68 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    /// Check if a type is legal for a unary operation.
+    /// Returns the expected type for the operand, or None if the operation is not valid.
+    pub fn type_legal_for_unary_op(&self, op: &crate::parser::ast::UnaryOp, typ: &Type) -> bool {
+        use crate::parser::ast::UnaryOp;
+
+        match op {
+            UnaryOp::Neg => matches!(typ.kind, TypeKind::Int),
+            UnaryOp::Not => matches!(typ.kind, TypeKind::Bool),
+        }
+    }
+    ///
+    /// Get the result type of a unary operation.
+    /// Assumes the operand type is valid for the operation.
+    pub fn unary_op_result_type(
+        &self,
+        op: &crate::parser::ast::UnaryOp,
+        position: SourcePosition,
+    ) -> Type {
+        use crate::parser::ast::UnaryOp;
+
+        match op {
+            UnaryOp::Neg => Type {
+                kind: TypeKind::Int,
+                position: position,
+            },
+            UnaryOp::Not => Type {
+                kind: TypeKind::Bool,
+                position: position,
+            },
+        }
+    }
+
+    /// Get the result type of a binary operation.
+    /// Assumes operand types are valid for the operation.
+    pub fn binary_op_result_type(
+        &self,
+        op: &crate::parser::ast::BinaryOp,
+        lhs_type: &Type,
+        position: SourcePosition,
+    ) -> Type {
+        use crate::parser::ast::BinaryOp;
+
+        match op {
+            // Result type is same as operand type
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => Type {
+                kind: lhs_type.kind.clone(),
+                position,
+            },
+            // Result type is always bool
+            BinaryOp::Lt
+            | BinaryOp::Le
+            | BinaryOp::Gt
+            | BinaryOp::Ge
+            | BinaryOp::Eq
+            | BinaryOp::Neq
+            | BinaryOp::And
+            | BinaryOp::Or => Type {
+                kind: TypeKind::Bool,
+                position,
+            },
+        }
+    }
     /// Validate a type used for variable or field declaration.
     /// Void and Null types are not allowed for declarations.
     pub fn validate_variable_type(&self, typ: &Type) -> Result<(), SemanticError> {
