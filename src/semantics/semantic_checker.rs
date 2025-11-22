@@ -50,7 +50,9 @@ impl SemanticChecker {
     }
 }
 
-/// TYPES
+// ======================
+// Types 
+// ======================
 // TODO: Try to move that and make Semantic analyzer store a reference?
 impl SemanticChecker {
     fn types_equal(&self, t1: &Type, t2: &Type) -> bool {
@@ -103,6 +105,162 @@ impl SemanticChecker {
     }
 }
 
+
+// ======================
+// Misc 
+// ======================
+impl SemanticChecker {
+    /// TODO: Export that to ReturnChecker
+    fn check_stmt_returns(&self, stmt: &Stmt) -> bool {
+        match &stmt.kind {
+            StmtKind::Return { expr } => true,
+            StmtKind::Block(block) => {
+                for stmt in &block.stmts {
+                    if self.check_stmt_returns(stmt) {
+                        return true;
+                    }
+                }
+                false
+            }
+            StmtKind::If {
+                cond,
+                if_true,
+                if_false,
+            } => match &cond.kind {
+                // if (true)
+                ExprKind::LiteralTrue => self.check_stmt_returns(&if_true),
+                // if (false)
+                ExprKind::LiteralFalse => {
+                    if let Some(else_stmt) = if_false {
+                        self.check_stmt_returns(&else_stmt)
+                    } else {
+                        false
+                    }
+                }
+                _ => {
+                    let true_returns = self.check_stmt_returns(if_true);
+                    match if_false {
+                        Some(else_stmt) => {
+                            let false_returns = self.check_stmt_returns(&else_stmt);
+                            true_returns && false_returns
+                        }
+                        None => false,
+                    }
+                }
+            },
+            // TODO: Think about that.
+            StmtKind::While { cond, body } => {
+                matches!(cond.kind, ExprKind::LiteralTrue)
+            }
+            // TODO: For now it doesn't work for fors as it's not required. Change that
+            StmtKind::For { .. } => false,
+            StmtKind::ForEach { .. } => false,
+            _ => false,
+        }
+    }
+
+    fn validate_function_call(
+        &mut self,
+        func_info: &FunctionInfo,
+        args: &Vec<Box<Expr>>,
+        expr_position: SourcePosition,
+    ) {
+        let func_ident = func_info.ident.clone();
+        if args.len() != func_info.params.len() {
+            self.add_error(SemanticError::WrongNumberOfArguments {
+                name: func_ident.name.clone(),
+                expected: func_info.params.len(),
+                found: args.len(),
+                call_position: expr_position,
+                function_position: func_info.position,
+            });
+            // Don't return here, check types of what we have if possible or just mismatch
+        }
+
+        // Type check arguments.
+        for (expr, param) in args.iter().zip(&func_info.params) {
+            let arg_type = self.visit_expr(expr);
+            if !self.is_subtype(&arg_type, &param) {
+                self.add_error(SemanticError::ArgumentTypeMismatch {
+                    expected: param.to_string(),
+                    found: arg_type.to_string(),
+                    position: expr.position,
+                    function_name: func_info.ident.name.clone(),
+                    argument_position: param.position,
+                });
+            }
+        }
+    }
+
+    /// Validate that operands are valid for the binary operation.
+    fn validate_binary_operands(
+        &mut self,
+        op: &BinaryOp,
+        lhs_type: &Type,
+        rhs_type: &Type,
+        lhs_position: SourcePosition,
+        rhs_position: SourcePosition,
+    ) {
+        // Check if left operand is valid for this operation.
+        if !self.type_legal_for_bin_op(op, lhs_type) {
+            self.add_error(SemanticError::InvalidOperands {
+                operator: op.to_string(),
+                operand: lhs_type.to_string(),
+                position: lhs_position,
+                type_position: lhs_type.position,
+            });
+        }
+
+        // Check if right operand is valid for this operation.
+        if !self.type_legal_for_bin_op(op, rhs_type) {
+            self.add_error(SemanticError::InvalidOperands {
+                operator: op.to_string(),
+                operand: rhs_type.to_string(),
+                position: rhs_position,
+                type_position: rhs_type.position,
+            });
+        }
+
+        // Check type compatibility between operands.
+        self.validate_operand_compatibility(op, lhs_type, rhs_type);
+    }
+
+    /// Check that the two operands are compatible for the binary operation.
+    fn validate_operand_compatibility(&mut self, op: &BinaryOp, lhs_type: &Type, rhs_type: &Type) {
+        match op {
+            // Equality operators allow subtype relationships.
+            BinaryOp::Eq | BinaryOp::Neq => {
+                let compatible =
+                    self.is_subtype(lhs_type, rhs_type) || self.is_subtype(rhs_type, lhs_type);
+
+                if !compatible {
+                    self.add_error(SemanticError::BinaryOpTypeMismatch {
+                        lhs_type: lhs_type.to_string(),
+                        lhs_position: lhs_type.position,
+                        rhs_type: rhs_type.to_string(),
+                        rhs_position: rhs_type.position,
+                    });
+                }
+            }
+            // All other operators require exact type match.
+            _ => {
+                if !self.types_equal(lhs_type, rhs_type) {
+                    self.add_error(SemanticError::BinaryOpTypeMismatch {
+                        lhs_type: lhs_type.to_string(),
+                        lhs_position: lhs_type.position,
+                        rhs_type: rhs_type.to_string(),
+                        rhs_position: rhs_type.position,
+                    });
+                }
+            }
+        }
+    }
+}
+
+
+// ======================
+// Classes 
+// ======================
 impl SemanticChecker {
     /// Forward declare a class and validate correctness of class definition.
     /// This function does not validate the inheritance hierarchy. This is done in validate_class.
@@ -337,10 +495,10 @@ impl SemanticChecker {
 }
 
 // ======================
-// Top Level
+// Top Level Visitors
 // ======================
 impl SemanticChecker {
-    pub fn visit_program(&mut self, program: &Program) {
+    fn visit_program(&mut self, program: &Program) {
         // Forward declare all functions and classes in the global scope.
         for top_def in &program.defs {
             match &top_def.kind {
@@ -364,14 +522,14 @@ impl SemanticChecker {
         self.validate_main();
     }
 
-    pub fn visit_top_def(&mut self, top_def: &TopDef) {
+    fn visit_top_def(&mut self, top_def: &TopDef) {
         match &top_def.kind {
             TopDefKind::Func(func_def) => self.visit_function_definition(func_def),
             TopDefKind::Class(class_def) => self.visit_class_definition(class_def),
         }
     }
 
-    pub fn visit_function_definition(&mut self, func: &FuncDef) {
+    fn visit_function_definition(&mut self, func: &FuncDef) {
         self.symbol_table.enter_scope();
 
         self.validate_function_return_type(&func.return_type);
@@ -416,7 +574,7 @@ impl SemanticChecker {
         self.symbol_table.leave_scope();
     }
 
-    pub fn visit_class_definition(&mut self, class: &ClassDef) {
+    fn visit_class_definition(&mut self, class: &ClassDef) {
         self.current_class = Some(class.name.name.clone());
         for entry in &class.entries {
             if let ClassEntryKind::Method(method) = &entry.kind {
@@ -448,60 +606,10 @@ impl SemanticChecker {
 }
 
 // ======================
-// Statements
+// Statement Visitors
 // ======================
 impl SemanticChecker {
-    /// TODO: Export that to ReturnChecker
-    fn check_stmt_returns(&self, stmt: &Stmt) -> bool {
-        match &stmt.kind {
-            StmtKind::Return { expr } => true,
-            StmtKind::Block(block) => {
-                for stmt in &block.stmts {
-                    if self.check_stmt_returns(stmt) {
-                        return true;
-                    }
-                }
-                false
-            }
-            StmtKind::If {
-                cond,
-                if_true,
-                if_false,
-            } => match &cond.kind {
-                // if (true)
-                ExprKind::LiteralTrue => self.check_stmt_returns(&if_true),
-                // if (false)
-                ExprKind::LiteralFalse => {
-                    if let Some(else_stmt) = if_false {
-                        self.check_stmt_returns(&else_stmt)
-                    } else {
-                        false
-                    }
-                }
-                _ => {
-                    let true_returns = self.check_stmt_returns(if_true);
-                    match if_false {
-                        Some(else_stmt) => {
-                            let false_returns = self.check_stmt_returns(&else_stmt);
-                            true_returns && false_returns
-                        }
-                        None => false,
-                    }
-                }
-            },
-            // TODO: Think about that.
-            StmtKind::While { cond, body } => {
-                matches!(cond.kind, ExprKind::LiteralTrue)
-            }
-            // TODO: For now it doesn't work for fors as it's not required. Change that
-            StmtKind::For { .. } => false,
-            StmtKind::ForEach { .. } => false,
-            _ => false,
-        }
-    }
-
-    // TODO: All of these should probably not be pub.
-    pub fn visit_statement(&mut self, stmt: &Stmt) {
+    fn visit_statement(&mut self, stmt: &Stmt) {
         let position = stmt.position;
         match &stmt.kind {
             StmtKind::Empty => (),
@@ -536,7 +644,7 @@ impl SemanticChecker {
         }
     }
 
-    pub fn visit_block(&mut self, block: &Block) {
+    fn visit_block(&mut self, block: &Block) {
         self.symbol_table.enter_scope();
         // TODO: Here we should:
         // - Look for defined functions
@@ -546,7 +654,7 @@ impl SemanticChecker {
         self.symbol_table.leave_scope();
     }
 
-    pub fn visit_declaration(&mut self, typ: &Type, items: &Vec<Item>, position: SourcePosition) {
+    fn visit_declaration(&mut self, typ: &Type, items: &Vec<Item>, position: SourcePosition) {
         self.validate_variable_type(typ);
         for item in items {
             match &item.kind {
@@ -581,7 +689,7 @@ impl SemanticChecker {
         }
     }
 
-    pub fn visit_assign(
+    fn visit_assign(
         &mut self,
         target: &Box<Expr>,
         value: &Box<Expr>,
@@ -612,7 +720,7 @@ impl SemanticChecker {
         }
     }
 
-    pub fn visit_return(&mut self, expr: &Option<Box<Expr>>, position: SourcePosition) {
+    fn visit_return(&mut self, expr: &Option<Box<Expr>>, position: SourcePosition) {
         let return_type = self
             .current_return_type
             .clone()
@@ -651,7 +759,7 @@ impl SemanticChecker {
         }
     }
 
-    pub fn visit_increment(&mut self, expr: &Box<Expr>, position: SourcePosition) {
+    fn visit_increment(&mut self, expr: &Box<Expr>, position: SourcePosition) {
         let expr_type = self.visit_expr(expr);
         if !matches!(expr_type.kind, TypeKind::Int | TypeKind::Error) {
             self.add_error(SemanticError::InvalidOperands {
@@ -673,7 +781,7 @@ impl SemanticChecker {
         }
     }
 
-    pub fn visit_decrement(&mut self, expr: &Box<Expr>, position: SourcePosition) {
+    fn visit_decrement(&mut self, expr: &Box<Expr>, position: SourcePosition) {
         let expr_type = self.visit_expr(expr);
         if !matches!(expr_type.kind, TypeKind::Int | TypeKind::Error) {
             self.add_error(SemanticError::InvalidOperands {
@@ -695,7 +803,7 @@ impl SemanticChecker {
         }
     }
 
-    pub fn visit_if(
+    fn visit_if(
         &mut self,
         cond: &Box<Expr>,
         if_true: &Box<Stmt>,
@@ -718,7 +826,7 @@ impl SemanticChecker {
         self.symbol_table.leave_scope();
     }
 
-    pub fn visit_while(&mut self, cond: &Box<Expr>, body: &Box<Stmt>, position: SourcePosition) {
+    fn visit_while(&mut self, cond: &Box<Expr>, body: &Box<Stmt>, position: SourcePosition) {
         let cond_type = self.visit_expr(cond);
         if !matches!(cond_type.kind, TypeKind::Bool | TypeKind::Error) {
             self.add_error(SemanticError::TypeMismatch {
@@ -732,7 +840,7 @@ impl SemanticChecker {
         self.symbol_table.leave_scope();
     }
 
-    pub fn visit_for(
+    fn visit_for(
         &mut self,
         init: &Option<Box<Stmt>>,
         cond: &Option<Box<Expr>>,
@@ -766,7 +874,7 @@ impl SemanticChecker {
         self.symbol_table.leave_scope();
     }
 
-    pub fn visit_for_each(
+    fn visit_for_each(
         &mut self,
         element_type: &Type,
         item_name: &Ident,
@@ -804,7 +912,7 @@ impl SemanticChecker {
     }
 
     // TODO: Remove that?
-    pub fn visit_function_definition_expr(
+    fn visit_function_definition_expr(
         &mut self,
         block: &Block,
     ) -> Result<(), Vec<SemanticError>> {
@@ -813,11 +921,11 @@ impl SemanticChecker {
 }
 
 // ======================
-// Expressions
+// Expression Visitors
 // ======================
 impl SemanticChecker {
-    // Checks an expression and returns it's type.
-    pub fn visit_expr(&mut self, outer_expr: &Box<Expr>) -> Type {
+    /// Type checks an expression and returns it's type.
+    fn visit_expr(&mut self, outer_expr: &Box<Expr>) -> Type {
         match &outer_expr.kind {
             ExprKind::Var(ident) => match self.symbol_table.lookup_variable(ident) {
                 Ok(t) => t,
@@ -958,39 +1066,6 @@ impl SemanticChecker {
                     });
                     self.error_type(outer_expr.position)
                 }
-            }
-        }
-    }
-
-    fn validate_function_call(
-        &mut self,
-        func_info: &FunctionInfo,
-        args: &Vec<Box<Expr>>,
-        expr_position: SourcePosition,
-    ) {
-        let func_ident = func_info.ident.clone();
-        if args.len() != func_info.params.len() {
-            self.add_error(SemanticError::WrongNumberOfArguments {
-                name: func_ident.name.clone(),
-                expected: func_info.params.len(),
-                found: args.len(),
-                call_position: expr_position,
-                function_position: func_info.position,
-            });
-            // Don't return here, check types of what we have if possible or just mismatch
-        }
-
-        // Type check arguments.
-        for (expr, param) in args.iter().zip(&func_info.params) {
-            let arg_type = self.visit_expr(expr);
-            if !self.is_subtype(&arg_type, &param) {
-                self.add_error(SemanticError::ArgumentTypeMismatch {
-                    expected: param.to_string(),
-                    found: arg_type.to_string(),
-                    position: expr.position,
-                    function_name: func_info.ident.name.clone(),
-                    argument_position: param.position,
-                });
             }
         }
     }
@@ -1213,69 +1288,5 @@ impl SemanticChecker {
         }
 
         self.binary_op_result_type(op, &lhs_type, position)
-    }
-
-    /// Validate that operands are valid for the binary operation.
-    fn validate_binary_operands(
-        &mut self,
-        op: &BinaryOp,
-        lhs_type: &Type,
-        rhs_type: &Type,
-        lhs_position: SourcePosition,
-        rhs_position: SourcePosition,
-    ) {
-        // Check if left operand is valid for this operation.
-        if !self.type_legal_for_bin_op(op, lhs_type) {
-            self.add_error(SemanticError::InvalidOperands {
-                operator: op.to_string(),
-                operand: lhs_type.to_string(),
-                position: lhs_position,
-                type_position: lhs_type.position,
-            });
-        }
-
-        // Check if right operand is valid for this operation.
-        if !self.type_legal_for_bin_op(op, rhs_type) {
-            self.add_error(SemanticError::InvalidOperands {
-                operator: op.to_string(),
-                operand: rhs_type.to_string(),
-                position: rhs_position,
-                type_position: rhs_type.position,
-            });
-        }
-
-        // Check type compatibility between operands.
-        self.validate_operand_compatibility(op, lhs_type, rhs_type);
-    }
-
-    /// Check that the two operands are compatible for the binary operation.
-    fn validate_operand_compatibility(&mut self, op: &BinaryOp, lhs_type: &Type, rhs_type: &Type) {
-        match op {
-            // Equality operators allow subtype relationships.
-            BinaryOp::Eq | BinaryOp::Neq => {
-                let compatible =
-                    self.is_subtype(lhs_type, rhs_type) || self.is_subtype(rhs_type, lhs_type);
-
-                if !compatible {
-                    self.add_error(SemanticError::BinaryOpTypeMismatch {
-                        lhs_type: lhs_type.to_string(),
-                        lhs_position: lhs_type.position,
-                        rhs_type: rhs_type.to_string(),
-                        rhs_position: rhs_type.position,
-                    });
-                }
-            }
-            // All other operators require exact type match.
-            _ => {
-                if !self.types_equal(lhs_type, rhs_type) {
-                    self.add_error(SemanticError::BinaryOpTypeMismatch {
-                        lhs_type: lhs_type.to_string(),
-                        lhs_position: lhs_type.position,
-                        rhs_type: rhs_type.to_string(),
-                        rhs_position: rhs_type.position,
-                    });
-                }
-            }
-        }
     }
 }
