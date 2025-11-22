@@ -236,7 +236,7 @@ impl SemanticChecker {
             }
         }
     }
-    
+
     /// Checks if an expression is a LValue. Logs error otherwise.
     fn check_lvalue(&mut self, expr: &Expr) {
         let is_lvalue = matches!(
@@ -248,6 +248,17 @@ impl SemanticChecker {
             self.add_error(SemanticError::InvalidLValue {
                 position: expr.position,
             });
+        }
+    }
+
+    // Defines a variable in the current scope. Logs an error on duplicate definition.
+    fn define_variable(&mut self, ident: &Ident, typ: &Type) {
+        let var_info = VariableInfo {
+            ident: ident.clone(),
+            typ: typ.clone(),
+        };
+        if let Err(e) = self.symbol_table.define_variable(var_info) {
+            self.add_error(e);
         }
     }
 }
@@ -505,12 +516,7 @@ impl SemanticChecker {
         // Add arguments to scope.
         for arg in &func.args {
             self.validate_variable_type(&arg.arg_type);
-            if let Err(e) = self.symbol_table.define_variable(VariableInfo {
-                ident: arg.name.clone(),
-                typ: arg.arg_type.clone(),
-            }) {
-                self.add_error(e);
-            }
+            self.define_variable(&arg.name, &arg.arg_type);
         }
 
         self.visit_block(&func.body);
@@ -539,18 +545,11 @@ impl SemanticChecker {
                 // Define class fields in scope, including superclasses.
                 let all_fields = self.symbol_table.get_all_class_fields(&class.name.name);
                 for (name, (typ, position)) in all_fields {
-                    if let Err(e) = self.symbol_table.define_variable(VariableInfo {
-                        ident: Ident {
-                            name: name.clone(),
-                            position: position,
-                        },
-                        typ: typ.clone(),
-                    }) {
-                        // Sometimes fields shadow, or semantic logic differs.
-                        // Assuming simple shadowing or error reporting:
-                        // self.add_error(e);
-                        // For now, we just try to define them for the scope.
-                    }
+                    let ident = Ident {
+                        name: name.clone(),
+                        position: position,
+                    };
+                    self.define_variable(&ident, &typ);
                 }
 
                 self.visit_function_definition(method);
@@ -615,13 +614,7 @@ impl SemanticChecker {
         for item in items {
             match &item.kind {
                 ItemKind::NoInit(ident) => {
-                    let var_info = VariableInfo {
-                        ident: ident.clone(),
-                        typ: typ.clone(),
-                    };
-                    if let Err(e) = self.symbol_table.define_variable(var_info) {
-                        self.add_error(e);
-                    }
+                    self.define_variable(&ident, &typ);
                 }
                 ItemKind::Init(ident, expr) => {
                     let expr_type = self.visit_expr(expr);
@@ -634,12 +627,7 @@ impl SemanticChecker {
                             expr_position: expr.position,
                         });
                     }
-                    if let Err(e) = self.symbol_table.define_variable(VariableInfo {
-                        ident: ident.clone(),
-                        typ: typ.clone(),
-                    }) {
-                        self.add_error(e);
-                    }
+                    self.define_variable(&ident, &typ);
                 }
             }
         }
@@ -647,7 +635,7 @@ impl SemanticChecker {
 
     fn visit_assign(&mut self, target: &Box<Expr>, value: &Box<Expr>, position: SourcePosition) {
         // Continue checking rhs even if lhs is invalid lvalue
-        self.check_lvalue(&target); 
+        self.check_lvalue(&target);
 
         let target_type = self.visit_expr(&target);
         let value_type = self.visit_expr(&value);
@@ -711,7 +699,7 @@ impl SemanticChecker {
                 type_position: expr_type.position,
             });
         }
-        self.check_lvalue(&expr); 
+        self.check_lvalue(&expr);
     }
 
     fn visit_decrement(&mut self, expr: &Box<Expr>, position: SourcePosition) {
@@ -725,7 +713,7 @@ impl SemanticChecker {
             });
         }
 
-        self.check_lvalue(&expr); 
+        self.check_lvalue(&expr);
     }
 
     fn visit_if(
@@ -826,12 +814,7 @@ impl SemanticChecker {
         }
 
         self.symbol_table.enter_scope();
-        if let Err(e) = self.symbol_table.define_variable(VariableInfo {
-            ident: item_name.clone(),
-            typ: element_type.clone(),
-        }) {
-            self.add_error(e);
-        }
+        self.define_variable(item_name, element_type);
         self.visit_statement(body);
         self.symbol_table.leave_scope();
     }
