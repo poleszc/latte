@@ -12,6 +12,16 @@ class A {
     }
 }
 
+class B extends A {
+    int bar() {
+        int c = this.foo();
+        c = this.goo();
+        c = this.bar();
+        return 0;
+    }
+}
+
+
 int main() {
     A a = new A;
     return 0;
