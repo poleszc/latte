@@ -326,6 +326,17 @@ impl Diagnostic {
                 .with_help(format!("Try using one of: {}", expected.join(", ")))
     
             }
+            SemanticError::MissingReturn { function_name, position } => {
+                Diagnostic::error(format!("Function {} doesn't return on all paths", function_name))
+                .with_label(position.0..position.1, "In this function, not all paths end with a return statement")
+                .with_help("Make sure all paths end with a return statement")
+            }
+            SemanticError::InvalidVoidReturn { ret_type_position } => {
+                Diagnostic::error("Return with an expression of type 'void'")
+                .with_label(ret_type_position.0..ret_type_position.1, "This expression if of type 'void'")
+                .with_note("Return statements can't return values of type 'void'")
+                .with_help("Change the expression in the return statement")
+            }
         }
     }
 }

@@ -215,6 +215,9 @@ pub enum SemanticError {
         found: String,
         position: SourcePosition,
     },
+    InvalidVoidReturn {
+        ret_type_position: SourcePosition,
+    },
     InvalidLValue {
         position: SourcePosition,
     },
@@ -255,6 +258,10 @@ pub enum SemanticError {
         expected: Vec<String>,
         cast_position: SourcePosition,
         expr_position: SourcePosition,
+    },
+    MissingReturn {
+        function_name: String,
+        position: SourcePosition,
     },
 }
 // TODO: Maybe not needed. Remove?
@@ -385,8 +392,26 @@ impl fmt::Display for SemanticError {
             SemanticError::InvalidNullCastExpr { .. } => {
                 write!(fmt, "Null cast to invalid expression")
             }
-            SemanticError::BinaryOpTypeMismatch { lhs_type, lhs_position, rhs_type, rhs_position } => todo!(),
-            SemanticError::AssignTypeMismatch { lhs_type, rhs_type, lhs_position, rhs_position } => todo!(),
+            SemanticError::BinaryOpTypeMismatch {
+                lhs_type,
+                lhs_position,
+                rhs_type,
+                rhs_position,
+            } => todo!(),
+            SemanticError::AssignTypeMismatch {
+                lhs_type,
+                rhs_type,
+                lhs_position,
+                rhs_position,
+            } => todo!(),
+            SemanticError::MissingReturn { function_name, .. } => {
+                write!(
+                    fmt,
+                    "Function {} doesn't return on all paths",
+                    function_name
+                )
+            }
+            SemanticError::InvalidVoidReturn { ret_type_position } => todo!(),
         }
     }
 }

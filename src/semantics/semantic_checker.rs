@@ -423,6 +423,24 @@ impl SemanticChecker {
 
         self.visit_block(&func.body)?;
 
+        // Check if function is guaranteed to return.
+        if !matches!(func.return_type.kind, TypeKind::Void) {
+            let mut guarantees_return = false;
+            for stmt in &func.body.stmts {
+                if self.check_stmt_returns(stmt) {
+                    guarantees_return = true;
+                    break;
+                }
+            }
+
+            if !guarantees_return {
+                self.add_error(SemanticError::MissingReturn {
+                    function_name: func.name.name.clone(),
+                    position: func.position,
+                });
+            }
+        }
+
         // TODO: This is bugged in nested functions.
         self.current_return_type = None;
         self.symbol_table.leave_scope();
@@ -461,6 +479,70 @@ impl SemanticChecker {
 // Statements
 // ======================
 impl SemanticChecker {
+    /// Export that to ReturnChecker
+    fn check_stmt_returns(&self, stmt: &Stmt) -> bool {
+        match &stmt.kind {
+            StmtKind::Return { expr } => true,
+            StmtKind::Block(block) => {
+                for stmt in &block.stmts {
+                    if self.check_stmt_returns(stmt) {
+                        return true;
+                    }
+                }
+                false
+            }
+            StmtKind::If {
+                cond,
+                if_true,
+                if_false,
+            } => {
+                match &cond.kind {
+                    ExprKind::LiteralTrue => {
+                        // if(true)
+                        // Check only the true branch.
+                        self.check_stmt_returns(&if_true)
+                    }
+                    ExprKind::LiteralFalse => {
+                        // if(false)
+                        if let Some(else_stmt) = if_false {
+                            self.check_stmt_returns(&else_stmt)
+                        } else {
+                            false
+                        }
+                    }
+                    _ => {
+                        let true_returns = self.check_stmt_returns(if_true);
+                        match if_false {
+                            Some(else_stmt) => {
+                                let false_returns = self.check_stmt_returns(&else_stmt);
+                                true_returns && false_returns
+                            }
+                            None => false,
+                        }
+                    }
+                }
+            }
+
+            // TODO: Think about that
+            StmtKind::While { cond, body } => {
+                // TODO: This is temporary. We want to evaluate expressions in a smarter way than that.
+                return matches!(cond.kind, ExprKind::LiteralTrue);
+                let is_always_true = matches!(cond.kind, ExprKind::LiteralTrue);
+
+                // We will always enter here. If this block end with a return then The program is valid.
+                if is_always_true {
+                    return self.check_stmt_returns(body);
+                }
+                false
+            }
+            // TODO: For now it doesn't work for fors as it's not required. Change that
+            StmtKind::For { .. } => false,
+            StmtKind::ForEach { .. } => false,
+            _ => false,
+        }
+    }
+
+    // TODO: All of these should probably not be pub.
     pub fn visit_statement(&mut self, stmt: &Stmt) -> Result<(), Vec<SemanticError>> {
         let position = stmt.position;
         match &stmt.kind {
@@ -592,6 +674,11 @@ impl SemanticChecker {
         match expr {
             Some(expr) => {
                 let expr_type = self.visit_expr(&expr)?;
+
+                // Can't return void expression.
+                if matches!(expr_type.kind, TypeKind::Void) {
+                    self.add_error(SemanticError::InvalidVoidReturn { ret_type_position: expr_type.position });
+                }
 
                 if !self.is_subtype(&expr_type, &return_type) {
                     self.add_error(SemanticError::InvalidReturnValue {
