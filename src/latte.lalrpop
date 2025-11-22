@@ -65,8 +65,6 @@ extern {
         ":" => Token::Colon,
         "," => Token::Comma,
         "." => Token::Dot,
-        // TODO: This is an ugly hack to distinguish between array access 
-        // and array type. int[ ] won't work. Try to fix that.
         "[]" => Token::Dims,
     }
 }
@@ -291,7 +289,6 @@ DeclItem: ast::Item = {
 /////////////
 /// TYPES ///
 /////////////
-// TODO: Filter out void types from class fields and variable names
 PrimitiveType: ast::Type = {
     <start: @L> "int" <end: @R> => ast::Type {
         kind: ast::TypeKind::Int,
@@ -305,7 +302,6 @@ PrimitiveType: ast::Type = {
         kind: ast::TypeKind::Bool,
         position: SourcePosition(start, end)
     },
-    // TODO: Array of voids is possible. Check for that in frontend.
     <start: @L> "void" <end: @R> => ast::Type {
         kind: ast::TypeKind::Void,
         position: SourcePosition(start, end)

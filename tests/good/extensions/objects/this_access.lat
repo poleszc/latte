@@ -1,0 +1,26 @@
+class A {
+    int a;
+    int foo() {
+        int x = a;
+        int y = this.a;
+        return 1;
+    }
+        
+}
+
+class B extends A {
+    int b;
+    int goo() {
+        int x = a;
+        x = b;
+        x = this.a;
+        x = this.b;
+        return 1;
+    }
+}
+
+int main() {
+    A a = new A;
+    
+    return 0;
+}

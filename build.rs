@@ -7,7 +7,6 @@ use std::{
 fn main() {
     println!("cargo:rerun-if-changed=src/latte.lalrpop");
     lalrpop::process_root().unwrap();
-    // TODO: Create test groups so not all errors are in the same bag?
     // TODO: A lot of repeating code here. Maybe add a generic error generation function.
     generate_lexer_tests().expect("Generate lexer tests failed");
     generate_basic_parsing_tests().expect("Generate basic parsing tests failed");
@@ -79,7 +78,22 @@ fn generate_extensions_parsing_tests() -> io::Result<()> {
 
     // Generate pass tests.
     let test_dir_paths = vec![
-        Path::new("tests").join("good").join("extensions"),
+        Path::new("tests")
+            .join("good")
+            .join("extensions")
+            .join("arrays"),
+        Path::new("tests")
+            .join("good")
+            .join("extensions")
+            .join("objects"),
+        Path::new("tests")
+            .join("good")
+            .join("extensions")
+            .join("struct"),
+        Path::new("tests")
+            .join("good")
+            .join("extensions")
+            .join("virtual"),
         Path::new("tests").join("good").join("extra"),
     ];
     for directory in &test_dir_paths {
@@ -182,6 +196,10 @@ fn generate_extensions_semantic_tests() -> io::Result<()> {
             .join("bad")
             .join("semantic")
             .join("extensions"),
+        Path::new("tests")
+            .join("bad")
+            .join("semantic")
+            .join("error_recovery"),
     ];
 
     for directory in fail_test_dir_paths {

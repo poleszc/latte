@@ -1,0 +1,17 @@
+class A {
+    void foo(int x) {
+        printInt(x);
+    }
+}
+
+class B extends A {}
+
+int main() {
+    B b = new B;
+
+    b.foo(10);
+
+    b.foo("tekst");
+
+    return 0;
+}

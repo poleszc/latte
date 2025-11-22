@@ -5,8 +5,6 @@ use super::expressions::Expr;
 use super::types::Type;
 use super::{Ident, SourcePosition};
 
-// TODO: Add consts?
-
 /// STATEMENTS ///
 #[derive(Debug, PartialEq, Clone, Serialize)]
 pub struct Block {

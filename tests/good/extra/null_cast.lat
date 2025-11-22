@@ -1,0 +1,11 @@
+int main() {
+    int[] a = new int[42];
+    a = null;
+    if (a == null) {
+        return 0;
+    }
+    if (a == (int[])null) {
+        return 0;
+    }
+    return 1;
+}

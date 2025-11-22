@@ -520,7 +520,7 @@ impl From<&str> for CompilerError {
     }
 }
 
-// TODO: For now we just return the first error. Change this in the future.
+// TODO: Try to remove that.
 impl From<Vec<SemanticError>> for CompilerError {
     fn from(errors: Vec<SemanticError>) -> Self {
         if let Some(first_error) = errors.into_iter().next() {

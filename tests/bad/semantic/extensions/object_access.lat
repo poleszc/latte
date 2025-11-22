@@ -1,0 +1,26 @@
+class A {
+    int a;
+}
+
+class B extends A {
+    int b;
+}
+
+class C extends B {
+    int c;
+    
+    void test() {
+        a = 1;
+        b = 2;
+        c = 3;
+        
+        d = 4; // Error
+        this.d = 5; // Error
+    }
+}
+
+int main() {
+    C obj = new C;
+    obj.d = 6;
+    return 0;
+}

@@ -58,6 +58,31 @@ pub fn assert_semantic_analysis_fail(input_path: &str) {
     );
 }
 
+pub fn assert_semantic_analysis_fail_with_n_errors(input_path: &str, error_count: usize) {
+    let source_code = std::fs::read_to_string(input_path)
+        .unwrap_or_else(|err| panic!("Failed to read a test file '{}': {}", input_path, err));
+
+    let ast = match parser::parse(&source_code) {
+        Ok(ast) => ast,
+        Err(_) => return, // Test passes if parsing failed.
+    };
+
+    let result = SemanticChecker::check(&ast);
+    assert!(
+        result.is_err(),
+        "Expected semantic analysis to fail for '{}', but it succeeded",
+        input_path
+    );
+
+    let got_errors = result.err().unwrap().len();
+    assert!(
+        got_errors == error_count,
+        "Expected semantic analysis to fail with '{}' errors, but it returned '{}' errors",
+        error_count,
+        got_errors
+    );
+}
+
 // pub fn assert_compilation_fails(input_path: &str) {
 //     let insc_jvm = env!("CARGO_BIN_EXE_insc_jvm");
 //     let insc_llvm = env!("CARGO_BIN_EXE_insc_llvm");

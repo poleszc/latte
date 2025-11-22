@@ -1,0 +1,18 @@
+class A {
+    int a;
+    int foo() {
+        int x = this.goo();
+        int x = goo();
+        return 1;
+    }
+
+    int goo() {
+        int y = this.a;
+        return 1;
+    }
+}
+
+int main() {
+    A a = new A;
+    return 0;
+}

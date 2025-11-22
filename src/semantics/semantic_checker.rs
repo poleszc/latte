@@ -58,7 +58,6 @@ impl SemanticChecker {
             (TypeKind::Array(inner1), TypeKind::Array(inner2)) => {
                 self.types_equal(&inner1, &inner2)
             }
-            // TODO: Add functions here?
             _ => false,
         }
     }
@@ -67,7 +66,6 @@ impl SemanticChecker {
     /// type, a subtype in inheritance hierarchy or a null subtype.
     /// For now null is interpreted as a subtype of all classes and arrays.
     /// TODO: Change that.
-    /// TODO: This should do something more. Take two types and say if they can be assigned to.
     fn is_subtype(&self, subtype: &Type, supertype: &Type) -> bool {
         // Mute out the error types.
         if matches!(subtype.kind, TypeKind::Error) || matches!(supertype.kind, TypeKind::Error) {
@@ -191,7 +189,6 @@ impl SemanticChecker {
         let signature = FunctionInfo {
             ident: func_def.name.clone(),
             return_type: func_def.return_type.clone(),
-            // TODO: We may need arg names as well. Not only types.
             params: func_def
                 .args
                 .iter()
@@ -238,8 +235,6 @@ impl SemanticChecker {
     }
 
     fn validate_class(&mut self, class_def: &ClassDef) -> Result<(), Vec<SemanticError>> {
-        // TODO: Add inheritance hierarchy cycles detection.
-
         // Undefined superclass.
         if let Some(parent) = &class_def.extends {
             if !self.symbol_table.class_exists(&parent.name) {
@@ -252,7 +247,7 @@ impl SemanticChecker {
 
         if class_def.extends.is_some() {
             if let Some(cycle_path) = self.detect_inheritance_cycle(&class_def.name.name) {
-                // A simple hack to deduplicate the cycle errors. We look for the smallest lexical 
+                // A simple hack to deduplicate the cycle errors. We look for the smallest lexical
                 // class name in the cycle and report it only for this.
                 let leader_name = cycle_path
                     .iter()
@@ -471,7 +466,7 @@ impl SemanticChecker {
         // TODO: Try to use parametrized lifetime here to avoid cloning?
         self.current_return_type = Some(func.return_type.clone());
 
-        // TODO: Here we should look for all function definitions and handle them.
+        // TODO: Here we should look for all nested function definitions and handle them.
 
         // Add arguments to scope.
         for arg in &func.args {
@@ -702,7 +697,6 @@ impl SemanticChecker {
         let target_type = self.visit_expr(&target)?;
         let value_type = self.visit_expr(&value)?;
 
-        // TODO: Would be nice to seek where was the lhs defined
         if !self.is_subtype(&value_type, &target_type) {
             self.add_error(SemanticError::AssignTypeMismatch {
                 lhs_type: target_type.to_string(),
@@ -931,6 +925,7 @@ impl SemanticChecker {
         Ok(())
     }
 
+    // TODO: Remove that?
     pub fn visit_function_definition_expr(
         &mut self,
         block: &Block,
@@ -995,7 +990,6 @@ impl SemanticChecker {
             ExprKind::NewArray { element_type, size } => {
                 self.validate_variable_type(element_type)?;
                 let size_type = self.visit_expr(&size)?;
-                // TODO: Save the array size somewhere to static check the array access.
                 if !matches!(size_type.kind, TypeKind::Int) {
                     self.add_error(SemanticError::TypeMismatch {
                         expected: "int".to_string(),
@@ -1012,7 +1006,6 @@ impl SemanticChecker {
             ExprKind::TypedNull(typ) => {
                 self.validate_variable_type(&typ)?;
 
-                // TODO: Test for (null)null
                 if matches!(typ.kind, TypeKind::Bool | TypeKind::Int | TypeKind::Void) {
                     let expected = vec![
                         "{ClassType}".to_string(),
@@ -1136,6 +1129,7 @@ impl SemanticChecker {
         position: SourcePosition,
     ) -> Result<Type, Vec<SemanticError>> {
         // TODO: For now we only support direct calls on function names. Change that to use function types.
+        // TODO: implicit this.
         if let ExprKind::Var(name) = &callee.kind {
             let func_info = self.symbol_table.lookup_function(&name)?;
 
@@ -1246,11 +1240,10 @@ impl SemanticChecker {
         }
     }
 
-    // TODO: Probably remove that
     fn visit_method_call(
         &mut self,
-        callee: &Box<Expr>,
-        method_name: &Ident,
+        callee: &Box<Expr>,  // A.b
+        method_name: &Ident, // c
         args: &Vec<Box<Expr>>,
         position: SourcePosition,
     ) -> Result<Type, Vec<SemanticError>> {
@@ -1403,7 +1396,7 @@ impl SemanticChecker {
             | BinaryOp::Le
             | BinaryOp::Gt
             | BinaryOp::Ge
-            | BinaryOp::Eq // TODO: Maybe we should check if rhs is a subtype of lhs or other way around in case of Neq and Eq.
+            | BinaryOp::Eq
             | BinaryOp::Neq
             | BinaryOp::And
             | BinaryOp::Or => Ok(Type {
