@@ -2,7 +2,7 @@ class A {
     int a;
     int foo() {
         int x = this.goo();
-        int x = goo();
+        # int x = goo(); // TODO: Think about that. Maybe this should be legal?
         return 1;
     }
 

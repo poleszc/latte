@@ -510,13 +510,13 @@ impl SemanticChecker {
             if let ClassEntryKind::Method(method) = &entry.kind {
                 self.symbol_table.enter_scope();
 
-                // Define class fields in scope.
-                let class_info = self.symbol_table.lookup_class(&class.name)?;
-                for (name, (typ, position)) in &class_info.fields {
+                // Define class fields in scope, including superclasses.
+                let all_fields = self.symbol_table.get_all_class_fields(&class.name.name);
+                for (name, (typ, position)) in all_fields {
                     self.symbol_table.define_variable(VariableInfo {
                         ident: Ident {
                             name: name.clone(),
-                            position: *position,
+                            position: position,
                         },
                         typ: typ.clone(),
                     })?;
@@ -1249,23 +1249,37 @@ impl SemanticChecker {
     ) -> Result<Type, Vec<SemanticError>> {
         let obj_type = self.visit_expr(callee)?;
 
-        if let TypeKind::Class(class_name) = obj_type.kind {
-            let all_methods = self.symbol_table.get_all_class_methods(&class_name.name);
+        match &obj_type.kind {
+            TypeKind::Class(class_name) => {
+                let all_methods = self.symbol_table.get_all_class_methods(&class_name.name);
 
-            if let Some(method_info) = all_methods.get(&method_name.name) {
-                // self.validate_function_call(&method_info, args, position)?;
+                if let Some(method_info) = all_methods.get(&method_name.name) {
+                    self.validate_function_call(&method_info, args, position)?;
 
-                // Function call okay.
-                return Ok(Type {
-                    kind: method_info.return_type.kind.clone(),
+                    // Function call okay.
+                    return Ok(Type {
+                        kind: method_info.return_type.kind.clone(),
+                        position,
+                    });
+                } else {
+                    self.add_error(SemanticError::UndefinedMethod {
+                        class_name: class_name.name.clone(),
+                        method_name: method_name.name.clone(),
+                        position,
+                        class_position: class_name.position,
+                    });
+                    return Ok(Type {
+                        kind: TypeKind::Error,
+                        position,
+                    });
+                }
+            }
+            _ => {
+                self.add_error(SemanticError::InvalidOperands {
+                    operator: format!("method call .{}()", method_name.name),
+                    operand: obj_type.to_string(),
                     position,
-                });
-            } else {
-                self.add_error(SemanticError::UndefinedMethod {
-                    class_name: class_name.name,
-                    method_name: method_name.name.clone(),
-                    position,
-                    class_position: class_name.position,
+                    type_position: obj_type.position,
                 });
                 return Ok(Type {
                     kind: TypeKind::Error,
@@ -1273,11 +1287,6 @@ impl SemanticChecker {
                 });
             }
         }
-
-        Ok(Type {
-            kind: TypeKind::Error,
-            position,
-        })
     }
 
     fn visit_unary_operator(

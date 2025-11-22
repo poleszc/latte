@@ -21,6 +21,5 @@ class B extends A {
 
 int main() {
     A a = new A;
-    
     return 0;
 }

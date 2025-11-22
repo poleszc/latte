@@ -44,20 +44,24 @@ impl Diagnostic {
     }
 
     pub fn with_label(mut self, span: Range<usize>, message: impl Into<String>) -> Self {
-        self.labels.push(DiagnosticLabel {
-            position: span,
-            message: message.into(),
-            is_primary: true,
-        });
+        if !span.is_empty() {
+            self.labels.push(DiagnosticLabel {
+                position: span,
+                message: message.into(),
+                is_primary: true,
+            });
+        }
         self
     }
 
     pub fn with_secondary_label(mut self, span: Range<usize>, message: impl Into<String>) -> Self {
-        self.labels.push(DiagnosticLabel {
-            position: span,
-            message: message.into(),
-            is_primary: false,
-        });
+        if !span.is_empty() {
+            self.labels.push(DiagnosticLabel {
+                position: span,
+                message: message.into(),
+                is_primary: false,
+            });
+        }
         self
     }
 

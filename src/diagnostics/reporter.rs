@@ -111,7 +111,7 @@ impl Diagnostic {
                 Diagnostic::error(format!("Undefined field '{}'", field_name))
                     .with_label(position.0..position.1, format!("Field '{}' was not declared", field_name))
                     .with_label(class_position.0..class_position.1, "In this class")
-                    .with_note(format!("Class field '{}' was not declared in class '{}'", field_name, class_name))
+                    .with_note(format!("Field '{}' was not declared in class '{}'", field_name, class_name))
                 .with_help("Consider declaring this field.")
             }
             SemanticError::UndefinedMethod { class_name, method_name, position, class_position } => {
