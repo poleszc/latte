@@ -22,7 +22,7 @@ pub struct SemanticChecker {
 }
 
 // ======================
-// Basic and utilities
+// Basic functionality.
 // ======================
 impl SemanticChecker {
     pub fn new() -> Self {
@@ -203,6 +203,36 @@ impl SemanticChecker {
                         rhs_position: rhs_type.position,
                     });
                 }
+            }
+        }
+    }
+
+    fn validate_main(&mut self) {
+        let main_ident = Ident {
+            name: "main".to_string(),
+            position: SourcePosition(0, 0),
+        };
+
+        match self.symbol_table.lookup_function(&main_ident) {
+            Ok(signature) => {
+                if !matches!(signature.return_type.kind, TypeKind::Int) {
+                    let error = SemanticError::WrongMainReturnType {
+                        expected: "int".to_string(),
+                        found: signature.return_type.to_string(),
+                        position: signature.ident.position,
+                    };
+                    self.add_error(error);
+                }
+                if !signature.params.is_empty() {
+                    let error = SemanticError::WrongNumberOfMainArguments {
+                        found: signature.params.len(),
+                        position: signature.ident.position,
+                    };
+                    self.add_error(error);
+                }
+            }
+            Err(_) => {
+                self.add_error(SemanticError::UndefinedMain);
             }
         }
     }
@@ -409,36 +439,6 @@ impl SemanticChecker {
         for entry in &class_def.entries {
             if let ClassEntryKind::Field(_, typ) = &entry.kind {
                 self.validate_variable_type(&typ);
-            }
-        }
-    }
-
-    fn validate_main(&mut self) {
-        let main_ident = Ident {
-            name: "main".to_string(),
-            position: SourcePosition(0, 0),
-        };
-
-        match self.symbol_table.lookup_function(&main_ident) {
-            Ok(signature) => {
-                if !matches!(signature.return_type.kind, TypeKind::Int) {
-                    let error = SemanticError::WrongMainReturnType {
-                        expected: "int".to_string(),
-                        found: signature.return_type.to_string(),
-                        position: signature.ident.position,
-                    };
-                    self.add_error(error);
-                }
-                if !signature.params.is_empty() {
-                    let error = SemanticError::WrongNumberOfMainArguments {
-                        found: signature.params.len(),
-                        position: signature.ident.position,
-                    };
-                    self.add_error(error);
-                }
-            }
-            Err(_) => {
-                self.add_error(SemanticError::UndefinedMain);
             }
         }
     }
