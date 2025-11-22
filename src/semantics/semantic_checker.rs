@@ -203,6 +203,40 @@ impl SemanticChecker {
         Ok(())
     }
 
+    fn detect_inheritance_cycle(
+        &self,
+        start_class: &str,
+    ) -> Option<Vec<(String, String, SourcePosition)>> {
+        let mut cycle = Vec::new();
+        let mut current_name = start_class.to_string();
+
+        loop {
+            let ident = Ident {
+                name: current_name.clone(),
+                position: SourcePosition(0, 0),
+            };
+
+            let class_info = match self.symbol_table.lookup_class(&ident) {
+                Ok(info) => info,
+                Err(_) => return None,
+            };
+
+            if let Some(parent_ident) = &class_info.parent {
+                let parent_name = parent_ident.name.clone();
+                let position = parent_ident.position;
+
+                cycle.push((current_name.clone(), parent_name.clone(), position));
+
+                if let Some(index) = cycle.iter().position(|(c, _, _)| c == &parent_name) {
+                    return Some(cycle[index..].to_vec());
+                }
+                current_name = parent_name;
+            } else {
+                return None;
+            }
+        }
+    }
+
     fn validate_class(&mut self, class_def: &ClassDef) -> Result<(), Vec<SemanticError>> {
         // TODO: Add inheritance hierarchy cycles detection.
 
@@ -213,6 +247,22 @@ impl SemanticChecker {
                     name: parent.name.clone(),
                     position: parent.position,
                 });
+            }
+        }
+
+        if class_def.extends.is_some() {
+            if let Some(cycle_path) = self.detect_inheritance_cycle(&class_def.name.name) {
+                // A simple hack to deduplicate the cycle errors. We look for the smallest lexical 
+                // class name in the cycle and report it only for this.
+                let leader_name = cycle_path
+                    .iter()
+                    .map(|(name, _, _)| name)
+                    .min()
+                    .expect("Cycle path cannot be empty");
+
+                if &class_def.name.name == leader_name {
+                    self.add_error(SemanticError::InheritanceCycle { cycle: cycle_path });
+                }
             }
         }
 

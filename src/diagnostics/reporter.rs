@@ -380,6 +380,24 @@ impl Diagnostic {
                 )
                 .with_help("Remove 'this' or move the code into a class method.")
             }
+            SemanticError::InheritanceCycle { cycle } => {
+                let mut diag = Diagnostic::error("Inheritance cycle detected")
+                .with_note("Inheritance hierarchy cannot contain cycles.");
+
+                for (i, (child, parent, pos)) in cycle.iter().enumerate() {
+                    let msg = if i == 0 {
+                        format!("Cycle starts here: class `{}` extends `{}`...", child, parent)
+                    } else if i == cycle.len() - 1 {
+                        format!("...and class `{}` extends `{}`, closing the cycle.", child, parent)
+                    } else {
+                        format!("...class `{}` extends `{}`...", child, parent)
+                    };
+
+                    diag = diag.with_label(pos.0..pos.1, msg);
+                }
+
+                diag
+            }
         }
     }
 }

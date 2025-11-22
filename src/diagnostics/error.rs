@@ -279,6 +279,10 @@ pub enum SemanticError {
     ThisUsedOutsideClass {
         position: SourcePosition,
     },
+    InheritanceCycle {
+        // (subclass, superclass, extends_position)
+        cycle: Vec<(String, String, SourcePosition)>,
+    },
 }
 // TODO: Maybe not needed. Remove?
 
@@ -444,6 +448,7 @@ impl fmt::Display for SemanticError {
             SemanticError::ThisUsedOutsideClass { position } => {
                 write!(fmt, "This used outside of class")
             }
+            SemanticError::InheritanceCycle { cycle } => todo!(),
         }
     }
 }
