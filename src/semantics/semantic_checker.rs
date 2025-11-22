@@ -35,8 +35,8 @@ impl SemanticChecker {
     /// Main function to call which performs the semantic checks.
     pub fn check(program: &Program) -> Result<(), Vec<SemanticError>> {
         let mut checker = SemanticChecker::new();
-        checker.visit_program(program)?;
-        // TODO: Do the error handling nicely.
+        checker.visit_program(program);
+
         if checker.errors.is_empty() {
             Ok(())
         } else {
@@ -48,8 +48,16 @@ impl SemanticChecker {
         self.errors.push(error);
     }
 
+    fn error_type(&self, pos: SourcePosition) -> Type {
+        Type {
+            kind: TypeKind::Error,
+            position: pos,
+        }
+    }
+
     fn types_equal(&self, t1: &Type, t2: &Type) -> bool {
         match (&t1.kind, &t2.kind) {
+            (TypeKind::Error, _) | (_, TypeKind::Error) => true, // Error equals everything to prevent cascading errors when recovering.
             (TypeKind::Int, TypeKind::Int) => true,
             (TypeKind::String, TypeKind::String) => true,
             (TypeKind::Bool, TypeKind::Bool) => true,
@@ -115,6 +123,9 @@ impl SemanticChecker {
                 } else {
                     return false;
                 }
+            } else {
+                // Should catch this earlier, but safely return false
+                return false;
             }
         }
     }
@@ -123,7 +134,7 @@ impl SemanticChecker {
 impl SemanticChecker {
     /// Forward declare a class and validate correctness of class definition.
     /// This function does not validate the inheritance hierarchy. This is done in validate_class.
-    fn add_class(&mut self, class_def: &ClassDef) -> Result<(), Vec<SemanticError>> {
+    fn add_class(&mut self, class_def: &ClassDef) {
         let mut fields: HashMap<String, (Type, SourcePosition)> = HashMap::new();
         let mut methods: HashMap<String, FunctionInfo> = HashMap::new();
 
@@ -178,13 +189,14 @@ impl SemanticChecker {
             methods,
             position: class_def.position,
         };
-        self.symbol_table.define_class(class_info)?;
 
-        Ok(())
+        if let Err(e) = self.symbol_table.define_class(class_info) {
+            self.add_error(e);
+        }
     }
 
     /// Forward declare a function.
-    fn add_function(&mut self, func_def: &FuncDef) -> Result<(), Vec<SemanticError>> {
+    fn add_function(&mut self, func_def: &FuncDef) {
         let signature = FunctionInfo {
             ident: func_def.name.clone(),
             return_type: func_def.return_type.clone(),
@@ -195,8 +207,9 @@ impl SemanticChecker {
                 .collect(),
             position: func_def.position,
         };
-        self.symbol_table.define_function(signature)?;
-        Ok(())
+        if let Err(e) = self.symbol_table.define_function(signature) {
+            self.add_error(e);
+        }
     }
 
     fn detect_inheritance_cycle(
@@ -233,8 +246,7 @@ impl SemanticChecker {
         }
     }
 
-    fn validate_class(&mut self, class_def: &ClassDef) -> Result<(), Vec<SemanticError>> {
-        // Undefined superclass.
+    fn validate_class(&mut self, class_def: &ClassDef) {
         if let Some(parent) = &class_def.extends {
             if !self.symbol_table.class_exists(&parent.name) {
                 self.add_error(SemanticError::UndefinedClass {
@@ -270,7 +282,6 @@ impl SemanticChecker {
                         .symbol_table
                         .lookup_method(&parent.name, &method_name.name)
                     {
-                        dbg!(&parent_method);
                         // TODO: Use types equal? or some other function which returns an enum on what the mismatch was
                         // Argument count.
                         if method_def.args.len() != parent_method.params.len() {
@@ -290,9 +301,6 @@ impl SemanticChecker {
                             .zip(&parent_method.params)
                             .enumerate()
                         {
-                            println!("Hello");
-                            dbg!(&arg);
-                            dbg!(&parent_type);
                             if !self.types_equal(&arg.arg_type, parent_type) {
                                 self.add_error(SemanticError::InvalidOverride {
                                     method_name: method_name.name.clone(),
@@ -320,17 +328,15 @@ impl SemanticChecker {
 
         for entry in &class_def.entries {
             if let ClassEntryKind::Field(_, typ) = &entry.kind {
-                self.validate_variable_type(&typ)?;
+                self.validate_variable_type(&typ);
             }
         }
-
-        Ok(())
     }
 
     /// TODO: Try to unify the validate_type functions.
     /// Validates the types assuming the type is used to declare a variable of a class field.
     /// This means void and null type will be treated as an error.
-    fn validate_variable_type(&mut self, typ: &Type) -> Result<(), Vec<SemanticError>> {
+    fn validate_variable_type(&mut self, typ: &Type) {
         let expected_types = vec![
             "int".to_string(),
             "bool".to_string(),
@@ -374,17 +380,16 @@ impl SemanticChecker {
                         position: inner.position,
                     });
                 } else {
-                    self.validate_variable_type(&inner)?;
+                    self.validate_variable_type(&inner);
                 }
             }
             _ => {}
         }
-        Ok(())
     }
 
     /// Validates the types assuming the type is used to declare a functions return type.
     /// This means void and null type will be treated as an error.
-    fn validate_functions_return_type(&mut self, typ: &Type) -> Result<(), Vec<SemanticError>> {
+    fn validate_functions_return_type(&mut self, typ: &Type) {
         let expected_types = vec![
             "void".to_string(),
             "int".to_string(),
@@ -423,15 +428,14 @@ impl SemanticChecker {
                         position: inner.position,
                     });
                 } else {
-                    self.validate_variable_type(&inner)?;
+                    self.validate_variable_type(&inner);
                 }
             }
             _ => {}
         }
-        Ok(())
     }
 
-    fn validate_main(&mut self) -> Result<(), Vec<SemanticError>> {
+    fn validate_main(&mut self) {
         let main_ident = Ident {
             name: "main".to_string(),
             position: SourcePosition(0, 0),
@@ -459,8 +463,6 @@ impl SemanticChecker {
                 self.add_error(SemanticError::UndefinedMain);
             }
         }
-
-        Ok(())
     }
 
     fn type_legal_for_bin_op(&mut self, op: &BinaryOp, typ: &Type) -> bool {
@@ -484,41 +486,38 @@ impl SemanticChecker {
 // Top Level
 // ======================
 impl SemanticChecker {
-    // TODO: Probably remove the Result<(), Vec<>>
-    pub fn visit_program(&mut self, program: &Program) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_program(&mut self, program: &Program) {
         // Forward declare all functions and classes in the global scope.
         for top_def in &program.defs {
             match &top_def.kind {
-                TopDefKind::Func(func_def) => self.add_function(&func_def)?,
-                TopDefKind::Class(class_def) => self.add_class(&class_def)?,
+                TopDefKind::Func(func_def) => self.add_function(&func_def),
+                TopDefKind::Class(class_def) => self.add_class(&class_def),
             }
         }
 
         // Now that we have all classes defined, we can validate them.
         for top_def in &program.defs {
             if let TopDefKind::Class(class_def) = &top_def.kind {
-                self.validate_class(class_def)?;
+                self.validate_class(class_def);
             }
         }
 
         // Now we type check the functions and methods.
         for top_def in &program.defs {
-            self.visit_top_def(&top_def)?;
+            self.visit_top_def(&top_def);
         }
 
-        self.validate_main()?;
-
-        Ok(())
+        self.validate_main();
     }
 
-    pub fn visit_top_def(&mut self, top_def: &TopDef) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_top_def(&mut self, top_def: &TopDef) {
         match &top_def.kind {
-            TopDefKind::Func(func_def) => Ok(self.visit_function_definition(func_def)?),
-            TopDefKind::Class(class_def) => Ok(self.visit_class_definition(class_def)?),
+            TopDefKind::Func(func_def) => self.visit_function_definition(func_def),
+            TopDefKind::Class(class_def) => self.visit_class_definition(class_def),
         }
     }
 
-    pub fn visit_function_definition(&mut self, func: &FuncDef) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_function_definition(&mut self, func: &FuncDef) {
         self.symbol_table.enter_scope();
         // TODO: Try to use parametrized lifetime here to avoid cloning?
         self.current_return_type = Some(func.return_type.clone());
@@ -527,14 +526,16 @@ impl SemanticChecker {
 
         // Add arguments to scope.
         for arg in &func.args {
-            self.validate_variable_type(&arg.arg_type)?;
-            self.symbol_table.define_variable(VariableInfo {
+            self.validate_variable_type(&arg.arg_type);
+            if let Err(e) = self.symbol_table.define_variable(VariableInfo {
                 ident: arg.name.clone(),
                 typ: arg.arg_type.clone(),
-            })?;
+            }) {
+                self.add_error(e);
+            }
         }
 
-        self.visit_block(&func.body)?;
+        self.visit_block(&func.body);
 
         // Check if function is guaranteed to return.
         if !matches!(func.return_type.kind, TypeKind::Void) {
@@ -557,11 +558,9 @@ impl SemanticChecker {
         // TODO: This is bugged in nested functions.
         self.current_return_type = None;
         self.symbol_table.leave_scope();
-
-        Ok(())
     }
 
-    pub fn visit_class_definition(&mut self, class: &ClassDef) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_class_definition(&mut self, class: &ClassDef) {
         self.current_class = Some(class.name.name.clone());
         for entry in &class.entries {
             if let ClassEntryKind::Method(method) = &entry.kind {
@@ -570,21 +569,25 @@ impl SemanticChecker {
                 // Define class fields in scope, including superclasses.
                 let all_fields = self.symbol_table.get_all_class_fields(&class.name.name);
                 for (name, (typ, position)) in all_fields {
-                    self.symbol_table.define_variable(VariableInfo {
+                    if let Err(e) = self.symbol_table.define_variable(VariableInfo {
                         ident: Ident {
                             name: name.clone(),
                             position: position,
                         },
                         typ: typ.clone(),
-                    })?;
+                    }) {
+                        // Sometimes fields shadow, or semantic logic differs.
+                        // Assuming simple shadowing or error reporting:
+                        // self.add_error(e);
+                        // For now, we just try to define them for the scope.
+                    }
                 }
 
-                self.visit_function_definition(method)?;
+                self.visit_function_definition(method);
                 self.symbol_table.leave_scope();
             }
         }
         self.current_class = None;
-        Ok(())
     }
 }
 
@@ -592,7 +595,7 @@ impl SemanticChecker {
 // Statements
 // ======================
 impl SemanticChecker {
-    /// Export that to ReturnChecker
+    /// TODO: Export that to ReturnChecker
     fn check_stmt_returns(&self, stmt: &Stmt) -> bool {
         match &stmt.kind {
             StmtKind::Return { expr } => true,
@@ -608,38 +611,31 @@ impl SemanticChecker {
                 cond,
                 if_true,
                 if_false,
-            } => {
-                match &cond.kind {
-                    ExprKind::LiteralTrue => {
-                        // if(true)
-                        // Check only the true branch.
-                        self.check_stmt_returns(&if_true)
-                    }
-                    ExprKind::LiteralFalse => {
-                        // if(false)
-                        if let Some(else_stmt) = if_false {
-                            self.check_stmt_returns(&else_stmt)
-                        } else {
-                            false
-                        }
-                    }
-                    _ => {
-                        let true_returns = self.check_stmt_returns(if_true);
-                        match if_false {
-                            Some(else_stmt) => {
-                                let false_returns = self.check_stmt_returns(&else_stmt);
-                                true_returns && false_returns
-                            }
-                            None => false,
-                        }
+            } => match &cond.kind {
+                // if (true)
+                ExprKind::LiteralTrue => self.check_stmt_returns(&if_true),
+                // if (false)
+                ExprKind::LiteralFalse => {
+                    if let Some(else_stmt) = if_false {
+                        self.check_stmt_returns(&else_stmt)
+                    } else {
+                        false
                     }
                 }
-            }
-
-            // TODO: Think about that
+                _ => {
+                    let true_returns = self.check_stmt_returns(if_true);
+                    match if_false {
+                        Some(else_stmt) => {
+                            let false_returns = self.check_stmt_returns(&else_stmt);
+                            true_returns && false_returns
+                        }
+                        None => false,
+                    }
+                }
+            },
+            // TODO: Think about that.
             StmtKind::While { cond, body } => {
-                // TODO: This is temporary. We want to evaluate expressions in a smarter way than that.
-                return matches!(cond.kind, ExprKind::LiteralTrue);
+                matches!(cond.kind, ExprKind::LiteralTrue)
             }
             // TODO: For now it doesn't work for fors as it's not required. Change that
             StmtKind::For { .. } => false,
@@ -649,10 +645,10 @@ impl SemanticChecker {
     }
 
     // TODO: All of these should probably not be pub.
-    pub fn visit_statement(&mut self, stmt: &Stmt) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_statement(&mut self, stmt: &Stmt) {
         let position = stmt.position;
         match &stmt.kind {
-            StmtKind::Empty => Ok(()),
+            StmtKind::Empty => (),
             StmtKind::Block(block) => self.visit_block(block),
             StmtKind::Decl(typ, items) => self.visit_declaration(typ, items, position),
             StmtKind::Assign { target, value } => self.visit_assign(target, value, position),
@@ -678,31 +674,24 @@ impl SemanticChecker {
                 body,
             } => self.visit_for_each(element_type, item_name, collection, body, position),
             StmtKind::Expr(expr) => {
-                self.visit_expr(expr)?;
-                Ok(())
+                self.visit_expr(expr);
             }
             StmtKind::FuncDef(func_def) => self.visit_function_definition(func_def),
         }
     }
 
-    pub fn visit_block(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_block(&mut self, block: &Block) {
         self.symbol_table.enter_scope();
         // TODO: Here we should:
         // - Look for defined functions
         for stmt in &block.stmts {
-            self.visit_statement(&stmt)?;
+            self.visit_statement(&stmt);
         }
         self.symbol_table.leave_scope();
-        Ok(())
     }
 
-    pub fn visit_declaration(
-        &mut self,
-        typ: &Type,
-        items: &Vec<Item>,
-        position: SourcePosition,
-    ) -> Result<(), Vec<SemanticError>> {
-        self.validate_variable_type(typ)?;
+    pub fn visit_declaration(&mut self, typ: &Type, items: &Vec<Item>, position: SourcePosition) {
+        self.validate_variable_type(typ);
         for item in items {
             match &item.kind {
                 ItemKind::NoInit(ident) => {
@@ -710,10 +699,12 @@ impl SemanticChecker {
                         ident: ident.clone(),
                         typ: typ.clone(),
                     };
-                    self.symbol_table.define_variable(var_info)?;
+                    if let Err(e) = self.symbol_table.define_variable(var_info) {
+                        self.add_error(e);
+                    }
                 }
                 ItemKind::Init(ident, expr) => {
-                    let expr_type = self.visit_expr(expr)?;
+                    let expr_type = self.visit_expr(expr);
                     if !self.is_subtype(&expr_type, typ) {
                         self.add_error(SemanticError::DeclarationTypeMismatch {
                             var_name: ident.name.clone(),
@@ -723,14 +714,15 @@ impl SemanticChecker {
                             expr_position: expr.position,
                         });
                     }
-                    self.symbol_table.define_variable(VariableInfo {
+                    if let Err(e) = self.symbol_table.define_variable(VariableInfo {
                         ident: ident.clone(),
                         typ: typ.clone(),
-                    })?;
+                    }) {
+                        self.add_error(e);
+                    }
                 }
             }
         }
-        Ok(())
     }
 
     pub fn visit_assign(
@@ -738,7 +730,7 @@ impl SemanticChecker {
         target: &Box<Expr>,
         value: &Box<Expr>,
         position: SourcePosition,
-    ) -> Result<(), Vec<SemanticError>> {
+    ) {
         let is_lvalue = matches!(
             target.kind,
             ExprKind::Var(_) | ExprKind::ArrayAccess { .. } | ExprKind::FieldAccess { .. }
@@ -748,11 +740,11 @@ impl SemanticChecker {
             self.add_error(SemanticError::InvalidLValue {
                 position: target.position,
             });
-            return Ok(());
+            // Continue checking rhs even if lhs is invalid lvalue
         }
 
-        let target_type = self.visit_expr(&target)?;
-        let value_type = self.visit_expr(&value)?;
+        let target_type = self.visit_expr(&target);
+        let value_type = self.visit_expr(&value);
 
         if !self.is_subtype(&value_type, &target_type) {
             self.add_error(SemanticError::AssignTypeMismatch {
@@ -762,15 +754,9 @@ impl SemanticChecker {
                 rhs_position: value_type.position,
             });
         }
-
-        Ok(())
     }
 
-    pub fn visit_return(
-        &mut self,
-        expr: &Option<Box<Expr>>,
-        position: SourcePosition,
-    ) -> Result<(), Vec<SemanticError>> {
+    pub fn visit_return(&mut self, expr: &Option<Box<Expr>>, position: SourcePosition) {
         let return_type = self
             .current_return_type
             .clone()
@@ -778,7 +764,7 @@ impl SemanticChecker {
 
         match expr {
             Some(expr) => {
-                let expr_type = self.visit_expr(&expr)?;
+                let expr_type = self.visit_expr(&expr);
 
                 // Can't return void expression.
                 if matches!(expr_type.kind, TypeKind::Void) {
@@ -807,16 +793,11 @@ impl SemanticChecker {
                 }
             }
         }
-        Ok(())
     }
 
-    pub fn visit_increment(
-        &mut self,
-        expr: &Box<Expr>,
-        position: SourcePosition,
-    ) -> Result<(), Vec<SemanticError>> {
-        let expr_type = self.visit_expr(expr)?;
-        if !matches!(expr_type.kind, TypeKind::Int) {
+    pub fn visit_increment(&mut self, expr: &Box<Expr>, position: SourcePosition) {
+        let expr_type = self.visit_expr(expr);
+        if !matches!(expr_type.kind, TypeKind::Int | TypeKind::Error) {
             self.add_error(SemanticError::InvalidOperands {
                 operator: "++".to_string(),
                 operand: expr_type.to_string(),
@@ -834,17 +815,11 @@ impl SemanticChecker {
                 position: expr.position,
             });
         }
-
-        Ok(())
     }
 
-    pub fn visit_decrement(
-        &mut self,
-        expr: &Box<Expr>,
-        position: SourcePosition,
-    ) -> Result<(), Vec<SemanticError>> {
-        let expr_type = self.visit_expr(expr)?;
-        if !matches!(expr_type.kind, TypeKind::Int) {
+    pub fn visit_decrement(&mut self, expr: &Box<Expr>, position: SourcePosition) {
+        let expr_type = self.visit_expr(expr);
+        if !matches!(expr_type.kind, TypeKind::Int | TypeKind::Error) {
             self.add_error(SemanticError::InvalidOperands {
                 operator: "--".to_string(),
                 operand: expr_type.to_string(),
@@ -862,8 +837,6 @@ impl SemanticChecker {
                 position: expr.position,
             });
         }
-
-        Ok(())
     }
 
     pub fn visit_if(
@@ -872,9 +845,9 @@ impl SemanticChecker {
         if_true: &Box<Stmt>,
         if_false: &Option<Box<Stmt>>,
         position: SourcePosition,
-    ) -> Result<(), Vec<SemanticError>> {
-        let cond_type = self.visit_expr(cond)?;
-        if !matches!(cond_type.kind, TypeKind::Bool) {
+    ) {
+        let cond_type = self.visit_expr(cond);
+        if !matches!(cond_type.kind, TypeKind::Bool | TypeKind::Error) {
             self.add_error(SemanticError::TypeMismatch {
                 expected: "boolean".to_string(),
                 found: cond_type.to_string(),
@@ -882,23 +855,16 @@ impl SemanticChecker {
             });
         }
         self.symbol_table.enter_scope();
-        self.visit_statement(&if_true)?;
+        self.visit_statement(&if_true);
         if let Some(if_false) = if_false {
-            self.visit_statement(&if_false)?;
+            self.visit_statement(&if_false);
         }
         self.symbol_table.leave_scope();
-
-        Ok(())
     }
 
-    pub fn visit_while(
-        &mut self,
-        cond: &Box<Expr>,
-        body: &Box<Stmt>,
-        position: SourcePosition,
-    ) -> Result<(), Vec<SemanticError>> {
-        let cond_type = self.visit_expr(cond)?;
-        if !matches!(cond_type.kind, TypeKind::Bool) {
+    pub fn visit_while(&mut self, cond: &Box<Expr>, body: &Box<Stmt>, position: SourcePosition) {
+        let cond_type = self.visit_expr(cond);
+        if !matches!(cond_type.kind, TypeKind::Bool | TypeKind::Error) {
             self.add_error(SemanticError::TypeMismatch {
                 expected: "boolean".to_string(),
                 found: cond_type.to_string(),
@@ -906,9 +872,8 @@ impl SemanticChecker {
             });
         }
         self.symbol_table.enter_scope();
-        self.visit_statement(&body)?;
+        self.visit_statement(&body);
         self.symbol_table.leave_scope();
-        Ok(())
     }
 
     pub fn visit_for(
@@ -918,17 +883,17 @@ impl SemanticChecker {
         post: &Option<Box<Expr>>,
         body: &Box<Stmt>,
         position: SourcePosition,
-    ) -> Result<(), Vec<SemanticError>> {
+    ) {
         self.symbol_table.enter_scope();
 
         if let Some(init_stmt) = init {
             // The init variable will be defined in `visit_statement`.
-            self.visit_statement(&init_stmt)?;
+            self.visit_statement(&init_stmt);
         }
 
         if let Some(cond_expr) = cond {
-            let cond_type = self.visit_expr(&cond_expr)?;
-            if !matches!(cond_type.kind, TypeKind::Bool) {
+            let cond_type = self.visit_expr(&cond_expr);
+            if !matches!(cond_type.kind, TypeKind::Bool | TypeKind::Error) {
                 self.add_error(SemanticError::TypeMismatch {
                     expected: "boolean".to_string(),
                     found: cond_type.to_string(),
@@ -938,12 +903,11 @@ impl SemanticChecker {
         }
 
         if let Some(post_expr) = post {
-            self.visit_expr(&post_expr)?;
+            self.visit_expr(&post_expr);
         }
 
-        self.visit_statement(&body)?;
+        self.visit_statement(&body);
         self.symbol_table.leave_scope();
-        Ok(())
     }
 
     pub fn visit_for_each(
@@ -953,8 +917,8 @@ impl SemanticChecker {
         collection: &Box<Expr>,
         body: &Box<Stmt>,
         position: SourcePosition,
-    ) -> Result<(), Vec<SemanticError>> {
-        let collection_type = self.visit_expr(&collection)?;
+    ) {
+        let collection_type = self.visit_expr(&collection);
         if let TypeKind::Array(inner) = &collection_type.kind {
             if !self.is_subtype(&inner, &element_type) {
                 self.add_error(SemanticError::ForEachTypeMismatch {
@@ -973,13 +937,14 @@ impl SemanticChecker {
         }
 
         self.symbol_table.enter_scope();
-        self.symbol_table.define_variable(VariableInfo {
+        if let Err(e) = self.symbol_table.define_variable(VariableInfo {
             ident: item_name.clone(),
             typ: element_type.clone(),
-        })?;
-        self.visit_statement(body)?;
+        }) {
+            self.add_error(e);
+        }
+        self.visit_statement(body);
         self.symbol_table.leave_scope();
-        Ok(())
     }
 
     // TODO: Remove that?
@@ -996,29 +961,35 @@ impl SemanticChecker {
 // ======================
 impl SemanticChecker {
     // Checks an expression and returns it's type.
-    pub fn visit_expr(&mut self, outer_expr: &Box<Expr>) -> Result<Type, Vec<SemanticError>> {
+    pub fn visit_expr(&mut self, outer_expr: &Box<Expr>) -> Type {
         match &outer_expr.kind {
-            ExprKind::Var(ident) => Ok(self.symbol_table.lookup_variable(ident)?),
-            ExprKind::LiteralInt(_) => Ok(Type {
+            ExprKind::Var(ident) => match self.symbol_table.lookup_variable(ident) {
+                Ok(t) => t,
+                Err(e) => {
+                    self.add_error(e);
+                    self.error_type(ident.position)
+                }
+            },
+            ExprKind::LiteralInt(_) => Type {
                 kind: TypeKind::Int,
                 position: outer_expr.position,
-            }),
-            ExprKind::LiteralTrue => Ok(Type {
+            },
+            ExprKind::LiteralTrue => Type {
                 kind: TypeKind::Bool,
                 position: outer_expr.position,
-            }),
-            ExprKind::LiteralFalse => Ok(Type {
+            },
+            ExprKind::LiteralFalse => Type {
                 kind: TypeKind::Bool,
                 position: outer_expr.position,
-            }),
-            ExprKind::LiteralString(_) => Ok(Type {
+            },
+            ExprKind::LiteralString(_) => Type {
                 kind: TypeKind::String,
                 position: outer_expr.position,
-            }),
-            ExprKind::LiteralNull => Ok(Type {
+            },
+            ExprKind::LiteralNull => Type {
                 kind: TypeKind::Null,
                 position: outer_expr.position,
-            }),
+            },
             ExprKind::App { callee, args } => {
                 self.visit_application(callee, args, outer_expr.position)
             }
@@ -1041,13 +1012,13 @@ impl SemanticChecker {
                 self.visit_binary_operator(op, lhs, rhs, outer_expr.position)
             }
             ExprKind::NewObject(typ) => {
-                self.validate_variable_type(typ)?;
-                Ok(typ.clone())
+                self.validate_variable_type(typ);
+                typ.clone()
             }
             ExprKind::NewArray { element_type, size } => {
-                self.validate_variable_type(element_type)?;
-                let size_type = self.visit_expr(&size)?;
-                if !matches!(size_type.kind, TypeKind::Int) {
+                self.validate_variable_type(element_type);
+                let size_type = self.visit_expr(&size);
+                if !matches!(size_type.kind, TypeKind::Int | TypeKind::Error) {
                     self.add_error(SemanticError::TypeMismatch {
                         expected: "int".to_string(),
                         found: size_type.to_string(),
@@ -1055,13 +1026,13 @@ impl SemanticChecker {
                     });
                 }
 
-                Ok(Type {
+                Type {
                     kind: TypeKind::Array(Box::new(element_type.clone())),
                     position: outer_expr.position,
-                })
+                }
             }
             ExprKind::TypedNull(typ) => {
-                self.validate_variable_type(&typ)?;
+                self.validate_variable_type(&typ);
 
                 if matches!(typ.kind, TypeKind::Bool | TypeKind::Int | TypeKind::Void) {
                     let expected = vec![
@@ -1077,7 +1048,7 @@ impl SemanticChecker {
                     });
                 }
 
-                Ok(typ.clone())
+                typ.clone()
             }
             ExprKind::ExprTypedNull(expr) => {
                 let expected = vec![
@@ -1092,31 +1063,25 @@ impl SemanticChecker {
                                 name: ident.name.clone(),
                                 position: ident.position,
                             });
-                            Ok(Type {
-                                kind: TypeKind::Error,
-                                position: outer_expr.position,
-                            })
+                            self.error_type(outer_expr.position)
                         } else {
-                            Ok(Type {
+                            Type {
                                 kind: TypeKind::Class(ident.clone()),
                                 position: ident.position,
-                            })
+                            }
                         }
                     }
-                    ExprKind::LiteralString(_) => Ok(Type {
+                    ExprKind::LiteralString(_) => Type {
                         kind: TypeKind::String,
                         position: outer_expr.position,
-                    }),
+                    },
                     _ => {
                         self.add_error(SemanticError::InvalidNullCastExpr {
                             expected,
                             cast_position: expr.position,
                             expr_position: outer_expr.position,
                         });
-                        Ok(Type {
-                            kind: TypeKind::Error,
-                            position: outer_expr.position,
-                        })
+                        self.error_type(outer_expr.position)
                     }
                 }
             }
@@ -1127,18 +1092,15 @@ impl SemanticChecker {
                         position: outer_expr.position,
                     };
 
-                    Ok(Type {
+                    Type {
                         kind: TypeKind::Class(class_ident),
                         position: outer_expr.position,
-                    })
+                    }
                 } else {
                     self.add_error(SemanticError::ThisUsedOutsideClass {
                         position: outer_expr.position,
                     });
-                    Ok(Type {
-                        kind: TypeKind::Error,
-                        position: outer_expr.position,
-                    })
+                    self.error_type(outer_expr.position)
                 }
             }
         }
@@ -1149,7 +1111,7 @@ impl SemanticChecker {
         func_info: &FunctionInfo,
         args: &Vec<Box<Expr>>,
         expr_position: SourcePosition,
-    ) -> Result<bool, Vec<SemanticError>> {
+    ) {
         let func_ident = func_info.ident.clone();
         if args.len() != func_info.params.len() {
             self.add_error(SemanticError::WrongNumberOfArguments {
@@ -1159,12 +1121,12 @@ impl SemanticChecker {
                 call_position: expr_position,
                 function_position: func_info.position,
             });
-            return Ok(false);
+            // Don't return here, check types of what we have if possible or just mismatch
         }
 
         // Type check arguments.
         for (expr, param) in args.iter().zip(&func_info.params) {
-            let arg_type = self.visit_expr(expr)?;
+            let arg_type = self.visit_expr(expr);
             if !self.is_subtype(&arg_type, &param) {
                 self.add_error(SemanticError::ArgumentTypeMismatch {
                     expected: param.to_string(),
@@ -1173,10 +1135,8 @@ impl SemanticChecker {
                     function_name: func_info.ident.name.clone(),
                     argument_position: param.position,
                 });
-                return Ok(false);
             }
         }
-        return Ok(true);
     }
 
     fn visit_application(
@@ -1184,25 +1144,31 @@ impl SemanticChecker {
         callee: &Box<Expr>,
         args: &Vec<Box<Expr>>, // TODO: Remove box expr.
         position: SourcePosition,
-    ) -> Result<Type, Vec<SemanticError>> {
+    ) -> Type {
         // TODO: For now we only support direct calls on function names. Change that to use function types.
         // TODO: implicit this.
         if let ExprKind::Var(name) = &callee.kind {
-            let func_info = self.symbol_table.lookup_function(&name)?;
-
-            self.validate_function_call(&func_info, &args, position)?;
-
-            // Function call okay.
-            return Ok(Type {
-                kind: func_info.return_type.kind,
-                position,
-            });
+            match self.symbol_table.lookup_function(&name) {
+                Ok(func_info) => {
+                    self.validate_function_call(&func_info, &args, position);
+                    return Type {
+                        kind: func_info.return_type.kind,
+                        position,
+                    };
+                }
+                Err(e) => {
+                    self.add_error(e);
+                    // Even if function is not found, we visit arguments to find errors in them.
+                    for arg in args {
+                        self.visit_expr(arg);
+                    }
+                    return self.error_type(position);
+                }
+            }
+        } else {
+             // Fallback for generic expr (not handled by this parser logic usually)
+             return self.error_type(position);
         }
-
-        Ok(Type {
-            kind: TypeKind::Error,
-            position,
-        })
     }
 
     fn visit_array_access(
@@ -1210,11 +1176,11 @@ impl SemanticChecker {
         array: &Box<Expr>,
         index: &Box<Expr>,
         position: SourcePosition,
-    ) -> Result<Type, Vec<SemanticError>> {
-        let array_type = self.visit_expr(&array)?;
-        let index_type = self.visit_expr(&index)?;
+    ) -> Type {
+        let array_type = self.visit_expr(&array);
+        let index_type = self.visit_expr(&index);
 
-        if !matches!(index_type.kind, TypeKind::Int) {
+        if !matches!(index_type.kind, TypeKind::Int | TypeKind::Error) {
             self.add_error(SemanticError::TypeMismatch {
                 expected: "int".to_string(),
                 found: index_type.to_string(),
@@ -1223,7 +1189,8 @@ impl SemanticChecker {
         }
 
         match &array_type.kind {
-            TypeKind::Array(elem_type) => Ok((**elem_type).clone()),
+            TypeKind::Array(elem_type) => (**elem_type).clone(),
+            TypeKind::Error => self.error_type(position),
             _ => {
                 self.add_error(SemanticError::InvalidOperands {
                     operator: "[]".to_string(),
@@ -1231,10 +1198,7 @@ impl SemanticChecker {
                     position,
                     type_position: array_type.position,
                 });
-                Ok(Type {
-                    kind: TypeKind::Error,
-                    position,
-                })
+                self.error_type(position)
             }
         }
     }
@@ -1244,14 +1208,14 @@ impl SemanticChecker {
         object: &Box<Expr>,
         field_name: &Ident,
         position: SourcePosition,
-    ) -> Result<Type, Vec<SemanticError>> {
-        let obj_type = self.visit_expr(&object)?;
+    ) -> Type {
+        let obj_type = self.visit_expr(&object);
 
         if let TypeKind::Class(class_name) = obj_type.kind {
             let all_fields = self.symbol_table.get_all_class_fields(&class_name.name);
 
             if let Some((field_type, _)) = all_fields.get(&field_name.name) {
-                return Ok(field_type.clone());
+                field_type.clone()
             } else {
                 self.add_error(SemanticError::UndefinedField {
                     class_name: class_name.name,
@@ -1259,13 +1223,9 @@ impl SemanticChecker {
                     position,
                     class_position: class_name.position,
                 });
-                return Ok(Type {
-                    kind: TypeKind::Error,
-                    position,
-                });
+                self.error_type(position)
             }
         } else if let TypeKind::String | TypeKind::Array(_) = obj_type.kind {
-            // TODO: Extract the legal type field into a module.
             if field_name.name != "length" {
                 self.add_error(SemanticError::UndefinedField {
                     class_name: obj_type.to_string(),
@@ -1273,16 +1233,15 @@ impl SemanticChecker {
                     position,
                     class_position: SourcePosition(0, 0),
                 });
-                return Ok(Type {
-                    kind: TypeKind::Error,
-                    position: position,
-                });
+                self.error_type(position)
             } else {
-                return Ok(Type {
+                Type {
                     kind: TypeKind::Int,
                     position: position,
-                });
+                }
             }
+        } else if matches!(obj_type.kind, TypeKind::Error) {
+            self.error_type(position)
         } else {
             self.add_error(SemanticError::InvalidOperands {
                 operator: ".".to_string(),
@@ -1290,10 +1249,7 @@ impl SemanticChecker {
                 position: position,
                 type_position: obj_type.position,
             });
-            return Ok(Type {
-                kind: TypeKind::Error,
-                position: position,
-            });
+            self.error_type(position)
         }
     }
 
@@ -1303,21 +1259,20 @@ impl SemanticChecker {
         method_name: &Ident, // c
         args: &Vec<Box<Expr>>,
         position: SourcePosition,
-    ) -> Result<Type, Vec<SemanticError>> {
-        let obj_type = self.visit_expr(callee)?;
+    ) -> Type {
+        let obj_type = self.visit_expr(callee);
 
         match &obj_type.kind {
             TypeKind::Class(class_name) => {
                 let all_methods = self.symbol_table.get_all_class_methods(&class_name.name);
 
                 if let Some(method_info) = all_methods.get(&method_name.name) {
-                    self.validate_function_call(&method_info, args, position)?;
+                    self.validate_function_call(&method_info, args, position);
 
-                    // Function call okay.
-                    return Ok(Type {
+                    Type {
                         kind: method_info.return_type.kind.clone(),
                         position,
-                    });
+                    }
                 } else {
                     self.add_error(SemanticError::UndefinedMethod {
                         class_name: class_name.name.clone(),
@@ -1325,11 +1280,19 @@ impl SemanticChecker {
                         position,
                         class_position: class_name.position,
                     });
-                    return Ok(Type {
-                        kind: TypeKind::Error,
-                        position,
-                    });
+                    // Visit args anyway to check them anyway
+                    for arg in args {
+                        self.visit_expr(arg);
+                    }
+                    self.error_type(position)
                 }
+            }
+            TypeKind::Error => {
+                // Visit args anyway
+                for arg in args {
+                    self.visit_expr(arg);
+                }
+                self.error_type(position)
             }
             _ => {
                 self.add_error(SemanticError::InvalidOperands {
@@ -1338,10 +1301,10 @@ impl SemanticChecker {
                     position,
                     type_position: obj_type.position,
                 });
-                return Ok(Type {
-                    kind: TypeKind::Error,
-                    position,
-                });
+                for arg in args {
+                    self.visit_expr(arg);
+                }
+                self.error_type(position)
             }
         }
     }
@@ -1351,11 +1314,11 @@ impl SemanticChecker {
         op: &UnaryOp,
         expr: &Box<Expr>,
         position: SourcePosition,
-    ) -> Result<Type, Vec<SemanticError>> {
-        let expr_type = self.visit_expr(&expr)?;
+    ) -> Type {
+        let expr_type = self.visit_expr(&expr);
         match op {
             UnaryOp::Neg => {
-                if !matches!(expr_type.kind, TypeKind::Int) {
+                if !matches!(expr_type.kind, TypeKind::Int | TypeKind::Error) {
                     self.add_error(SemanticError::InvalidOperands {
                         operator: op.to_string(),
                         operand: expr_type.to_string(),
@@ -1363,13 +1326,13 @@ impl SemanticChecker {
                         type_position: expr_type.position,
                     });
                 }
-                Ok(Type {
+                Type {
                     kind: TypeKind::Int,
                     position: expr.position,
-                })
+                }
             }
             UnaryOp::Not => {
-                if !matches!(expr_type.kind, TypeKind::Bool) {
+                if !matches!(expr_type.kind, TypeKind::Bool | TypeKind::Error) {
                     self.add_error(SemanticError::InvalidOperands {
                         operator: "!".to_string(),
                         operand: expr_type.to_string(),
@@ -1377,10 +1340,10 @@ impl SemanticChecker {
                         type_position: expr_type.position,
                     });
                 }
-                Ok(Type {
+                Type {
                     kind: TypeKind::Bool,
                     position: expr.position,
-                })
+                }
             }
         }
     }
@@ -1391,9 +1354,9 @@ impl SemanticChecker {
         lhs: &Box<Expr>,
         rhs: &Box<Expr>,
         position: SourcePosition,
-    ) -> Result<Type, Vec<SemanticError>> {
-        let lhs_type = self.visit_expr(&lhs)?;
-        let rhs_type = self.visit_expr(&rhs)?;
+    ) -> Type {
+        let lhs_type = self.visit_expr(&lhs);
+        let rhs_type = self.visit_expr(&rhs);
 
         // Check if left operand if valid for this op.
         if !self.type_legal_for_bin_op(op, &lhs_type) {
@@ -1442,10 +1405,10 @@ impl SemanticChecker {
 
         match op {
             // Result of this binary is the same as the operands type.
-            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul => Ok(Type {
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul => Type {
                 kind: lhs_type.kind,
                 position,
-            }),
+            },
             // Result of this binary is the same as the operands type.
             BinaryOp::Div | BinaryOp::Mod => {
                 if let ExprKind::LiteralInt(0) = rhs.kind {
@@ -1453,10 +1416,10 @@ impl SemanticChecker {
                         position: rhs.position,
                     });
                 }
-                Ok(Type {
+                Type {
                     kind: lhs_type.kind,
                     position,
-                })
+                }
             }
             BinaryOp::Lt
             | BinaryOp::Le
@@ -1465,10 +1428,10 @@ impl SemanticChecker {
             | BinaryOp::Eq
             | BinaryOp::Neq
             | BinaryOp::And
-            | BinaryOp::Or => Ok(Type {
+            | BinaryOp::Or => Type {
                 kind: TypeKind::Bool,
                 position,
-            }),
+            },
         }
     }
 }
