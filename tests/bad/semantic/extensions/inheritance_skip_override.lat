@@ -1,0 +1,23 @@
+class GrandParent {
+    void makeNoise(int times) {
+        printInt(times);
+    }
+}
+
+class Parent extends GrandParent {
+    int makeNoise(int times) {
+        printInt(times);
+        return 1;
+    }
+}
+
+class Child extends Parent {
+    void makeNoise(string sound) {
+        printString(sound);
+    }
+}
+
+int main() {
+    Child c = new Child;
+    return 0;
+}

@@ -152,6 +152,26 @@ impl SymbolTable {
                 position: ident.position,
             })
     }
+
+    pub fn lookup_method(&self, class_name: &str, method_name: &str) -> Option<FunctionInfo> {
+        let mut current_class_name = class_name;
+
+        loop {
+            if let Some(class_info) = self.classes.get(current_class_name) {
+                if let Some(method) = class_info.methods.get(method_name) {
+                    return Some(method.clone());
+                }
+
+                if let Some(parent) = &class_info.parent {
+                    current_class_name = &parent.name;
+                } else {
+                    return None;
+                }
+            } else {
+                return None;
+            }
+        }
+    }
 }
 
 // ============================

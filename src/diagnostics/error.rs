@@ -1,6 +1,7 @@
 /// Main file for all errors detected at the compilation stage.
 use crate::parser::ast::SourcePosition;
 use crate::parser::tokens::Token;
+use ariadne::Source;
 use lalrpop_util::ParseError as LalrpopParseError;
 use logos::source;
 use std::fmt;
@@ -283,6 +284,12 @@ pub enum SemanticError {
         // (subclass, superclass, extends_position)
         cycle: Vec<(String, String, SourcePosition)>,
     },
+    InvalidOverride {
+        method_name: String,
+        parent_name: String,
+        reason: String,
+        position: SourcePosition,
+    },
 }
 // TODO: Maybe not needed. Remove?
 
@@ -431,7 +438,6 @@ impl fmt::Display for SemanticError {
                     rhs_type, lhs_type
                 )
             }
-
             SemanticError::AssignTypeMismatch {
                 lhs_type, rhs_type, ..
             } => {
@@ -481,6 +487,18 @@ impl fmt::Display for SemanticError {
                     fmt,
                     "Inheritance cycle detected: {} -> (back to start)",
                     path
+                )
+            }
+            SemanticError::InvalidOverride {
+                method_name,
+                parent_name,
+                reason,
+                ..
+            } => {
+                write!(
+                    fmt,
+                    "Invalid override of method '{}' from class '{}': {}",
+                    method_name, parent_name, reason
                 )
             }
         }

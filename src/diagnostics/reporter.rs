@@ -398,6 +398,18 @@ impl Diagnostic {
 
                 diag
             }
+            SemanticError::InvalidOverride { method_name, parent_name, reason, position } => {
+                Diagnostic::error("Invalid method override")
+                    .with_label(
+                        position.0..position.1,
+                        format!(
+                            "This method attempts to override `{}` from class `{}`",
+                            method_name, parent_name
+                        ),
+                    )
+                    .with_note(format!("The override is invalid because: {}", reason))
+                    .with_help("Method signature in the subclass must exactly match the parent class (return type and argument types).")
+            },
         }
     }
 }

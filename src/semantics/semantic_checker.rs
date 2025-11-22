@@ -128,7 +128,6 @@ impl SemanticChecker {
         let mut methods: HashMap<String, FunctionInfo> = HashMap::new();
 
         // Check for duplicate fields and methods. Extends are not validated yet since we don't know the hierarchy.
-        // TODO: Can fields be overridden from a superclass?
         for entry in &class_def.entries {
             match &entry.kind {
                 ClassEntryKind::Field(identifiers, typ) => {
@@ -245,7 +244,8 @@ impl SemanticChecker {
             }
         }
 
-        if class_def.extends.is_some() {
+        if let Some(parent) = &class_def.extends {
+            // Check for cycles in the inheritance hierarchy.
             if let Some(cycle_path) = self.detect_inheritance_cycle(&class_def.name.name) {
                 // A simple hack to deduplicate the cycle errors. We look for the smallest lexical
                 // class name in the cycle and report it only for this.
@@ -257,6 +257,62 @@ impl SemanticChecker {
 
                 if &class_def.name.name == leader_name {
                     self.add_error(SemanticError::InheritanceCycle { cycle: cycle_path });
+                }
+            }
+
+            // Check if all overrides are valid - have the same signature.
+            for entry in &class_def.entries {
+                if let ClassEntryKind::Method(method_def) = &entry.kind {
+                    let method_name = &method_def.name;
+
+                    if let Some(parent_method) = self
+                        .symbol_table
+                        .lookup_method(&parent.name, &method_name.name)
+                    {
+                        dbg!(&parent_method);
+                        // TODO: Use types equal? or some other function which returns an enum on what the mismatch was
+                        // Argument count.
+                        if method_def.args.len() != parent_method.params.len() {
+                            self.add_error(SemanticError::InvalidOverride {
+                                method_name: method_name.name.clone(),
+                                parent_name: parent.name.clone(),
+                                reason: "Different number of arguments".to_string(),
+                                position: method_name.position,
+                            });
+                            continue;
+                        }
+
+                        // Argument types.
+                        for (i, (arg, parent_type)) in method_def
+                            .args
+                            .iter()
+                            .zip(&parent_method.params)
+                            .enumerate()
+                        {
+                            println!("Hello");
+                            dbg!(&arg);
+                            dbg!(&parent_type);
+                            if !self.types_equal(&arg.arg_type, parent_type) {
+                                self.add_error(SemanticError::InvalidOverride {
+                                    method_name: method_name.name.clone(),
+                                    parent_name: parent.name.clone(),
+                                    reason: format!("Argument #{} type mismatch", i + 1),
+                                    position: method_name.position,
+                                });
+                                continue;
+                            }
+                        }
+
+                        // Return type.
+                        if !self.types_equal(&method_def.return_type, &parent_method.return_type) {
+                            self.add_error(SemanticError::InvalidOverride {
+                                method_name: method_name.name.clone(),
+                                parent_name: parent.name.clone(),
+                                reason: "Return type mismatch".to_string(),
+                                position: method_name.position,
+                            });
+                        }
+                    }
                 }
             }
         }
