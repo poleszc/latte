@@ -66,6 +66,7 @@ pub fn run_compiler<
                     &comp_error,
                 );
             }
+            // TODO: remove kajak...
             return Err(CompilerError::Other("Kajak".to_string()));
         }
     }

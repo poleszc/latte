@@ -1,9 +1,7 @@
 /// Main file for all errors detected at the compilation stage.
 use crate::parser::ast::SourcePosition;
 use crate::parser::tokens::Token;
-use ariadne::Source;
 use lalrpop_util::ParseError as LalrpopParseError;
-use logos::source;
 use std::fmt;
 use std::num::ParseIntError;
 
