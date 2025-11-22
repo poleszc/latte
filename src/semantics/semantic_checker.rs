@@ -7,6 +7,7 @@ use std::vec;
 
 use crate::diagnostics::SemanticError;
 use crate::parser::ast::*;
+use crate::semantics::return_checker::ReturnChecker;
 use crate::semantics::symbol_table::SymbolTable;
 use crate::semantics::type_checker::TypeChecker;
 use crate::semantics::{ClassInfo, FunctionInfo, VariableInfo};
@@ -51,7 +52,7 @@ impl SemanticChecker {
 }
 
 // ======================
-// Types 
+// Types
 // ======================
 // TODO: Try to move that and make Semantic analyzer store a reference?
 impl SemanticChecker {
@@ -105,60 +106,10 @@ impl SemanticChecker {
     }
 }
 
-
 // ======================
-// Misc 
+// Misc
 // ======================
 impl SemanticChecker {
-    /// TODO: Export that to ReturnChecker
-    fn check_stmt_returns(&self, stmt: &Stmt) -> bool {
-        match &stmt.kind {
-            StmtKind::Return { expr } => true,
-            StmtKind::Block(block) => {
-                for stmt in &block.stmts {
-                    if self.check_stmt_returns(stmt) {
-                        return true;
-                    }
-                }
-                false
-            }
-            StmtKind::If {
-                cond,
-                if_true,
-                if_false,
-            } => match &cond.kind {
-                // if (true)
-                ExprKind::LiteralTrue => self.check_stmt_returns(&if_true),
-                // if (false)
-                ExprKind::LiteralFalse => {
-                    if let Some(else_stmt) = if_false {
-                        self.check_stmt_returns(&else_stmt)
-                    } else {
-                        false
-                    }
-                }
-                _ => {
-                    let true_returns = self.check_stmt_returns(if_true);
-                    match if_false {
-                        Some(else_stmt) => {
-                            let false_returns = self.check_stmt_returns(&else_stmt);
-                            true_returns && false_returns
-                        }
-                        None => false,
-                    }
-                }
-            },
-            // TODO: Think about that.
-            StmtKind::While { cond, body } => {
-                matches!(cond.kind, ExprKind::LiteralTrue)
-            }
-            // TODO: For now it doesn't work for fors as it's not required. Change that
-            StmtKind::For { .. } => false,
-            StmtKind::ForEach { .. } => false,
-            _ => false,
-        }
-    }
-
     fn validate_function_call(
         &mut self,
         func_info: &FunctionInfo,
@@ -257,9 +208,8 @@ impl SemanticChecker {
     }
 }
 
-
 // ======================
-// Classes 
+// Classes
 // ======================
 impl SemanticChecker {
     /// Forward declare a class and validate correctness of class definition.
@@ -553,15 +503,7 @@ impl SemanticChecker {
 
         // Check if function is guaranteed to return.
         if !matches!(func.return_type.kind, TypeKind::Void) {
-            let mut guarantees_return = false;
-            for stmt in &func.body.stmts {
-                if self.check_stmt_returns(stmt) {
-                    guarantees_return = true;
-                    break;
-                }
-            }
-
-            if !guarantees_return {
+            if !ReturnChecker::function_guarantees_return(&func.body) {
                 self.add_error(SemanticError::MissingReturn {
                     function_name: func.name.name.clone(),
                     position: func.position,
@@ -689,12 +631,7 @@ impl SemanticChecker {
         }
     }
 
-    fn visit_assign(
-        &mut self,
-        target: &Box<Expr>,
-        value: &Box<Expr>,
-        position: SourcePosition,
-    ) {
+    fn visit_assign(&mut self, target: &Box<Expr>, value: &Box<Expr>, position: SourcePosition) {
         let is_lvalue = matches!(
             target.kind,
             ExprKind::Var(_) | ExprKind::ArrayAccess { .. } | ExprKind::FieldAccess { .. }
@@ -912,10 +849,7 @@ impl SemanticChecker {
     }
 
     // TODO: Remove that?
-    fn visit_function_definition_expr(
-        &mut self,
-        block: &Block,
-    ) -> Result<(), Vec<SemanticError>> {
+    fn visit_function_definition_expr(&mut self, block: &Block) -> Result<(), Vec<SemanticError>> {
         todo!();
     }
 }
