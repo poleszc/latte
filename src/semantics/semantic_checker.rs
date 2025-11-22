@@ -8,6 +8,7 @@ use std::vec;
 use crate::diagnostics::SemanticError;
 use crate::parser::ast::*;
 use crate::semantics::symbol_table::SymbolTable;
+use crate::semantics::type_checker::TypeChecker;
 use crate::semantics::{ClassInfo, FunctionInfo, VariableInfo};
 
 pub struct SemanticChecker {
@@ -47,89 +48,39 @@ impl SemanticChecker {
     fn add_error(&mut self, error: SemanticError) {
         self.errors.push(error);
     }
+}
+
+/// TYPES
+impl SemanticChecker {
+     fn types_equal(&self, t1: &Type, t2: &Type) -> bool {
+        let type_checker = TypeChecker::new(&self.symbol_table);
+        type_checker.types_equal(t1, t2)
+    }
+
+    fn is_subtype(&self, subtype: &Type, supertype: &Type) -> bool {
+        let type_checker = TypeChecker::new(&self.symbol_table);
+        type_checker.is_subtype(subtype, supertype)
+    }
+
+    fn validate_variable_type(&mut self, typ: &Type) {
+        let type_checker = TypeChecker::new(&self.symbol_table);
+        if let Err(e) = type_checker.validate_variable_type(typ) {
+            self.add_error(e);
+        }
+    }
+
+    fn type_legal_for_bin_op(&self, op: &BinaryOp, typ: &Type) -> bool {
+        let type_checker = TypeChecker::new(&self.symbol_table);
+        type_checker.type_legal_for_bin_op(op, typ)
+    }   
 
     fn error_type(&self, pos: SourcePosition) -> Type {
-        Type {
-            kind: TypeKind::Error,
-            position: pos,
-        }
-    }
-
-    fn types_equal(&self, t1: &Type, t2: &Type) -> bool {
-        match (&t1.kind, &t2.kind) {
-            (TypeKind::Error, _) | (_, TypeKind::Error) => true, // Error equals everything to prevent cascading errors when recovering.
-            (TypeKind::Int, TypeKind::Int) => true,
-            (TypeKind::String, TypeKind::String) => true,
-            (TypeKind::Bool, TypeKind::Bool) => true,
-            (TypeKind::Void, TypeKind::Void) => true,
-            (TypeKind::Class(i1), TypeKind::Class(i2)) => i1.name == i2.name,
-            (TypeKind::Array(inner1), TypeKind::Array(inner2)) => {
-                self.types_equal(&inner1, &inner2)
-            }
-            _ => false,
-        }
-    }
-
-    /// True if `subtype` is a subtype of `supertype`. Essentially if they are the same
-    /// type, a subtype in inheritance hierarchy or a null subtype.
-    /// For now null is interpreted as a subtype of all classes and arrays.
-    /// TODO: Change that.
-    fn is_subtype(&self, subtype: &Type, supertype: &Type) -> bool {
-        // Mute out the error types.
-        if matches!(subtype.kind, TypeKind::Error) || matches!(supertype.kind, TypeKind::Error) {
-            return true;
-        }
-
-        // Null is a subtype of all classes and arrays.
-        if matches!(subtype.kind, TypeKind::Null) {
-            return matches!(supertype.kind, TypeKind::Class(_) | TypeKind::Array(_));
-        }
-
-        if self.types_equal(subtype, supertype) {
-            return true;
-        }
-
-        if let (TypeKind::Class(sub_class), TypeKind::Class(super_class)) =
-            (&subtype.kind, &supertype.kind)
-        {
-            return self.is_class_subtype(&sub_class.name, &super_class.name);
-        }
-
-        if let (TypeKind::Array(sub_inner), TypeKind::Array(super_inner)) =
-            (&subtype.kind, &supertype.kind)
-        {
-            return self.is_subtype(sub_inner, super_inner);
-        }
-        false
-    }
-
-    /// True if `subclass` if a subclass of `superclass` in the inheritance hierarchy context.
-    fn is_class_subtype(&self, subclass: &str, superclass: &str) -> bool {
-        if subclass == superclass {
-            return true;
-        }
-
-        let mut current = subclass.to_string();
-        loop {
-            if let Ok(class_info) = self.symbol_table.lookup_class(&Ident {
-                name: current.to_string(),
-                position: SourcePosition(0, 0),
-            }) {
-                if let Some(parent) = class_info.parent {
-                    if parent.name == superclass {
-                        return true;
-                    }
-                    current = parent.name.clone();
-                } else {
-                    return false;
-                }
-            } else {
-                // Should catch this earlier, but safely return false
-                return false;
-            }
-        }
-    }
+        let type_checker = TypeChecker::new(&self.symbol_table);
+        type_checker.error_type(pos)
+    }   
 }
+
+
 
 impl SemanticChecker {
     /// Forward declare a class and validate correctness of class definition.
@@ -333,108 +284,6 @@ impl SemanticChecker {
         }
     }
 
-    /// TODO: Try to unify the validate_type functions.
-    /// Validates the types assuming the type is used to declare a variable of a class field.
-    /// This means void and null type will be treated as an error.
-    fn validate_variable_type(&mut self, typ: &Type) {
-        let expected_types = vec![
-            "int".to_string(),
-            "bool".to_string(),
-            "string".to_string(),
-            "{ClassType}".to_string(),
-            "{ArrayType}".to_string(),
-        ];
-        match &typ.kind {
-            TypeKind::Void => {
-                self.add_error(SemanticError::InvalidVariableType {
-                    found: typ.to_string(),
-                    expected: expected_types,
-                    position: typ.position,
-                });
-            }
-            TypeKind::Null => {
-                self.add_error(SemanticError::InvalidVariableType {
-                    found: typ.to_string(),
-                    expected: expected_types,
-                    position: typ.position,
-                });
-            }
-            TypeKind::Class(ident) => {
-                if !self.symbol_table.class_exists(&ident.name) {
-                    self.add_error(SemanticError::UndefinedClass {
-                        name: ident.name.clone(),
-                        position: ident.position,
-                    });
-                }
-            }
-            TypeKind::Array(inner) => {
-                if let TypeKind::Void = inner.kind {
-                    self.add_error(SemanticError::InvalidVoidArrayType {
-                        expected: vec![
-                            "int".to_string(),
-                            "bool".to_string(),
-                            "string".to_string(),
-                            "{ClassType}".to_string(),
-                            "{ArrayType}".to_string(),
-                        ],
-                        position: inner.position,
-                    });
-                } else {
-                    self.validate_variable_type(&inner);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    /// Validates the types assuming the type is used to declare a functions return type.
-    /// This means void and null type will be treated as an error.
-    fn validate_functions_return_type(&mut self, typ: &Type) {
-        let expected_types = vec![
-            "void".to_string(),
-            "int".to_string(),
-            "bool".to_string(),
-            "string".to_string(),
-            "{ClassType}".to_string(),
-            "{ArrayType}".to_string(),
-        ];
-        match &typ.kind {
-            TypeKind::Null => {
-                self.add_error(SemanticError::InvalidVariableType {
-                    found: typ.to_string(),
-                    expected: expected_types,
-                    position: typ.position,
-                });
-            }
-            TypeKind::Class(ident) => {
-                if !self.symbol_table.class_exists(&ident.name) {
-                    self.add_error(SemanticError::UndefinedClass {
-                        name: ident.name.clone(),
-                        position: ident.position,
-                    });
-                }
-            }
-            TypeKind::Array(inner) => {
-                if let TypeKind::Void = inner.kind {
-                    self.add_error(SemanticError::InvalidVoidArrayType {
-                        expected: vec![
-                            "void".to_string(),
-                            "int".to_string(),
-                            "bool".to_string(),
-                            "string".to_string(),
-                            "{ClassType}".to_string(),
-                            "{ArrayType}".to_string(),
-                        ],
-                        position: inner.position,
-                    });
-                } else {
-                    self.validate_variable_type(&inner);
-                }
-            }
-            _ => {}
-        }
-    }
-
     fn validate_main(&mut self) {
         let main_ident = Ident {
             name: "main".to_string(),
@@ -461,22 +310,6 @@ impl SemanticChecker {
             }
             Err(_) => {
                 self.add_error(SemanticError::UndefinedMain);
-            }
-        }
-    }
-
-    fn type_legal_for_bin_op(&mut self, op: &BinaryOp, typ: &Type) -> bool {
-        match op {
-            BinaryOp::Add => matches!(typ.kind, TypeKind::Int | TypeKind::String),
-            BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
-                matches!(typ.kind, TypeKind::Int)
-            }
-            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
-                matches!(typ.kind, TypeKind::Int)
-            }
-            BinaryOp::Eq | BinaryOp::Neq => true,
-            BinaryOp::And | BinaryOp::Or => {
-                matches!(typ.kind, TypeKind::Bool)
             }
         }
     }
