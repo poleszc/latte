@@ -261,6 +261,7 @@ impl SemanticChecker {
             }
 
             // Check if all overrides are valid - have the same signature.
+            // TODO: Check if the field overrides are okay - have the same type.
             for entry in &class_def.entries {
                 if let ClassEntryKind::Method(method_def) = &entry.kind {
                     let method_name = &method_def.name;
