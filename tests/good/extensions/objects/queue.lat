@@ -19,7 +19,7 @@ class IntQueue {
   void insert (int x) {
     Node last = new Node;
     last.setElem(x);
-    if (self.isEmpty())
+    if (this.isEmpty())
       front = last;
     else 
       rear.setNext(last);

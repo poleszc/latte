@@ -276,6 +276,9 @@ pub enum SemanticError {
         function_name: String,
         position: SourcePosition,
     },
+    ThisUsedOutsideClass {
+        position: SourcePosition,
+    },
 }
 // TODO: Maybe not needed. Remove?
 
@@ -438,6 +441,9 @@ impl fmt::Display for SemanticError {
                 variable_position,
                 collection_position,
             } => todo!(),
+            SemanticError::ThisUsedOutsideClass { position } => {
+                write!(fmt, "This used outside of class")
+            }
         }
     }
 }

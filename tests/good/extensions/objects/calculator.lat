@@ -57,7 +57,7 @@ class Operator extends Node {
         return 0;
     }
     int value() {
-        return self.operator(left.value(), right.value());
+        return this.operator(left.value(), right.value());
     }
 }
 

@@ -33,6 +33,7 @@ extern {
         "false" => Token::KWFalse,
         "new" => Token::KWNew,
         "null" => Token::KWNull,
+        "this" => Token::KWThis,
 
         // Operators.
         "+" => Token::OPAdd,
@@ -510,6 +511,10 @@ Expr8: Box<ast::Expr> = {
     }),
     <start: @L> "null" <end: @R> => Box::new(ast::Expr {
         kind: ast::ExprKind::LiteralNull,
+        position: SourcePosition(start, end),
+    }),
+    <start: @L> "this" <end: @R> => Box::new(ast::Expr {
+        kind: ast::ExprKind::This,
         position: SourcePosition(start, end),
     }),
     <id: PositionedIdent> => Box::new(ast::Expr {

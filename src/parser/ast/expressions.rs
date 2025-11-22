@@ -16,6 +16,7 @@ pub enum ExprKind {
     LiteralInt(i32),
     LiteralTrue,
     LiteralFalse,
+    This,
     LiteralString(String),
     LiteralNull,
     App {

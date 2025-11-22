@@ -372,6 +372,14 @@ impl Diagnostic {
                 .with_note("Return statements can't return values of type 'void'")
                 .with_help("Change the expression in the return statement")
             }
+            SemanticError::ThisUsedOutsideClass { position } => {
+                Diagnostic::error("Invalid use of 'this'")
+                .with_label(
+                    position.0..position.1,
+                    "'this' keyword can only be used inside a class method",
+                )
+                .with_help("Remove 'this' or move the code into a class method.")
+            }
         }
     }
 }

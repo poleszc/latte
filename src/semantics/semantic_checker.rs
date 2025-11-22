@@ -1020,6 +1020,27 @@ impl SemanticChecker {
                     }
                 }
             }
+            ExprKind::This => {
+                if let Some(class_name) = &self.current_class {
+                    let class_ident = Ident {
+                        name: class_name.clone(),
+                        position: outer_expr.position,
+                    };
+
+                    Ok(Type {
+                        kind: TypeKind::Class(class_ident),
+                        position: outer_expr.position,
+                    })
+                } else {
+                    self.add_error(SemanticError::ThisUsedOutsideClass {
+                        position: outer_expr.position,
+                    });
+                    Ok(Type {
+                        kind: TypeKind::Error,
+                        position: outer_expr.position,
+                    })
+                }
+            }
         }
     }
 

@@ -80,6 +80,8 @@ pub enum Token {
     KWNew,
     #[token("null")]
     KWNull,
+    #[token("this")]
+    KWThis,
 
     // Operators.
     #[token("+")]
@@ -173,6 +175,7 @@ impl fmt::Display for Token {
             Token::KWFalse => write!(f, "false"),
             Token::KWNew => write!(f, "new"),
             Token::KWNull => write!(f, "null"),
+            Token::KWThis => write!(f, "this"),
 
             // Operators
             Token::OPAdd => write!(f, "+"),
