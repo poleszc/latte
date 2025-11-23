@@ -1,4 +1,4 @@
-use latte::{CompilerError, diagnostics::SemanticError, parser, semantics::SemanticChecker};
+use latte::{CompilerError, parser, semantics::SemanticChecker};
 
 pub fn assert_parsing_succeeds(input_path: &str) {
     let source_code = std::fs::read_to_string(input_path)
