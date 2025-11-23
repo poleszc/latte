@@ -66,15 +66,13 @@ pub fn run_compiler<
                     &comp_error,
                 );
             }
+            // TODO: remove kajak...
             return Err(CompilerError::Other("Kajak".to_string()));
         }
     }
-
-    eprintln!("[Semantic] Semantic analysis completed successful");
-
+    // eprintln!("[Semantic] Semantic analysis completed successful");
     // backend_compile(&mut parsed_program, &output_dir, file_stem, &args)?;
-
-    Ok(())
+    // Ok(())
 }
 
 /// Dumps the AST to a JSON file in a specified output_dir and a given file name.

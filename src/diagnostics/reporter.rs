@@ -1,4 +1,3 @@
-use crate::SourcePosition;
 use crate::semantics::builtins;
 
 use super::error::{CompilerError, LexicalError, ParseError, SemanticError};

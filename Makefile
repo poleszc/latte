@@ -17,12 +17,17 @@ clean:
 	rm -rf insc_llvm
 	rm -rf tests/good/*.ll tests/good/*.bc
 	rm -rf tests/good/*.json
-	rm -rf tests/extensions/arrays/*.json
-	rm -rf tests/extensions/objects/*.json
-	rm -rf tests/extensions/struct/*.json
-	rm -rf tests/extensions/virtual/*.json
+	rm -rf tests/good/extensions/arrays/*.json
+	rm -rf tests/good/extra/*.json
+	rm -rf tests/good/extensions/objects/*.json
+	rm -rf tests/good/extensions/struct/*.json
+	rm -rf tests/good/extensions/virtual/*.json
 	rm -rf tests/bad/*.json
 	rm -rf tests/bad/lexical/*.json
+	rm -rf tests/bad/official/*.json
+	rm -rf tests/bad/semantic/basic/*.json
+	rm -rf tests/bad/semantic/error_recovery/*.json
+	rm -rf tests/bad/semantic/extensions/*.json
 
 .PHONY:
 	all build build-llvm test clean clean-all

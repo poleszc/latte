@@ -1,8 +1,9 @@
+pub mod analysis;
 pub mod builtins;
-mod semantic_checker;
-mod symbol_table;
-mod symbols;
+pub mod symbol_table;
+pub mod symbols;
 
-pub use builtins::get_builtin_signature;
-pub use semantic_checker::SemanticChecker;
+pub use analysis::SemanticChecker;
 pub use symbols::{ClassInfo, FunctionInfo, VariableInfo};
+pub use symbol_table::SymbolTable;
+pub use builtins::get_builtin_signature;
