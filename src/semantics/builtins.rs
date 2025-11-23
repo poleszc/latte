@@ -52,12 +52,7 @@ pub fn get_builtin_signature(name: &str) -> Option<String> {
     {
         let params: Vec<String> = param_kinds.iter().map(|k| k.to_string()).collect();
         // TODO: Implement display for Type?
-        Some(format!(
-            "{} {}({})",
-            ret_kind,
-            func_name,
-            params.join(", ")
-        ))
+        Some(format!("{} {}({})", ret_kind, func_name, params.join(", ")))
     } else {
         None
     }

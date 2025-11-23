@@ -48,11 +48,7 @@ impl ReturnChecker {
     }
 
     /// Check if an if statement guarantees to return.
-    fn if_guarantees_return(
-        cond: &Expr,
-        if_true: &Stmt,
-        if_false: &Option<Box<Stmt>>,
-    ) -> bool {
+    fn if_guarantees_return(cond: &Expr, if_true: &Stmt, if_false: &Option<Box<Stmt>>) -> bool {
         match &cond.kind {
             // if (true) - only check true branch
             ExprKind::LiteralTrue => Self::stmt_guarantees_return(if_true),

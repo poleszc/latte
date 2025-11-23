@@ -345,6 +345,10 @@ Type: ast::Type = {
 ///////////////////
 /// EXPRESSIONS ///
 ///////////////////
+ExprUnboxed: ast::Expr = {
+    <e: Expr> => *e,
+};
+
 Expr: Box<ast::Expr> = {
     <l: Expr> "||" <r: Expr1> => make_binary(ast::BinaryOp::Or, l, r),
     Expr1,
@@ -404,7 +408,7 @@ Expr6: Box<ast::Expr> = {
 }
 
 Expr7: Box<ast::Expr> = {
-    <callee: Expr7> "(" <args: Comma<Expr>> ")" <end: @R> => {
+    <callee: Expr7> "(" <args: Comma<ExprUnboxed>> ")" <end: @R> => {
         let start_pos = callee.position.0;
 
         match callee.kind {

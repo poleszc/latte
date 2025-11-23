@@ -60,11 +60,7 @@ pub fn run_compiler<
         Err(errors) => {
             for err in errors {
                 let comp_error = CompilerError::Semantic(err);
-                report_compiler_error(
-                    args.input_file.to_str().unwrap(),
-                    &source_code,
-                    &comp_error,
-                );
+                report_compiler_error(args.input_file.to_str().unwrap(), &source_code, &comp_error);
             }
             // TODO: remove kajak...
             Err(CompilerError::Other("Kajak".to_string()))

@@ -23,8 +23,7 @@ pub enum ExprKind {
     LiteralNull,
     App {
         callee: Box<Expr>,
-        // TODO: Try to remove Vec<Box<_>>
-        args: Vec<Box<Expr>>,
+        args: Vec<Expr>,
     }, // obj.foo(1, 2)
     ArrayAccess {
         array: Box<Expr>,
@@ -37,7 +36,7 @@ pub enum ExprKind {
     Method {
         object: Box<Expr>,
         method_name: Ident,
-        args: Vec<Box<Expr>>,
+        args: Vec<Expr>,
     }, // class.method(1, 2)
     Paren(Box<Expr>),
     UnaryOp {

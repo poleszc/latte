@@ -245,7 +245,7 @@ impl<'a> ExpressionChecker<'a> {
     fn visit_application(
         &mut self,
         callee: &Expr,
-        args: &Vec<Box<Expr>>, // TODO: Remove box expr.
+        args: &[Expr],
         position: SourcePosition,
     ) -> Type {
         // TODO: For now we only support direct calls on function names. Change that to use function types.
@@ -355,7 +355,7 @@ impl<'a> ExpressionChecker<'a> {
         &mut self,
         callee: &Expr,
         method_name: &Ident,
-        args: &Vec<Box<Expr>>,
+        args: &[Expr],
         position: SourcePosition,
     ) -> Type {
         let obj_type = self.visit_expr(callee);
@@ -414,7 +414,7 @@ impl<'a> ExpressionChecker<'a> {
     fn visit_unary_operator(
         &mut self,
         op: &UnaryOp,
-        expr: &Box<Expr>,
+        expr: &Expr,
         position: SourcePosition,
     ) -> Type {
         let expr_type = self.visit_expr(expr);
@@ -464,7 +464,7 @@ impl<'a> ExpressionChecker<'a> {
     fn validate_function_call(
         &mut self,
         func_info: &FunctionInfo,
-        args: &Vec<Box<Expr>>,
+        args: &[Expr],
         expr_position: SourcePosition,
     ) {
         let func_ident = func_info.ident.clone();
