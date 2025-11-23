@@ -1,4 +1,4 @@
-use crate::diagnostics::SemanticError;
+use crate::errors::SemanticError;
 use crate::parser::ast::TypeKind;
 use crate::parser::ast::*;
 use crate::semantics::FunctionInfo;

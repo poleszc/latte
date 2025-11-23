@@ -1,4 +1,4 @@
-use crate::diagnostics::SemanticError;
+use crate::errors::SemanticError;
 use crate::parser::ast::*;
 use crate::semantics::VariableInfo;
 use crate::semantics::analysis::context::SemanticContext;
@@ -22,7 +22,7 @@ impl<'a> StatementChecker<'a> {
     pub fn check_stmt(&mut self, stmt: &Stmt) {
         self.visit_stmt(stmt)
     }
-    
+
     /// Main function to perform a type check of a block statement.
     /// Logs errors in the context in case of errors.
     pub fn check_block(&mut self, block: &Block) {
@@ -99,7 +99,7 @@ impl<'a> StatementChecker<'a> {
         }
     }
 
-   fn visit_block(&mut self, block: &Block) {
+    fn visit_block(&mut self, block: &Block) {
         self.ctx.symbol_table.enter_scope();
         // TODO: Here we should:
         // - Look for defined functions

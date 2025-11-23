@@ -1,5 +1,5 @@
 // File containing the token definitions for the custom lexer implementation.
-use crate::diagnostics::LexicalError;
+use crate::errors::LexicalError;
 use logos::Logos;
 use std::fmt;
 

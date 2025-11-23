@@ -1,4 +1,4 @@
-use crate::diagnostics::SemanticError;
+use crate::errors::SemanticError;
 use crate::parser::ast::*;
 use crate::semantics::analysis::type_checker::TypeChecker;
 use crate::semantics::symbol_table::SymbolTable;
@@ -120,7 +120,6 @@ impl SemanticContext {
 // Misc / Shared Validation Logic
 // ======================
 impl SemanticContext {
-
     // TODO: Is this used?
     pub fn resolve_method(&self, class_name: &str, method_name: &str) -> Option<FunctionInfo> {
         self.symbol_table.lookup_method(class_name, method_name)

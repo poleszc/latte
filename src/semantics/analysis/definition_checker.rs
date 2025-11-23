@@ -1,4 +1,4 @@
-use crate::diagnostics::SemanticError;
+use crate::errors::SemanticError;
 use crate::parser::ast::*;
 use crate::semantics::analysis::context::SemanticContext;
 use crate::semantics::analysis::return_checker::ReturnChecker;

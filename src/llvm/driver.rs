@@ -4,7 +4,7 @@
 /// - Runs `llvm-as` to assemble the bitcode
 /// - Runs the `lli` on the generated bitcode if requested.
 use crate::config::LatteArgs;
-use crate::diagnostics::CompilerError;
+use crate::errors::CompilerError;
 use crate::parser::ast::definitions::Program;
 use std::path::Path;
 

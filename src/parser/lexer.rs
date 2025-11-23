@@ -1,4 +1,4 @@
-use crate::diagnostics::LexicalError;
+use crate::errors::LexicalError;
 use crate::parser::tokens::Token;
 use logos::Logos;
 
