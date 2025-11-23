@@ -5,7 +5,7 @@ pub mod return_checker;
 pub mod stmt_checker;
 pub mod type_checker;
 
-use crate::diagnostics::SemanticError;
+use crate::errors::SemanticError;
 use crate::parser::ast::Program;
 
 use context::SemanticContext;

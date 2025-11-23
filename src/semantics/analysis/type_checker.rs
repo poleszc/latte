@@ -1,4 +1,4 @@
-use crate::diagnostics::SemanticError;
+use crate::errors::SemanticError;
 use crate::parser::ast::{Ident, SourcePosition, Type, TypeKind};
 use crate::semantics::symbol_table::SymbolTable;
 

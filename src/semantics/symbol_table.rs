@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 use crate::{
-    diagnostics::SemanticError,
+    errors::SemanticError,
     parser::ast::*,
     semantics::{
         builtins,
