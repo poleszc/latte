@@ -9,6 +9,7 @@ pub mod errors;
 pub mod llvm;
 pub mod parser;
 pub mod semantics;
+pub mod utils;
 
 pub use crate::config::LatteArgs;
 pub use crate::driver::run_compiler;

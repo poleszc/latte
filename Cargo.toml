@@ -11,6 +11,7 @@ test = false
 lalrpop = "0.22.2"
 
 [dependencies]
+ustr = "1.0"
 clap = { version = "4.5.41", features = ["derive"] }
 lalrpop-util = { version = "0.22.2", features = ["lexer", "unicode"] }
 ariadne = {version = "0.4.0", features = ["auto-color"]}
