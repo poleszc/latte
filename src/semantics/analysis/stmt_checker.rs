@@ -1,11 +1,9 @@
-// src/semantics/stmt_checker.rs
-
 use crate::diagnostics::SemanticError;
 use crate::parser::ast::*;
 use crate::semantics::VariableInfo;
-use crate::semantics::context::SemanticContext;
-use crate::semantics::expr_checker::ExpressionChecker;
-use crate::semantics::return_checker::ReturnChecker;
+use crate::semantics::analysis::context::SemanticContext;
+use crate::semantics::analysis::expr_checker::ExpressionChecker;
+use crate::semantics::analysis::return_checker::ReturnChecker;
 
 pub struct StatementChecker<'a> {
     ctx: &'a mut SemanticContext,
@@ -111,7 +109,7 @@ impl<'a> StatementChecker<'a> {
         self.ctx.symbol_table.leave_scope();
     }
 
-    fn visit_declaration(&mut self, typ: &Type, items: &Vec<Item>, position: SourcePosition) {
+    fn visit_declaration(&mut self, typ: &Type, items: &Vec<Item>, _position: SourcePosition) {
         self.ctx.validate_variable_type(typ);
         for item in items {
             match &item.kind {
@@ -135,7 +133,7 @@ impl<'a> StatementChecker<'a> {
         }
     }
 
-    fn visit_assign(&mut self, target: &Box<Expr>, value: &Box<Expr>, position: SourcePosition) {
+    fn visit_assign(&mut self, target: &Box<Expr>, value: &Box<Expr>, _position: SourcePosition) {
         // Continue checking rhs even if lhs is invalid lvalue
         self.check_lvalue(target);
 
@@ -193,7 +191,7 @@ impl<'a> StatementChecker<'a> {
         }
     }
 
-    fn visit_increment(&mut self, expr: &Box<Expr>, position: SourcePosition) {
+    fn visit_increment(&mut self, expr: &Box<Expr>, _position: SourcePosition) {
         let expr_type = ExpressionChecker::new(self.ctx).check(expr);
 
         if !matches!(expr_type.kind, TypeKind::Int | TypeKind::Error) {
@@ -208,7 +206,7 @@ impl<'a> StatementChecker<'a> {
         self.check_lvalue(expr);
     }
 
-    fn visit_decrement(&mut self, expr: &Box<Expr>, position: SourcePosition) {
+    fn visit_decrement(&mut self, expr: &Box<Expr>, _position: SourcePosition) {
         let expr_type = ExpressionChecker::new(self.ctx).check(expr);
 
         if !matches!(expr_type.kind, TypeKind::Int | TypeKind::Error) {
@@ -228,7 +226,7 @@ impl<'a> StatementChecker<'a> {
         cond: &Box<Expr>,
         if_true: &Box<Stmt>,
         if_false: &Option<Box<Stmt>>,
-        position: SourcePosition,
+        _position: SourcePosition,
     ) {
         let cond_type = ExpressionChecker::new(self.ctx).check(cond);
 
@@ -251,7 +249,7 @@ impl<'a> StatementChecker<'a> {
         }
     }
 
-    fn visit_while(&mut self, cond: &Box<Expr>, body: &Box<Stmt>, position: SourcePosition) {
+    fn visit_while(&mut self, cond: &Box<Expr>, body: &Box<Stmt>, _position: SourcePosition) {
         let cond_type = ExpressionChecker::new(self.ctx).check(cond);
 
         if !matches!(cond_type.kind, TypeKind::Bool | TypeKind::Error) {
@@ -272,7 +270,7 @@ impl<'a> StatementChecker<'a> {
         cond: &Option<Box<Expr>>,
         post: &Option<Box<Expr>>,
         body: &Box<Stmt>,
-        position: SourcePosition,
+        _position: SourcePosition,
     ) {
         self.ctx.symbol_table.enter_scope();
 
@@ -306,7 +304,7 @@ impl<'a> StatementChecker<'a> {
         item_name: &Ident,
         collection: &Box<Expr>,
         body: &Box<Stmt>,
-        position: SourcePosition,
+        _position: SourcePosition,
     ) {
         let collection_type = ExpressionChecker::new(self.ctx).check(collection);
 

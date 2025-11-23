@@ -79,7 +79,7 @@ impl ReturnChecker {
     }
 
     /// Check if a while loop guarantees to return.
-    fn while_guarantees_return(cond: &Box<Expr>, body: &Box<Stmt>) -> bool {
+    fn while_guarantees_return(cond: &Box<Expr>, _body: &Box<Stmt>) -> bool {
         match &cond.kind {
             ExprKind::LiteralTrue => true,
             // TODO: Think about that.

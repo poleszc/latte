@@ -1,11 +1,10 @@
-use std::collections::{HashMap, HashSet};
-
 use crate::diagnostics::SemanticError;
 use crate::parser::ast::*;
-use crate::semantics::context::SemanticContext;
-use crate::semantics::return_checker::ReturnChecker;
-use crate::semantics::stmt_checker::StatementChecker;
-use crate::semantics::{ClassInfo, FunctionInfo, VariableInfo};
+use crate::semantics::analysis::context::SemanticContext;
+use crate::semantics::analysis::return_checker::ReturnChecker;
+use crate::semantics::analysis::stmt_checker::StatementChecker;
+use crate::semantics::{ClassInfo, FunctionInfo};
+use std::collections::HashMap;
 
 pub struct DefinitionChecker<'a> {
     ctx: &'a mut SemanticContext,
@@ -177,7 +176,7 @@ impl<'a> DefinitionChecker<'a> {
             // Check for cycles in the inheritance hierarchy.
             if let Some(cycle_path) = self.detect_inheritance_cycle(&class_def.name.name) {
                 // A simple hack to deduplicate the cycle errors. Sort the class names
-                // lexicographically and report only when we're the smallest (lexicaly) class.
+                // lexicographically and report only when we're the smallest (lexically) class.
                 // TODO: Introduce and move that to error handler?
                 let leader_name = cycle_path
                     .iter()

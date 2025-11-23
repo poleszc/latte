@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use crate::diagnostics::SemanticError;
 use crate::parser::ast::*;
+use crate::semantics::analysis::type_checker::TypeChecker;
 use crate::semantics::symbol_table::SymbolTable;
-use crate::semantics::type_checker::TypeChecker;
 use crate::semantics::{ClassInfo, FunctionInfo, VariableInfo};
 
 pub struct SemanticContext {

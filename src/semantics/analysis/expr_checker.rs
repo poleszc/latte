@@ -2,7 +2,7 @@ use crate::diagnostics::SemanticError;
 use crate::parser::ast::TypeKind;
 use crate::parser::ast::*;
 use crate::semantics::FunctionInfo;
-use crate::semantics::context::SemanticContext;
+use crate::semantics::analysis::context::SemanticContext;
 
 pub struct ExpressionChecker<'a> {
     ctx: &'a mut SemanticContext,
