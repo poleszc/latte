@@ -4,6 +4,7 @@ use crate::semantics::analysis::type_checker::TypeChecker;
 use crate::semantics::symbol_table::SymbolTable;
 use crate::semantics::{ClassInfo, FunctionInfo, VariableInfo};
 
+#[derive(Debug, Default)]
 pub struct SemanticContext {
     pub symbol_table: SymbolTable,
     /// TODO: This should be a stack once we support nested functions.
@@ -62,8 +63,7 @@ impl SemanticContext {
 // ======================
 impl SemanticContext {
     pub fn types_equal(&self, t1: &Type, t2: &Type) -> bool {
-        let type_checker = TypeChecker::new(&self.symbol_table);
-        type_checker.types_equal(t1, t2)
+        TypeChecker::types_equal(t1, t2)
     }
 
     pub fn is_subtype(&self, subtype: &Type, supertype: &Type) -> bool {

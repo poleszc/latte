@@ -24,8 +24,8 @@ impl<'a> DefinitionChecker<'a> {
         // Forward declare all functions and classes in the global scope.
         for top_def in &program.defs {
             match &top_def.kind {
-                TopDefKind::Func(func_def) => self.add_function(&func_def),
-                TopDefKind::Class(class_def) => self.add_class(&class_def),
+                TopDefKind::Func(func_def) => self.add_function(func_def),
+                TopDefKind::Class(class_def) => self.add_class(class_def),
             }
         }
 
@@ -38,7 +38,7 @@ impl<'a> DefinitionChecker<'a> {
 
         // Now we type check the functions and methods.
         for top_def in &program.defs {
-            self.visit_top_def(&top_def);
+            self.visit_top_def(top_def);
         }
 
         self.validate_main();
@@ -163,13 +163,13 @@ impl<'a> DefinitionChecker<'a> {
     }
 
     fn validate_class(&mut self, class_def: &ClassDef) {
-        if let Some(parent) = &class_def.extends {
-            if !self.ctx.symbol_table.class_exists(&parent.name) {
-                self.ctx.add_error(SemanticError::UndefinedClass {
-                    name: parent.name.clone(),
-                    position: parent.position,
-                });
-            }
+        if let Some(parent) = &class_def.extends
+            && !self.ctx.symbol_table.class_exists(&parent.name)
+        {
+            self.ctx.add_error(SemanticError::UndefinedClass {
+                name: parent.name.clone(),
+                position: parent.position,
+            });
         }
 
         if let Some(parent) = &class_def.extends {
@@ -251,7 +251,7 @@ impl<'a> DefinitionChecker<'a> {
 
         for entry in &class_def.entries {
             if let ClassEntryKind::Field(_, typ) = &entry.kind {
-                self.ctx.validate_variable_type(&typ);
+                self.ctx.validate_variable_type(typ);
             }
         }
     }
@@ -288,13 +288,13 @@ impl<'a> DefinitionChecker<'a> {
         StatementChecker::new(self.ctx).check_block(&func.body);
 
         // Check if function is guaranteed to return.
-        if !matches!(func.return_type.kind, TypeKind::Void) {
-            if !ReturnChecker::function_guarantees_return(&func.body) {
-                self.ctx.add_error(SemanticError::MissingReturn {
-                    function_name: func.name.name.clone(),
-                    position: func.position,
-                });
-            }
+        if !matches!(func.return_type.kind, TypeKind::Void)
+            && !ReturnChecker::function_guarantees_return(&func.body)
+        {
+            self.ctx.add_error(SemanticError::MissingReturn {
+                function_name: func.name.name.clone(),
+                position: func.position,
+            });
         }
 
         // TODO: This is bugged in nested functions.

@@ -19,7 +19,7 @@ impl<'a> ExpressionChecker<'a> {
     /// Perform a type check of an expression and return it's type.
     /// If expression if typed incorrectly we return an Error type
     /// to allow for error recovery.
-    pub fn check(&mut self, expr: &Box<Expr>) -> Type {
+    pub fn check(&mut self, expr: &Expr) -> Type {
         self.visit_expr(expr)
     }
 }
@@ -97,7 +97,7 @@ impl<'a> ExpressionChecker<'a> {
 // Expression visitors.
 // ======================
 impl<'a> ExpressionChecker<'a> {
-    fn visit_expr(&mut self, outer_expr: &Box<Expr>) -> Type {
+    fn visit_expr(&mut self, outer_expr: &Expr) -> Type {
         match &outer_expr.kind {
             ExprKind::Var(ident) => match self.ctx.symbol_table.lookup_variable(ident) {
                 Ok(t) => t,
@@ -153,7 +153,7 @@ impl<'a> ExpressionChecker<'a> {
             }
             ExprKind::NewArray { element_type, size } => {
                 self.ctx.validate_variable_type(element_type);
-                let size_type = self.visit_expr(&size);
+                let size_type = self.visit_expr(size);
                 if !matches!(size_type.kind, TypeKind::Int | TypeKind::Error) {
                     self.ctx.add_error(SemanticError::TypeMismatch {
                         expected: "int".to_string(),
@@ -168,7 +168,7 @@ impl<'a> ExpressionChecker<'a> {
                 }
             }
             ExprKind::TypedNull(typ) => {
-                self.ctx.validate_variable_type(&typ);
+                self.ctx.validate_variable_type(typ);
 
                 if matches!(typ.kind, TypeKind::Bool | TypeKind::Int | TypeKind::Void) {
                     let expected = vec![
@@ -244,20 +244,20 @@ impl<'a> ExpressionChecker<'a> {
 
     fn visit_application(
         &mut self,
-        callee: &Box<Expr>,
-        args: &Vec<Box<Expr>>, // TODO: Remove box expr.
+        callee: &Expr,
+        args: &[Expr],
         position: SourcePosition,
     ) -> Type {
         // TODO: For now we only support direct calls on function names. Change that to use function types.
         // TODO: implicit this.
         if let ExprKind::Var(name) = &callee.kind {
-            match self.ctx.symbol_table.lookup_function(&name) {
+            match self.ctx.symbol_table.lookup_function(name) {
                 Ok(func_info) => {
-                    self.validate_function_call(&func_info, &args, position);
-                    return Type {
+                    self.validate_function_call(&func_info, args, position);
+                    Type {
                         kind: func_info.return_type.kind,
                         position,
-                    };
+                    }
                 }
                 Err(e) => {
                     self.ctx.add_error(e);
@@ -265,23 +265,18 @@ impl<'a> ExpressionChecker<'a> {
                     for arg in args {
                         self.visit_expr(arg);
                     }
-                    return self.ctx.error_type(position);
+                    self.ctx.error_type(position)
                 }
             }
         } else {
             // Fallback for generic expr (not handled by this parser logic usually)
-            return self.ctx.error_type(position);
+            self.ctx.error_type(position)
         }
     }
 
-    fn visit_array_access(
-        &mut self,
-        array: &Box<Expr>,
-        index: &Box<Expr>,
-        position: SourcePosition,
-    ) -> Type {
-        let array_type = self.visit_expr(&array);
-        let index_type = self.visit_expr(&index);
+    fn visit_array_access(&mut self, array: &Expr, index: &Expr, position: SourcePosition) -> Type {
+        let array_type = self.visit_expr(array);
+        let index_type = self.visit_expr(index);
 
         if !matches!(index_type.kind, TypeKind::Int | TypeKind::Error) {
             self.ctx.add_error(SemanticError::TypeMismatch {
@@ -308,11 +303,11 @@ impl<'a> ExpressionChecker<'a> {
 
     fn visit_field_access(
         &mut self,
-        object: &Box<Expr>,
+        object: &Expr,
         field_name: &Ident,
         position: SourcePosition,
     ) -> Type {
-        let obj_type = self.visit_expr(&object);
+        let obj_type = self.visit_expr(object);
 
         if let TypeKind::Class(class_name) = obj_type.kind {
             let all_fields = self.ctx.symbol_table.get_all_class_fields(&class_name.name);
@@ -340,7 +335,7 @@ impl<'a> ExpressionChecker<'a> {
             } else {
                 Type {
                     kind: TypeKind::Int,
-                    position: position,
+                    position,
                 }
             }
         } else if matches!(obj_type.kind, TypeKind::Error) {
@@ -349,7 +344,7 @@ impl<'a> ExpressionChecker<'a> {
             self.ctx.add_error(SemanticError::InvalidOperands {
                 operator: ".".to_string(),
                 operand: obj_type.to_string(),
-                position: position,
+                position,
                 type_position: obj_type.position,
             });
             self.ctx.error_type(position)
@@ -358,9 +353,9 @@ impl<'a> ExpressionChecker<'a> {
 
     fn visit_method_call(
         &mut self,
-        callee: &Box<Expr>,
+        callee: &Expr,
         method_name: &Ident,
-        args: &Vec<Box<Expr>>,
+        args: &[Expr],
         position: SourcePosition,
     ) -> Type {
         let obj_type = self.visit_expr(callee);
@@ -419,10 +414,10 @@ impl<'a> ExpressionChecker<'a> {
     fn visit_unary_operator(
         &mut self,
         op: &UnaryOp,
-        expr: &Box<Expr>,
+        expr: &Expr,
         position: SourcePosition,
     ) -> Type {
-        let expr_type = self.visit_expr(&expr);
+        let expr_type = self.visit_expr(expr);
 
         if !self.ctx.type_legal_for_unary_op(op, &expr_type)
             && !matches!(expr_type.kind, TypeKind::Error)
@@ -440,12 +435,12 @@ impl<'a> ExpressionChecker<'a> {
     fn visit_binary_operator(
         &mut self,
         op: &BinaryOp,
-        lhs: &Box<Expr>,
-        rhs: &Box<Expr>,
+        lhs: &Expr,
+        rhs: &Expr,
         position: SourcePosition,
     ) -> Type {
-        let lhs_type = self.visit_expr(&lhs);
-        let rhs_type = self.visit_expr(&rhs);
+        let lhs_type = self.visit_expr(lhs);
+        let rhs_type = self.visit_expr(rhs);
 
         // Early return for error types to prevent cascading errors.
         if matches!(lhs_type.kind, TypeKind::Error) || matches!(rhs_type.kind, TypeKind::Error) {
@@ -454,12 +449,12 @@ impl<'a> ExpressionChecker<'a> {
 
         self.validate_binary_operands(op, &lhs_type, &rhs_type, lhs.position, rhs.position);
 
-        if matches!(op, BinaryOp::Div | BinaryOp::Mod) {
-            if let ExprKind::LiteralInt(0) = rhs.kind {
-                self.ctx.add_error(SemanticError::ZeroDivision {
-                    position: rhs.position,
-                });
-            }
+        if matches!(op, BinaryOp::Div | BinaryOp::Mod)
+            && let ExprKind::LiteralInt(0) = rhs.kind
+        {
+            self.ctx.add_error(SemanticError::ZeroDivision {
+                position: rhs.position,
+            });
         }
 
         self.ctx.binary_op_result_type(op, &lhs_type, position)
@@ -469,7 +464,7 @@ impl<'a> ExpressionChecker<'a> {
     fn validate_function_call(
         &mut self,
         func_info: &FunctionInfo,
-        args: &Vec<Box<Expr>>,
+        args: &[Expr],
         expr_position: SourcePosition,
     ) {
         let func_ident = func_info.ident.clone();
@@ -487,7 +482,7 @@ impl<'a> ExpressionChecker<'a> {
         // Type check arguments.
         for (expr, param) in args.iter().zip(&func_info.params) {
             let arg_type = self.visit_expr(expr);
-            if !self.ctx.is_subtype(&arg_type, &param) {
+            if !self.ctx.is_subtype(&arg_type, param) {
                 self.ctx.add_error(SemanticError::ArgumentTypeMismatch {
                     expected: param.to_string(),
                     found: arg_type.to_string(),

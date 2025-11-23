@@ -48,11 +48,7 @@ impl ReturnChecker {
     }
 
     /// Check if an if statement guarantees to return.
-    fn if_guarantees_return(
-        cond: &Box<Expr>,
-        if_true: &Box<Stmt>,
-        if_false: &Option<Box<Stmt>>,
-    ) -> bool {
+    fn if_guarantees_return(cond: &Expr, if_true: &Stmt, if_false: &Option<Box<Stmt>>) -> bool {
         match &cond.kind {
             // if (true) - only check true branch
             ExprKind::LiteralTrue => Self::stmt_guarantees_return(if_true),
@@ -79,7 +75,7 @@ impl ReturnChecker {
     }
 
     /// Check if a while loop guarantees to return.
-    fn while_guarantees_return(cond: &Box<Expr>, _body: &Box<Stmt>) -> bool {
+    fn while_guarantees_return(cond: &Expr, _body: &Stmt) -> bool {
         match &cond.kind {
             ExprKind::LiteralTrue => true,
             // TODO: Think about that.

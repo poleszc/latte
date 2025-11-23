@@ -104,7 +104,7 @@ impl<'a> StatementChecker<'a> {
         // TODO: Here we should:
         // - Look for defined functions
         for stmt in &block.stmts {
-            self.visit_stmt(&stmt);
+            self.visit_stmt(stmt);
         }
         self.ctx.symbol_table.leave_scope();
     }
@@ -133,7 +133,7 @@ impl<'a> StatementChecker<'a> {
         }
     }
 
-    fn visit_assign(&mut self, target: &Box<Expr>, value: &Box<Expr>, _position: SourcePosition) {
+    fn visit_assign(&mut self, target: &Expr, value: &Expr, _position: SourcePosition) {
         // Continue checking rhs even if lhs is invalid lvalue
         self.check_lvalue(target);
 
@@ -191,7 +191,7 @@ impl<'a> StatementChecker<'a> {
         }
     }
 
-    fn visit_increment(&mut self, expr: &Box<Expr>, _position: SourcePosition) {
+    fn visit_increment(&mut self, expr: &Expr, _position: SourcePosition) {
         let expr_type = ExpressionChecker::new(self.ctx).check(expr);
 
         if !matches!(expr_type.kind, TypeKind::Int | TypeKind::Error) {
@@ -206,7 +206,7 @@ impl<'a> StatementChecker<'a> {
         self.check_lvalue(expr);
     }
 
-    fn visit_decrement(&mut self, expr: &Box<Expr>, _position: SourcePosition) {
+    fn visit_decrement(&mut self, expr: &Expr, _position: SourcePosition) {
         let expr_type = ExpressionChecker::new(self.ctx).check(expr);
 
         if !matches!(expr_type.kind, TypeKind::Int | TypeKind::Error) {
@@ -223,8 +223,8 @@ impl<'a> StatementChecker<'a> {
 
     fn visit_if(
         &mut self,
-        cond: &Box<Expr>,
-        if_true: &Box<Stmt>,
+        cond: &Expr,
+        if_true: &Stmt,
         if_false: &Option<Box<Stmt>>,
         _position: SourcePosition,
     ) {
@@ -249,7 +249,7 @@ impl<'a> StatementChecker<'a> {
         }
     }
 
-    fn visit_while(&mut self, cond: &Box<Expr>, body: &Box<Stmt>, _position: SourcePosition) {
+    fn visit_while(&mut self, cond: &Expr, body: &Stmt, _position: SourcePosition) {
         let cond_type = ExpressionChecker::new(self.ctx).check(cond);
 
         if !matches!(cond_type.kind, TypeKind::Bool | TypeKind::Error) {
@@ -269,7 +269,7 @@ impl<'a> StatementChecker<'a> {
         init: &Option<Box<Stmt>>,
         cond: &Option<Box<Expr>>,
         post: &Option<Box<Expr>>,
-        body: &Box<Stmt>,
+        body: &Stmt,
         _position: SourcePosition,
     ) {
         self.ctx.symbol_table.enter_scope();
@@ -302,8 +302,8 @@ impl<'a> StatementChecker<'a> {
         &mut self,
         element_type: &Type,
         item_name: &Ident,
-        collection: &Box<Expr>,
-        body: &Box<Stmt>,
+        collection: &Expr,
+        body: &Stmt,
         _position: SourcePosition,
     ) {
         let collection_type = ExpressionChecker::new(self.ctx).check(collection);
@@ -319,7 +319,7 @@ impl<'a> StatementChecker<'a> {
             }
         } else {
             self.ctx.add_error(SemanticError::TypeMismatch {
-                expected: format!("{}[]", element_type.to_string()),
+                expected: format!("{}[]", element_type),
                 found: collection_type.to_string(),
                 position: collection.position,
             });
@@ -353,13 +353,13 @@ impl<'a> StatementChecker<'a> {
         self.visit_block(&func.body);
 
         // Check if function is guaranteed to return.
-        if !matches!(func.return_type.kind, TypeKind::Void) {
-            if !ReturnChecker::function_guarantees_return(&func.body) {
-                self.ctx.add_error(SemanticError::MissingReturn {
-                    function_name: func.name.name.clone(),
-                    position: func.position,
-                });
-            }
+        if !matches!(func.return_type.kind, TypeKind::Void)
+            && !ReturnChecker::function_guarantees_return(&func.body)
+        {
+            self.ctx.add_error(SemanticError::MissingReturn {
+                function_name: func.name.name.clone(),
+                position: func.position,
+            });
         }
 
         // TODO: This is bugged in nested functions.

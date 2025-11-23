@@ -12,6 +12,7 @@ use context::SemanticContext;
 use definition_checker::DefinitionChecker;
 
 /// Main structure performing the semantic validation of the program.
+#[derive(Debug, Default)]
 pub struct SemanticChecker {
     /// Semantic verification context.
     ctx: SemanticContext,

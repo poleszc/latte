@@ -15,7 +15,7 @@ impl<'a> TypeChecker<'a> {
     /// Check if two types are equal.
     /// Error types are considered equal to everything to prevent cascading errors
     /// when performing error recovery.
-    pub fn types_equal(&self, t1: &Type, t2: &Type) -> bool {
+    pub fn types_equal(t1: &Type, t2: &Type) -> bool {
         match (&t1.kind, &t2.kind) {
             (TypeKind::Error, _) | (_, TypeKind::Error) => true,
             (TypeKind::Int, TypeKind::Int) => true,
@@ -23,9 +23,7 @@ impl<'a> TypeChecker<'a> {
             (TypeKind::Bool, TypeKind::Bool) => true,
             (TypeKind::Void, TypeKind::Void) => true,
             (TypeKind::Class(i1), TypeKind::Class(i2)) => i1.name == i2.name,
-            (TypeKind::Array(inner1), TypeKind::Array(inner2)) => {
-                self.types_equal(&inner1, &inner2)
-            }
+            (TypeKind::Array(inner1), TypeKind::Array(inner2)) => Self::types_equal(inner1, inner2),
             _ => false,
         }
     }
@@ -45,7 +43,7 @@ impl<'a> TypeChecker<'a> {
             return matches!(supertype.kind, TypeKind::Class(_) | TypeKind::Array(_));
         }
 
-        if self.types_equal(subtype, supertype) {
+        if TypeChecker::types_equal(subtype, supertype) {
             return true;
         }
 
@@ -133,11 +131,11 @@ impl<'a> TypeChecker<'a> {
         match op {
             UnaryOp::Neg => Type {
                 kind: TypeKind::Int,
-                position: position,
+                position,
             },
             UnaryOp::Not => Type {
                 kind: TypeKind::Bool,
-                position: position,
+                position,
             },
         }
     }
@@ -213,7 +211,7 @@ impl<'a> TypeChecker<'a> {
                     });
                 } else {
                     // Validate inner type.
-                    self.validate_variable_type(&inner)?;
+                    self.validate_variable_type(inner)?;
                 }
             }
             _ => {}
@@ -265,7 +263,7 @@ impl<'a> TypeChecker<'a> {
                     });
                 } else {
                     // Validate inner type.
-                    self.validate_variable_type(&inner)?;
+                    self.validate_variable_type(inner)?;
                 }
             }
             _ => {}

@@ -56,18 +56,14 @@ pub fn run_compiler<
 
     eprintln!("[Semantic] Running semantic analysis...");
     match SemanticChecker::check(&parsed_program) {
-        Ok(_) => return Ok(()),
+        Ok(_) => Ok(()),
         Err(errors) => {
             for err in errors {
                 let comp_error = CompilerError::Semantic(err);
-                report_compiler_error(
-                    &args.input_file.to_str().unwrap(),
-                    &source_code,
-                    &comp_error,
-                );
+                report_compiler_error(args.input_file.to_str().unwrap(), &source_code, &comp_error);
             }
             // TODO: remove kajak...
-            return Err(CompilerError::Other("Kajak".to_string()));
+            Err(CompilerError::Other("Kajak".to_string()))
         }
     }
     // eprintln!("[Semantic] Semantic analysis completed successful");
