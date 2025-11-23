@@ -97,7 +97,7 @@ fn generate_extensions_parsing_tests() -> io::Result<()> {
         Path::new("tests").join("good").join("extra"),
     ];
     for directory in &test_dir_paths {
-        for entry in fs::read_dir(&directory)? {
+        for entry in fs::read_dir(directory)? {
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {

@@ -54,7 +54,7 @@ pub fn get_builtin_signature(name: &str) -> Option<String> {
         // TODO: Implement display for Type?
         Some(format!(
             "{} {}({})",
-            ret_kind.to_string(),
+            ret_kind,
             func_name,
             params.join(", ")
         ))

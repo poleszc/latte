@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::Serialize;
 
 use super::types::Type;
@@ -61,12 +63,14 @@ pub enum UnaryOp {
     Neg, // -
     Not, // !
 }
-impl UnaryOp {
-    pub fn to_string(&self) -> String {
-        match self {
+
+impl fmt::Display for UnaryOp {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let op_str = match self {
             UnaryOp::Neg => "-".to_string(),
             UnaryOp::Not => "!".to_string(),
-        }
+        };
+        write!(fmt, "{}", op_str)
     }
 }
 
@@ -92,22 +96,23 @@ pub enum BinaryOp {
     Or,  // ||
 }
 
-impl BinaryOp {
-    pub fn to_string(&self) -> String {
-        match self {
-            BinaryOp::Add => "+".to_string(),
-            BinaryOp::Sub => "-".to_string(),
-            BinaryOp::Mul => "*".to_string(),
-            BinaryOp::Div => "/".to_string(),
-            BinaryOp::Mod => "%".to_string(),
-            BinaryOp::Eq => "==".to_string(),
-            BinaryOp::Neq => "!=".to_string(),
-            BinaryOp::Lt => "<".to_string(),
-            BinaryOp::Le => "<=".to_string(),
-            BinaryOp::Gt => ">".to_string(),
-            BinaryOp::Ge => ">=".to_string(),
-            BinaryOp::And => "&&".to_string(),
-            BinaryOp::Or => "||".to_string(),
-        }
+impl fmt::Display for BinaryOp {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let op_str = match self {
+            BinaryOp::Add => "+",
+            BinaryOp::Sub => "-",
+            BinaryOp::Mul => "*",
+            BinaryOp::Div => "/",
+            BinaryOp::Mod => "%",
+            BinaryOp::Lt => "<",
+            BinaryOp::Le => "<=",
+            BinaryOp::Gt => ">",
+            BinaryOp::Ge => ">=",
+            BinaryOp::Eq => "==",
+            BinaryOp::Neq => "!=",
+            BinaryOp::And => "&&",
+            BinaryOp::Or => "||",
+        };
+        write!(fmt, "{}", op_str)
     }
 }

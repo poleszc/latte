@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::Serialize;
 
 use super::{Ident, SourcePosition};
@@ -17,53 +19,36 @@ pub enum TypeKind {
     Error,
 }
 
+impl fmt::Display for TypeKind {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TypeKind::Int => write!(fmt, "int"),
+            TypeKind::String => write!(fmt, "string"),
+            TypeKind::Bool => write!(fmt, "bool"),
+            TypeKind::Void => write!(fmt, "void"),
+            TypeKind::Null => write!(fmt, "null"),
+            TypeKind::Class(ident) => write!(fmt, "{}", ident.name),
+            TypeKind::Array(inner) => write!(fmt, "{}[]", inner),
+            TypeKind::Fun(ret, params) => {
+                let param_str = params
+                    .iter()
+                    .map(|p| p.to_string()) // Teraz to zadziała dzięki implementacji Display dla Type
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                write!(fmt, "({}) -> {}", param_str, ret)
+            }
+            TypeKind::Error => write!(fmt, "error"),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone, Serialize)]
 pub struct Type {
     pub kind: TypeKind,
     pub position: SourcePosition,
 }
-impl TypeKind {
-    pub fn to_string(&self) -> String {
-        match &self {
-            TypeKind::Int => "int".to_string(),
-            TypeKind::String => "string".to_string(),
-            TypeKind::Bool => "bool".to_string(),
-            TypeKind::Void => "void".to_string(),
-            TypeKind::Null => "null".to_string(),
-            TypeKind::Class(ident) => ident.name.clone(),
-            TypeKind::Array(inner) => format!("{}[]", inner.to_string()),
-            TypeKind::Fun(ret, params) => {
-                let param_str = params
-                    .iter()
-                    .map(|p| p.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                format!("({}) -> {}", param_str, ret.to_string())
-            }
-            TypeKind::Error => "error".to_string(),
-        }
-    }
-}
-
-impl Type {
-    pub fn to_string(&self) -> String {
-        match &self.kind {
-            TypeKind::Int => "int".to_string(),
-            TypeKind::String => "string".to_string(),
-            TypeKind::Bool => "bool".to_string(),
-            TypeKind::Void => "void".to_string(),
-            TypeKind::Null => "null".to_string(),
-            TypeKind::Class(ident) => ident.name.clone(),
-            TypeKind::Array(inner) => format!("{}[]", inner.to_string()),
-            TypeKind::Fun(ret, params) => {
-                let param_str = params
-                    .iter()
-                    .map(|p| p.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                format!("({}) -> {}", param_str, ret.to_string())
-            }
-            TypeKind::Error => "error".to_string(),
-        }
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.kind)
     }
 }

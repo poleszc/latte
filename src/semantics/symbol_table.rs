@@ -11,7 +11,7 @@ use crate::{
 };
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SymbolTable {
     /// Scope stack - mapping from name to symbol.
     scopes: Vec<HashMap<String, SymbolKind>>,
@@ -64,7 +64,7 @@ impl SymbolTable {
             return Err(SemanticError::DuplicateVariable {
                 name: ident.name,
                 position: ident.position,
-                previous_position: previous_position,
+                previous_position,
             });
         }
 
@@ -92,7 +92,7 @@ impl SymbolTable {
             return Err(SemanticError::DuplicateFunction {
                 name: ident.name,
                 position: ident.position,
-                previous_position: previous_position,
+                previous_position,
             });
         }
 
@@ -108,7 +108,7 @@ impl SymbolTable {
             return Err(SemanticError::DuplicateClass {
                 name: ident.name,
                 position: ident.position,
-                previous_position: previous_position,
+                previous_position,
             });
         }
 
@@ -189,20 +189,16 @@ impl SymbolTable {
     ) -> HashMap<String, (Type, SourcePosition)> {
         let mut all_fields = HashMap::new();
         let mut current_class = class_name;
-        loop {
-            if let Some(class_info) = self.classes.get(current_class) {
-                // TODO: Parent fields will be overridden if redefined. If this ok?
-                for (field_name, field_info) in &class_info.fields {
-                    if !all_fields.contains_key(field_name) {
-                        all_fields.insert(field_name.clone(), field_info.clone());
-                    }
+        while let Some(class_info) = self.classes.get(current_class) {
+            // TODO: Parent fields will be overridden if redefined. If this ok?
+            for (field_name, field_info) in &class_info.fields {
+                if !all_fields.contains_key(field_name) {
+                    all_fields.insert(field_name.clone(), field_info.clone());
                 }
+            }
 
-                if let Some(parent) = &class_info.parent {
-                    current_class = &parent.name;
-                } else {
-                    break;
-                }
+            if let Some(parent) = &class_info.parent {
+                current_class = &parent.name;
             } else {
                 break;
             }
@@ -215,7 +211,7 @@ impl SymbolTable {
         let mut all_methods = HashMap::new();
         let mut current_class = class_name;
 
-        loop {
+        while let Some(class_info) = self.classes.get(current_class) {
             if let Some(class_info) = self.classes.get(current_class) {
                 for (method_name, method_sig) in &class_info.methods {
                     if !all_methods.contains_key(method_name) {
