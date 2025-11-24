@@ -1,12 +1,17 @@
+pub mod program_builder;
+pub mod function_builder;
+
+
+
 use std::{collections::HashMap, hash::Hash};
 
-use clap::builder::Str;
 
 use crate::{
     SourcePosition,
-    parser::ast::{Block, Type},
+    parser::ast::Type,
     utils::StrID,
 };
+
 
 /// Unique identifier of a single block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -100,6 +105,7 @@ pub enum MIRValue {
     Temp(TempID),   // temporary variable reference
     Block(BlockID), // Block reference
     Function(StrID),
+    Class(StrID),
 }
 
 /// Representation of a MIR place <-> lvalue.
