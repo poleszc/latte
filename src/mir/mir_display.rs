@@ -9,8 +9,8 @@ impl fmt::Display for MIRValue {
             MIRValue::BoolConst(val) => write!(f, "{}", val),
             MIRValue::StringConst(s) => write!(f, "\"{}\"", s.escape_default()),
             MIRValue::Null => write!(f, "null"),
-            MIRValue::Local(id) => write!(f, "Local({:>6})", id.0),
-            MIRValue::Temp(id) => write!(f, "Temp({:>6})", id.0),
+            MIRValue::Local(id) => write!(f, "Local({})", id.0),
+            MIRValue::Temp(id) => write!(f, "Temp({})", id.0),
             MIRValue::Block(id) => write!(f, "Block({})", id.0),
             MIRValue::Function(name) => write!(f, "Function({})", name),
             MIRValue::Class(name) => write!(f, "Class({})", name),
@@ -21,8 +21,8 @@ impl fmt::Display for MIRValue {
 impl fmt::Display for MIRPlace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MIRPlace::Local(id) => write!(f, "Local({:>6})", id.0),
-            MIRPlace::Temp(id) => write!(f, "Temp({:>6})", id.0),
+            MIRPlace::Local(id) => write!(f, "Local({})", id.0),
+            MIRPlace::Temp(id) => write!(f, "Temp({}){:>1}", id.0, ""),
             MIRPlace::Field {
                 base,
                 field_name,
@@ -81,7 +81,7 @@ impl fmt::Display for MIRInstruction {
         if let Some(dest) = &self.destination {
             write!(f, "{} := ", dest)?;
         } else {
-            write!(f, "{:>16}    ", "")?;
+            write!(f, "{:>8}    ", "")?;
         }
 
         write!(f, "{}", self.operation)?;
@@ -101,7 +101,7 @@ impl fmt::Display for MIRTerminator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             MIRTerminator::Jump { target, .. } => {
-                write!(f, "{:>16}    Jump               -> Block({})", "", target.0)
+                write!(f, "{:>8}    Jump              -> Block({})", "", target.0)
             }
             MIRTerminator::Branch {
                 condition,
@@ -110,16 +110,16 @@ impl fmt::Display for MIRTerminator {
                 ..
             } => write!(
                 f,
-                "{:>16}    Branch             {} -> Block({}), Block({})",
+                "{:>8}    Branch            {} -> Block({}), Block({})",
                 "", condition, if_true.0, if_false.0
             ),
             MIRTerminator::Return {
                 value: Some(val), ..
             } => {
-                write!(f, "{:>16}    Return             {}", "", val)
+                write!(f, "{:>8}    Return            {}", "", val)
             }
             MIRTerminator::Return { value: None, .. } => {
-                write!(f, "{:>16}    ReturnVoid", "")
+                write!(f, "{:>8}    ReturnVoid", "")
             }
         }
     }
@@ -155,7 +155,8 @@ impl fmt::Display for TempInfo {
 
 impl fmt::Display for MIRBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "  block {} [entry]:", self.id.0)?;
+        writeln!(f, " =========================================================");
+        writeln!(f, "  Block {} [entry]:", self.id.0)?;
         for instr in &self.instructions {
             writeln!(f, "    {}", instr)?;
         }

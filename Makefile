@@ -15,13 +15,20 @@ clean-all: clean
 clean:
 	echo "Cleaning up..."
 	rm -rf insc_llvm
-	rm -rf tests/good/*.ll tests/good/*.bc
-	rm -rf tests/good/*.json
-	rm -rf tests/good/extensions/arrays/*.json
 	rm -rf tests/good/extra/*.json
+	rm -rf tests/good/official/*.json
+	rm -rf tests/good/extensions/arrays/*.json
 	rm -rf tests/good/extensions/objects/*.json
 	rm -rf tests/good/extensions/struct/*.json
 	rm -rf tests/good/extensions/virtual/*.json
+
+	rm -rf tests/good/extra/*.mir.txt
+	rm -rf tests/good/official/*.mir.txt
+	rm -rf tests/good/extensions/arrays/*.mir.txt
+	rm -rf tests/good/extensions/objects/*.mir.txt
+	rm -rf tests/good/extensions/struct/*.mir.txt
+	rm -rf tests/good/extensions/virtual/*.mir.txt
+
 	rm -rf tests/bad/*.json
 	rm -rf tests/bad/lexical/*.json
 	rm -rf tests/bad/official/*.json

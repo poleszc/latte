@@ -122,7 +122,7 @@ impl MIRFunctionBuilder {
     /// Create a new temporary variable for a current block.
     pub fn create_temp(&mut self, typ: Type) -> TempID {
         let id = TempID(self.next_temp_id);
-        self.next_block_id += 1;
+        self.next_temp_id += 1;
         self.temps.push(TempInfo { id, typ });
         id
     }
