@@ -207,6 +207,7 @@ impl<'a> StatementChecker<'a> {
         self.check_lvalue(expr);
     }
 
+    // TODO: Remove positions
     fn visit_decrement(&mut self, expr: &Expr, _position: SourcePosition) {
         let expr_type = ExpressionChecker::new(self.ctx).check(expr);
 

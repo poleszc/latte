@@ -1,10 +1,13 @@
 pub mod program_builder;
 pub mod function_builder;
+pub mod lowering;
 
 
 
 use std::{collections::HashMap, hash::Hash};
 
+
+use serde::Serialize;
 
 use crate::{
     SourcePosition,
@@ -14,7 +17,7 @@ use crate::{
 
 
 /// Unique identifier of a single block.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct BlockID(pub usize);
 impl BlockID {
     pub fn new(id: usize) -> Self {
@@ -23,7 +26,7 @@ impl BlockID {
 }
 
 /// Unique identifier of a single local variable.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct LocalID(pub usize);
 impl LocalID {
     pub fn new(id: usize) -> Self {
@@ -32,7 +35,7 @@ impl LocalID {
 }
 
 /// Unique identifier of a temporary local variable.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct TempID(pub usize);
 impl TempID {
     pub fn new(id: usize) -> Self {
@@ -41,7 +44,7 @@ impl TempID {
 }
 
 /// All MRI operations.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum MIROperation {
     Nop, // TODO: Why, it's there in duckling?
 
@@ -94,7 +97,7 @@ pub enum MIROperation {
 }
 
 /// Representation of a MIR value.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum MIRValue {
     Unit, // void
     IntConst(i32),
@@ -109,7 +112,7 @@ pub enum MIRValue {
 }
 
 /// Representation of a MIR place <-> lvalue.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum MIRPlace {
     Local(LocalID),
     Temp(TempID),
@@ -126,7 +129,7 @@ pub enum MIRPlace {
 }
 
 // Single MIR instruction.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct MIRInstruction {
     pub operation: MIROperation,
     pub destination: Option<MIRPlace>, // Some ops don't return a value.
@@ -135,7 +138,7 @@ pub struct MIRInstruction {
 }
 
 /// Terminator instruction - ends the block.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum MIRTerminator {
     Jump {
         target: BlockID,
@@ -154,7 +157,7 @@ pub enum MIRTerminator {
 }
 
 /// Single MIR block in the CFG.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct MIRBlock {
     pub id: BlockID,
     /// List of instructions with no terminator.
@@ -164,7 +167,7 @@ pub struct MIRBlock {
 }
 
 /// Single local variable information.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct LocalInfo {
     pub id: LocalID,
     /// Local variable name - for debugging
@@ -178,7 +181,7 @@ pub struct LocalInfo {
 }
 
 /// Single temporary variable information.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TempInfo {
     pub id: TempID,
     /// Temporary variable type
@@ -186,7 +189,7 @@ pub struct TempInfo {
 }
 
 /// Single function representation in MIR.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct MIRFunction {
     /// Function name.
     pub name: StrID,
@@ -209,7 +212,7 @@ pub struct MIRFunction {
 }
 
 /// Single class information.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct MIRClass {
     /// Class name.
     pub name: StrID,
@@ -224,7 +227,7 @@ pub struct MIRClass {
 }
 
 /// Single class field information.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct MIRField {
     /// Field name.
     pub name: StrID,
@@ -237,7 +240,7 @@ pub struct MIRField {
 }
 
 /// Represents a whole MIR program.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct MIRProgram {
     /// Top level functions in the program.
     /// TODO: What with nested functions.

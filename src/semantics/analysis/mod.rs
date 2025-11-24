@@ -7,6 +7,7 @@ pub mod type_checker;
 
 use crate::errors::SemanticError;
 use crate::parser::ast::Program;
+use crate::semantics::SymbolTable;
 
 use context::SemanticContext;
 use definition_checker::DefinitionChecker;
@@ -26,14 +27,14 @@ impl SemanticChecker {
     }
 
     /// Main program validation function.
-    pub fn check(program: &Program) -> Result<(), Vec<SemanticError>> {
+    pub fn check(program: &Program) -> Result<SymbolTable, Vec<SemanticError>> {
         let mut checker = SemanticChecker::new();
         let mut def_checker = DefinitionChecker::new(&mut checker.ctx);
 
         def_checker.check_program(program);
 
         if checker.ctx.errors.is_empty() {
-            Ok(())
+            Ok(checker.ctx.symbol_table)
         } else {
             Err(checker.ctx.errors)
         }
