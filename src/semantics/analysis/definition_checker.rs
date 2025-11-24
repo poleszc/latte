@@ -4,6 +4,7 @@ use crate::semantics::analysis::context::SemanticContext;
 use crate::semantics::analysis::return_checker::ReturnChecker;
 use crate::semantics::analysis::stmt_checker::StatementChecker;
 use crate::semantics::{ClassInfo, FunctionInfo};
+use crate::utils::StrID;
 use std::collections::HashMap;
 
 pub struct DefinitionChecker<'a> {
@@ -52,23 +53,23 @@ impl<'a> DefinitionChecker<'a> {
     /// Forward declare a class and validate correctness of class definition.
     /// This function does not validate the inheritance hierarchy. This is done in validate_class.
     fn add_class(&mut self, class_def: &ClassDef) {
-        let mut fields: HashMap<String, (Type, SourcePosition)> = HashMap::new();
-        let mut methods: HashMap<String, FunctionInfo> = HashMap::new();
+        let mut fields: HashMap<StrID, (Type, SourcePosition)> = HashMap::new();
+        let mut methods: HashMap<StrID, FunctionInfo> = HashMap::new();
 
-        // Check for duplicate fields and methods. Extends are not validated yet since we don't know the hierarchy.
+        // Check for duplicate fields and methods.
         for entry in &class_def.entries {
             match &entry.kind {
                 ClassEntryKind::Field(identifiers, typ) => {
                     for ident in identifiers {
                         if fields.contains_key(&ident.name) {
                             self.ctx.add_error(SemanticError::DuplicateClassField {
-                                class_name: class_def.name.name.clone(),
-                                field_name: ident.name.clone(),
+                                class_name: class_def.name.name,
+                                field_name: ident.name,
                                 position: ident.position,
                                 previous_position: fields[&ident.name].1,
                             });
                         } else {
-                            fields.insert(ident.name.clone(), (typ.clone(), ident.position));
+                            fields.insert(ident.name, (typ.clone(), ident.position));
                         }
                     }
                 }
@@ -84,15 +85,16 @@ impl<'a> DefinitionChecker<'a> {
                             .collect(),
                         position: func_def.position,
                     };
+
                     if methods.contains_key(&method_ident.name) {
                         self.ctx.add_error(SemanticError::DuplicateMethod {
-                            class_name: class_def.name.name.clone(),
-                            method_name: method_ident.name.clone(),
+                            class_name: class_def.name.name,
+                            method_name: method_ident.name,
                             position: method_ident.position,
                             previous_position: methods[&method_ident.name].ident.position,
                         });
                     } else {
-                        methods.insert(method_ident.name.clone(), signature);
+                        methods.insert(method_ident.name, signature);
                     }
                 }
             }
@@ -129,30 +131,30 @@ impl<'a> DefinitionChecker<'a> {
     /// Returns a list of classes which form a cycle.
     fn detect_inheritance_cycle(
         &self,
-        start_class: &str,
-    ) -> Option<Vec<(String, String, SourcePosition)>> {
+        start_class: StrID,
+    ) -> Option<Vec<(StrID, StrID, SourcePosition)>> {
         let mut cycle = Vec::new();
-        let mut current_name = start_class.to_string();
+        let mut current_name = start_class;
 
         loop {
+            // TODO: while let Some?
             let ident = Ident {
-                name: current_name.clone(),
+                name: current_name,
                 position: SourcePosition(0, 0),
             };
 
-            // TODO: Utility function for that.
             let class_info = match self.ctx.symbol_table.lookup_class(&ident) {
                 Ok(info) => info,
                 Err(_) => return None,
             };
 
             if let Some(parent_ident) = &class_info.parent {
-                let parent_name = parent_ident.name.clone();
+                let parent_name = parent_ident.name;
                 let position = parent_ident.position;
 
-                cycle.push((current_name.clone(), parent_name.clone(), position));
+                cycle.push((current_name, parent_name, position));
 
-                if let Some(index) = cycle.iter().position(|(c, _, _)| c == &parent_name) {
+                if let Some(index) = cycle.iter().position(|(c, _, _)| *c == parent_name) {
                     return Some(cycle[index..].to_vec());
                 }
                 current_name = parent_name;
@@ -164,17 +166,17 @@ impl<'a> DefinitionChecker<'a> {
 
     fn validate_class(&mut self, class_def: &ClassDef) {
         if let Some(parent) = &class_def.extends
-            && !self.ctx.symbol_table.class_exists(&parent.name)
+            && !self.ctx.symbol_table.class_exists(parent.name)
         {
             self.ctx.add_error(SemanticError::UndefinedClass {
-                name: parent.name.clone(),
+                name: parent.name,
                 position: parent.position,
             });
         }
 
         if let Some(parent) = &class_def.extends {
             // Check for cycles in the inheritance hierarchy.
-            if let Some(cycle_path) = self.detect_inheritance_cycle(&class_def.name.name) {
+            if let Some(cycle_path) = self.detect_inheritance_cycle(class_def.name.name) {
                 // A simple hack to deduplicate the cycle errors. Sort the class names
                 // lexicographically and report only when we're the smallest (lexically) class.
                 // TODO: Introduce and move that to error handler?
@@ -199,16 +201,16 @@ impl<'a> DefinitionChecker<'a> {
                     let parent_method_opt = self
                         .ctx
                         .symbol_table
-                        .lookup_method(&parent.name, &method_name.name);
+                        .lookup_method(parent.name, method_name.name);
 
                     if let Some(parent_method) = parent_method_opt {
                         // TODO: Use types equal? or some other function which returns an enum on what the mismatch was
                         // Argument count.
                         if method_def.args.len() != parent_method.params.len() {
                             self.ctx.add_error(SemanticError::InvalidOverride {
-                                method_name: method_name.name.clone(),
-                                parent_name: parent.name.clone(),
-                                reason: "Different number of arguments".to_string(),
+                                method_name: method_name.name,
+                                parent_name: parent.name,
+                                reason: StrID::from("Different number of arguments"),
                                 position: method_name.position,
                             });
                             continue;
@@ -223,9 +225,12 @@ impl<'a> DefinitionChecker<'a> {
                         {
                             if !self.ctx.types_equal(&arg.arg_type, parent_type) {
                                 self.ctx.add_error(SemanticError::InvalidOverride {
-                                    method_name: method_name.name.clone(),
-                                    parent_name: parent.name.clone(),
-                                    reason: format!("Argument #{} type mismatch", i + 1),
+                                    method_name: method_name.name,
+                                    parent_name: parent.name,
+                                    reason: StrID::from(format!(
+                                        "Argument #{} type mismatch",
+                                        i + 1
+                                    )),
                                     position: method_name.position,
                                 });
                                 continue;
@@ -238,9 +243,9 @@ impl<'a> DefinitionChecker<'a> {
                             .types_equal(&method_def.return_type, &parent_method.return_type)
                         {
                             self.ctx.add_error(SemanticError::InvalidOverride {
-                                method_name: method_name.name.clone(),
-                                parent_name: parent.name.clone(),
-                                reason: "Return type mismatch".to_string(),
+                                method_name: method_name.name,
+                                parent_name: parent.name,
+                                reason: StrID::from("Return type mismatch"),
                                 position: method_name.position,
                             });
                         }
@@ -292,28 +297,27 @@ impl<'a> DefinitionChecker<'a> {
             && !ReturnChecker::function_guarantees_return(&func.body)
         {
             self.ctx.add_error(SemanticError::MissingReturn {
-                function_name: func.name.name.clone(),
+                function_name: func.name.name,
                 position: func.position,
             });
         }
 
-        // TODO: This is bugged in nested functions.
         self.ctx.current_return_type = previous_return_type;
         self.ctx.symbol_table.leave_scope();
     }
 
     fn visit_class_definition(&mut self, class: &ClassDef) {
-        self.ctx.current_class = Some(class.name.name.clone());
+        self.ctx.current_class = Some(class.name.name);
+
         for entry in &class.entries {
             if let ClassEntryKind::Method(method) = &entry.kind {
                 self.ctx.symbol_table.enter_scope();
 
                 // Define class fields in scope, including superclasses.
-                let all_fields = self.ctx.symbol_table.get_all_class_fields(&class.name.name);
+                let all_fields = self.ctx.symbol_table.get_all_class_fields(class.name.name);
                 for (name, (typ, position)) in all_fields {
-                    // Helper z context.rs
                     let ident = Ident {
-                        name: name.clone(),
+                        name: name,
                         position,
                     };
                     self.ctx.define_variable(ident, typ.clone());
@@ -328,26 +332,25 @@ impl<'a> DefinitionChecker<'a> {
 
     fn validate_main(&mut self) {
         let main_ident = Ident {
-            name: "main".to_string(),
+            name: StrID::from("main"),
             position: SourcePosition(0, 0),
         };
 
         match self.ctx.symbol_table.lookup_function(&main_ident) {
             Ok(signature) => {
                 if !matches!(signature.return_type.kind, TypeKind::Int) {
-                    let error = SemanticError::WrongMainReturnType {
-                        expected: "int".to_string(),
-                        found: signature.return_type.to_string(),
+                    self.ctx.add_error(SemanticError::WrongMainReturnType {
+                        expected: StrID::from("int"),
+                        found: StrID::from(signature.return_type.to_string()),
                         position: signature.ident.position,
-                    };
-                    self.ctx.add_error(error);
+                    });
                 }
                 if !signature.params.is_empty() {
-                    let error = SemanticError::WrongNumberOfMainArguments {
-                        found: signature.params.len(),
-                        position: signature.ident.position,
-                    };
-                    self.ctx.add_error(error);
+                    self.ctx
+                        .add_error(SemanticError::WrongNumberOfMainArguments {
+                            found: signature.params.len(),
+                            position: signature.ident.position,
+                        });
                 }
             }
             Err(_) => {

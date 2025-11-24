@@ -3,6 +3,7 @@ use crate::parser::ast::*;
 use crate::semantics::analysis::type_checker::TypeChecker;
 use crate::semantics::symbol_table::SymbolTable;
 use crate::semantics::{ClassInfo, FunctionInfo, VariableInfo};
+use crate::utils::StrID;
 
 #[derive(Debug, Default)]
 pub struct SemanticContext {
@@ -11,7 +12,7 @@ pub struct SemanticContext {
     /// Return type of the function we're currently analyzing.
     pub current_return_type: Option<Type>,
     /// Class we're currently analyzing.
-    pub current_class: Option<String>,
+    pub current_class: Option<StrID>,
     pub errors: Vec<SemanticError>,
 }
 
@@ -35,10 +36,10 @@ impl SemanticContext {
 
     /// Defines a variable in the current scope. Logs an error on duplicate definition.
     pub fn define_variable(&mut self, ident: Ident, typ: Type) {
-        if let Err(e) = self.symbol_table.define_variable(VariableInfo {
-            ident: ident.clone(),
-            typ,
-        }) {
+        if let Err(e) = self
+            .symbol_table
+            .define_variable(VariableInfo { ident, typ })
+        {
             self.add_error(e);
         }
     }
@@ -121,17 +122,17 @@ impl SemanticContext {
 // ======================
 impl SemanticContext {
     // TODO: Is this used?
-    pub fn resolve_method(&self, class_name: &str, method_name: &str) -> Option<FunctionInfo> {
+    pub fn resolve_method(&self, class_name: StrID, method_name: StrID) -> Option<FunctionInfo> {
         self.symbol_table.lookup_method(class_name, method_name)
     }
 
     // TODO: Is this used?
     pub fn resolve_field(
         &self,
-        class_name: &str,
-        field_name: &str,
+        class_name: StrID,
+        field_name: StrID,
     ) -> Option<(Type, SourcePosition)> {
         let all_fields = self.symbol_table.get_all_class_fields(class_name);
-        all_fields.get(field_name).cloned()
+        all_fields.get(&field_name).cloned()
     }
 }

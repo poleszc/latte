@@ -1,8 +1,10 @@
 use crate::parser::ast::Ident;
 use crate::parser::ast::{SourcePosition, Type, TypeKind};
 use crate::semantics::symbols::FunctionInfo;
+use crate::utils::StrID;
 
 type BuiltinDef = (&'static str, TypeKind, Vec<TypeKind>);
+
 fn get_raw_builtins() -> Vec<BuiltinDef> {
     vec![
         ("printInt", TypeKind::Void, vec![TypeKind::Int]),
@@ -18,7 +20,7 @@ pub fn get_builtin_functions() -> Vec<FunctionInfo> {
         .into_iter()
         .map(|(name, ret_kind, param_kinds)| FunctionInfo {
             ident: Ident {
-                name: name.to_string(),
+                name: StrID::from(name),
                 position: SourcePosition(0, 0),
             },
             return_type: Type {
@@ -37,21 +39,22 @@ pub fn get_builtin_functions() -> Vec<FunctionInfo> {
         .collect()
 }
 
-pub fn is_builtin(name: &str) -> bool {
-    matches!(
-        name,
-        "printInt" | "printString" | "error" | "readInt" | "readString"
-    )
+pub fn is_builtin(name: StrID) -> bool {
+    name == StrID::from("printInt")
+        || name == StrID::from("printString")
+        || name == StrID::from("error")
+        || name == StrID::from("readInt")
+        || name == StrID::from("readString")
 }
 
-pub fn get_builtin_signature(name: &str) -> Option<String> {
+pub fn get_builtin_signature(name: StrID) -> Option<String> {
     let builtins = get_raw_builtins();
 
-    if let Some((func_name, ret_kind, param_kinds)) =
-        builtins.into_iter().find(|(n, _, _)| *n == name)
+    if let Some((func_name, ret_kind, param_kinds)) = builtins
+        .into_iter()
+        .find(|(n, _, _)| StrID::from(*n) == name)
     {
         let params: Vec<String> = param_kinds.iter().map(|k| k.to_string()).collect();
-        // TODO: Implement display for Type?
         Some(format!("{} {}({})", ret_kind, func_name, params.join(", ")))
     } else {
         None

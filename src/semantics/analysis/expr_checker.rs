@@ -3,6 +3,7 @@ use crate::parser::ast::TypeKind;
 use crate::parser::ast::*;
 use crate::semantics::FunctionInfo;
 use crate::semantics::analysis::context::SemanticContext;
+use crate::utils::StrID;
 
 pub struct ExpressionChecker<'a> {
     ctx: &'a mut SemanticContext,
@@ -40,8 +41,8 @@ impl<'a> ExpressionChecker<'a> {
         // Check if left operand is valid for this operation.
         if !self.ctx.type_legal_for_bin_op(op, lhs_type) {
             self.ctx.add_error(SemanticError::InvalidOperands {
-                operator: op.to_string(),
-                operand: lhs_type.to_string(),
+                operator: StrID::from(op.to_string()),
+                operand: StrID::from(lhs_type.to_string()),
                 position: lhs_position,
                 type_position: lhs_type.position,
             });
@@ -50,8 +51,8 @@ impl<'a> ExpressionChecker<'a> {
         // Check if right operand is valid for this operation.
         if !self.ctx.type_legal_for_bin_op(op, rhs_type) {
             self.ctx.add_error(SemanticError::InvalidOperands {
-                operator: op.to_string(),
-                operand: rhs_type.to_string(),
+                operator: StrID::from(op.to_string()),
+                operand: StrID::from(rhs_type.to_string()),
                 position: rhs_position,
                 type_position: rhs_type.position,
             });
@@ -71,9 +72,9 @@ impl<'a> ExpressionChecker<'a> {
 
                 if !compatible {
                     self.ctx.add_error(SemanticError::BinaryOpTypeMismatch {
-                        lhs_type: lhs_type.to_string(),
+                        lhs_type: StrID::from(lhs_type.to_string()),
                         lhs_position: lhs_type.position,
-                        rhs_type: rhs_type.to_string(),
+                        rhs_type: StrID::from(rhs_type.to_string()),
                         rhs_position: rhs_type.position,
                     });
                 }
@@ -82,9 +83,9 @@ impl<'a> ExpressionChecker<'a> {
             _ => {
                 if !self.ctx.types_equal(lhs_type, rhs_type) {
                     self.ctx.add_error(SemanticError::BinaryOpTypeMismatch {
-                        lhs_type: lhs_type.to_string(),
+                        lhs_type: StrID::from(lhs_type.to_string()),
                         lhs_position: lhs_type.position,
-                        rhs_type: rhs_type.to_string(),
+                        rhs_type: StrID::from(rhs_type.to_string()),
                         rhs_position: rhs_type.position,
                     });
                 }
@@ -156,8 +157,8 @@ impl<'a> ExpressionChecker<'a> {
                 let size_type = self.visit_expr(size);
                 if !matches!(size_type.kind, TypeKind::Int | TypeKind::Error) {
                     self.ctx.add_error(SemanticError::TypeMismatch {
-                        expected: "int".to_string(),
-                        found: size_type.to_string(),
+                        expected: StrID::from("int"),
+                        found: StrID::from(size_type.to_string()),
                         position: size.position,
                     });
                 }
@@ -172,12 +173,12 @@ impl<'a> ExpressionChecker<'a> {
 
                 if matches!(typ.kind, TypeKind::Bool | TypeKind::Int | TypeKind::Void) {
                     let expected = vec![
-                        "{ClassType}".to_string(),
-                        "{ArrayType}".to_string(),
-                        "{string}".to_string(),
+                        StrID::from("{ClassType}"),
+                        StrID::from("{ArrayType}"),
+                        StrID::from("{string}"),
                     ];
                     self.ctx.add_error(SemanticError::InvalidNullCast {
-                        found: typ.to_string(),
+                        found: StrID::from(typ.to_string()),
                         expected,
                         type_position: typ.position,
                         expr_position: outer_expr.position,
@@ -188,15 +189,15 @@ impl<'a> ExpressionChecker<'a> {
             }
             ExprKind::ExprTypedNull(expr) => {
                 let expected = vec![
-                    "{ClassType}".to_string(),
-                    "{ArrayType}".to_string(),
-                    "{string}".to_string(),
+                    StrID::from("{ClassType}"),
+                    StrID::from("{ArrayType}"),
+                    StrID::from("{string}"),
                 ];
                 match &expr.kind {
                     ExprKind::Var(ident) => {
-                        if !self.ctx.symbol_table.class_exists(&ident.name) {
+                        if !self.ctx.symbol_table.class_exists(ident.name) {
                             self.ctx.add_error(SemanticError::UndefinedClass {
-                                name: ident.name.clone(),
+                                name: ident.name,
                                 position: ident.position,
                             });
                             self.ctx.error_type(outer_expr.position)
@@ -280,8 +281,8 @@ impl<'a> ExpressionChecker<'a> {
 
         if !matches!(index_type.kind, TypeKind::Int | TypeKind::Error) {
             self.ctx.add_error(SemanticError::TypeMismatch {
-                expected: "int".to_string(),
-                found: index_type.to_string(),
+                expected: StrID::from("int"),
+                found: StrID::from(index_type.to_string()),
                 position: index.position,
             });
         }
@@ -291,8 +292,8 @@ impl<'a> ExpressionChecker<'a> {
             TypeKind::Error => self.ctx.error_type(position),
             _ => {
                 self.ctx.add_error(SemanticError::InvalidOperands {
-                    operator: "[]".to_string(),
-                    operand: array_type.to_string(),
+                    operator: StrID::from("[]"),
+                    operand: StrID::from(array_type.to_string()),
                     position,
                     type_position: array_type.position,
                 });
@@ -310,13 +311,13 @@ impl<'a> ExpressionChecker<'a> {
         let obj_type = self.visit_expr(object);
 
         if let TypeKind::Class(class_name) = obj_type.kind {
-            let all_fields = self.ctx.symbol_table.get_all_class_fields(&class_name.name);
+            let all_fields = self.ctx.symbol_table.get_all_class_fields(class_name.name);
 
             if let Some((field_type, _)) = all_fields.get(&field_name.name) {
                 field_type.clone()
             } else {
                 self.ctx.add_error(SemanticError::UndefinedField {
-                    class_name: class_name.name,
+                    class_name: class_name.name, 
                     field_name: field_name.name.clone(),
                     position,
                     class_position: class_name.position,
@@ -324,9 +325,9 @@ impl<'a> ExpressionChecker<'a> {
                 self.ctx.error_type(position)
             }
         } else if let TypeKind::String | TypeKind::Array(_) = obj_type.kind {
-            if field_name.name != "length" {
+            if field_name.name != StrID::from("length") {
                 self.ctx.add_error(SemanticError::UndefinedField {
-                    class_name: obj_type.to_string(),
+                    class_name: StrID::from(obj_type.to_string()),
                     field_name: field_name.name.clone(),
                     position,
                     class_position: SourcePosition(0, 0),
@@ -342,8 +343,8 @@ impl<'a> ExpressionChecker<'a> {
             self.ctx.error_type(position)
         } else {
             self.ctx.add_error(SemanticError::InvalidOperands {
-                operator: ".".to_string(),
-                operand: obj_type.to_string(),
+                operator: StrID::from("."),
+                operand: StrID::from(obj_type.to_string()),
                 position,
                 type_position: obj_type.position,
             });
@@ -365,7 +366,7 @@ impl<'a> ExpressionChecker<'a> {
                 let all_methods = self
                     .ctx
                     .symbol_table
-                    .get_all_class_methods(&class_name.name);
+                    .get_all_class_methods(class_name.name);
 
                 if let Some(method_info) = all_methods.get(&method_name.name) {
                     let method_info = method_info.clone();
@@ -398,8 +399,8 @@ impl<'a> ExpressionChecker<'a> {
             }
             _ => {
                 self.ctx.add_error(SemanticError::InvalidOperands {
-                    operator: format!("method call .{}()", method_name.name),
-                    operand: obj_type.to_string(),
+                    operator: StrID::from(format!("method call .{}()", method_name.name)),
+                    operand: StrID::from(obj_type.to_string()),
                     position,
                     type_position: obj_type.position,
                 });
@@ -423,8 +424,8 @@ impl<'a> ExpressionChecker<'a> {
             && !matches!(expr_type.kind, TypeKind::Error)
         {
             self.ctx.add_error(SemanticError::InvalidOperands {
-                operator: op.to_string(),
-                operand: expr_type.to_string(),
+                operator: StrID::from(op.to_string()),
+                operand: StrID::from(expr_type.to_string()),
                 position: expr.position,
                 type_position: expr_type.position,
             });
@@ -484,8 +485,8 @@ impl<'a> ExpressionChecker<'a> {
             let arg_type = self.visit_expr(expr);
             if !self.ctx.is_subtype(&arg_type, param) {
                 self.ctx.add_error(SemanticError::ArgumentTypeMismatch {
-                    expected: param.to_string(),
-                    found: arg_type.to_string(),
+                    expected: StrID::from(param.to_string()),
+                    found: StrID::from(arg_type.to_string()),
                     position: expr.position,
                     function_name: func_info.ident.name.clone(),
                     argument_position: param.position,
