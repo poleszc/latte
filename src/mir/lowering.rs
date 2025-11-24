@@ -1,15 +1,16 @@
 // TODO: Remove those eventually.
 #![allow(dead_code)]
 #![allow(unused_variables)]
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
-use clap::builder;
+use clap::builder::{self, Str};
 
 use crate::{
     SourcePosition,
     mir::{
-        LocalID, MIRClass, MIRFunction, MIRInstruction, MIROperation, MIRPlace, MIRProgram,
-        MIRValue, function_builder::MIRFunctionBuilder, program_builder::MIRProgramBuilder,
+        self, LocalID, MIRClass, MIRField, MIRFunction, MIRInstruction, MIROperation, MIRPlace,
+        MIRProgram, MIRValue, function_builder::MIRFunctionBuilder,
+        program_builder::MIRProgramBuilder,
     },
     parser::ast::{
         BinaryOp, Block, ClassDef, ClassEntryKind, Expr, ExprKind, FuncDef, Ident, Item, ItemKind,
@@ -23,6 +24,7 @@ pub struct MIRLoweringContext {
     symbol_table: SymbolTable,
     variable_map: HashMap<StrID, LocalID>,
     current_function: Option<MIRFunctionBuilder>,
+    current_class_fields: HashMap<StrID, (usize, Type)>,
 }
 
 // ======================
@@ -34,6 +36,7 @@ impl MIRLoweringContext {
             symbol_table,
             variable_map: HashMap::new(),
             current_function: None,
+            current_class_fields: HashMap::new(),
         }
     }
 
@@ -45,6 +48,7 @@ impl MIRLoweringContext {
         for top_def in &program.defs {
             if let TopDefKind::Class(class_def) = &top_def.kind {
                 let mir_class = self.lower_class(class_def);
+                dbg!(&mir_class);
                 builder.add_class(mir_class);
             }
         }
@@ -60,12 +64,22 @@ impl MIRLoweringContext {
         // Lower all methods to MIR.
         for top_def in &program.defs {
             if let TopDefKind::Class(class_def) = &top_def.kind {
+                // Insert all class fields in the scope to have access to them in methods.
+                let class_fields = self
+                    .symbol_table
+                    .get_class_field_layout(class_def.name.name);
+                for (index, (name, typ, _)) in class_fields.iter().enumerate() {
+                    self.current_class_fields
+                        .insert(*name, (index, typ.clone()));
+                }
+
                 for entry in &class_def.entries {
                     if let ClassEntryKind::Method(method) = &entry.kind {
                         let mir_function = self.lower_method(class_def, method);
                         builder.add_function(mir_function);
                     }
                 }
+                self.current_class_fields.clear();
             }
         }
         builder.build()
@@ -76,13 +90,101 @@ impl MIRLoweringContext {
 // Top Def lowering.
 // ======================
 impl MIRLoweringContext {
+    fn mangle_method_name(&self, class_name: StrID, method_name: StrID) -> StrID {
+        StrID::from(format!("{}_{}", class_name, method_name))
+    }
+
     fn lower_class(&mut self, class_def: &ClassDef) -> MIRClass {
-        todo!("Lower class")
+        let class_name = class_def.name.name;
+        let field_layout = self.symbol_table.get_class_field_layout(class_name);
+
+        let fields: Vec<MIRField> = field_layout
+            .into_iter()
+            .enumerate()
+            .map(|(index, (name, typ, _pos))| MIRField {
+                name,
+                typ,
+                offset: index, // TODO: Change that
+                index,
+            })
+            .collect();
+
+        let vtable_layout = self.symbol_table.get_class_vtable_layout(class_name);
+        let vtable: Vec<StrID> = vtable_layout
+            .iter()
+            .map(|func_info| {
+                let defining_class = self
+                    .symbol_table
+                    .find_method_owner(class_name, func_info.ident.name)
+                    .unwrap();
+                self.mangle_method_name(defining_class, func_info.ident.name)
+            })
+            .collect();
+
+        let all_methods_map = self.symbol_table.get_all_class_methods(class_name);
+        let mut methods: Vec<StrID> = all_methods_map.keys().cloned().collect();
+        methods.sort();
+
+        MIRClass {
+            name: class_name,
+            parent: class_def.extends.map(|e| e.name),
+            fields,
+            methods,
+            vtable,
+            source_position: class_def.position,
+        }
     }
 
     fn lower_method(&mut self, class_def: &ClassDef, method: &FuncDef) -> MIRFunction {
-        // TODO: Add this as first param.
-        self.lower_function(method)
+        let mangled_name = self.mangle_method_name(class_def.name.name, method.name.name);
+
+        // Insert this as first parameter.
+        let mut parameter_types = vec![Type {
+            kind: TypeKind::Class(class_def.name),
+            position: class_def.position,
+        }];
+        parameter_types.extend(method.args.iter().map(|arg| arg.arg_type.clone()));
+
+        let mut builder = MIRFunctionBuilder::new(
+            mangled_name,
+            method.return_type.clone(),
+            parameter_types,
+            method.position,
+        );
+
+        self.variable_map.clear();
+
+        let this_local_id = builder.create_local(
+            Some(StrID::from("this")),
+            Type {
+                kind: TypeKind::Class(class_def.name),
+                position: class_def.position,
+            },
+            true,
+            Some(0),
+        );
+        self.variable_map.insert(StrID::from("this"), this_local_id);
+
+        for (i, arg) in method.args.iter().enumerate() {
+            let local_id =
+                builder.create_local(Some(arg.name.name), arg.arg_type.clone(), true, Some(i + 1));
+            self.variable_map.insert(arg.name.name, local_id);
+        }
+
+        self.current_function = Some(builder);
+
+        self.lower_block(&method.body);
+
+        // If a void function
+        if matches!(method.return_type.kind, TypeKind::Void) {
+            let builder = self
+                .current_function
+                .as_mut()
+                .expect("Lower method: builder not set");
+            builder.emit_return(None, method.position);
+        }
+
+        self.current_function.take().unwrap().build()
     }
 
     fn lower_function(&mut self, func_def: &FuncDef) -> MIRFunction {
@@ -501,11 +603,40 @@ impl MIRLoweringContext {
     fn lower_expr_as_place(&mut self, expr: &Expr) -> MIRPlace {
         match &expr.kind {
             ExprKind::Var(ident) => {
-                let local_id = self
-                    .variable_map
-                    .get(&ident.name)
-                    .expect(&format!("Variable {} not found in map", ident.name));
-                MIRPlace::Local(*local_id)
+                // First look for the identifier in the local variables.
+                if let Some(local_id) = self.variable_map.get(&ident.name) {
+                    return MIRPlace::Local(*local_id);
+                }
+
+                // If not found look in the class fields.
+                if let Some((field_index, t)) = self.current_class_fields.get(&ident.name) {
+                    // Retrieve 'this' from locals. It should always exist.
+                    let this_local_id = *self
+                        .variable_map
+                        .get(&StrID::from("this"))
+                        .expect("'this' not found in method context");
+                    let this_place = MIRPlace::Local(this_local_id);
+
+                    // Now find the field place.
+                    let builder = self
+                        .current_function
+                        .as_ref()
+                        .expect("Lower expr as place: func builder not set");
+                    let this_info = builder.get_local_info(this_local_id);
+                    let class_name = if let TypeKind::Class(class_name) = &this_info.typ.kind {
+                        class_name.name
+                    } else {
+                        panic!("'this' is not a class type")
+                    };
+
+                    return MIRPlace::Field {
+                        base: Box::new(this_place),
+                        class_name,
+                        field_name: ident.name,
+                        field_index: *field_index,
+                    };
+                }
+                panic!("Local variable not found in locals and method fields");
             }
             ExprKind::ArrayAccess { array, index } => {
                 let array_place = self.lower_expr_as_place(array);
@@ -532,7 +663,7 @@ impl MIRLoweringContext {
             ExprKind::LiteralNull => MIRValue::Null,
             ExprKind::Var(ident) => {
                 let local_id = self.variable_map.get(&ident.name).expect(&format!(
-                    "Variable {} not found in the map",
+                    "Variable '{}' not found in the map",
                     ident.name.to_string()
                 ));
                 MIRValue::Local(*local_id)
@@ -569,6 +700,8 @@ impl MIRLoweringContext {
     ) -> MIRValue {
         let lhs_val = self.lower_expr(lhs);
         let rhs_val = self.lower_expr(rhs);
+        
+        // TODO: We need notice the difference if expr is of type lhs.
 
         let mir_op = match op {
             BinaryOp::Add => MIROperation::IntAdd,
@@ -585,6 +718,7 @@ impl MIRLoweringContext {
             BinaryOp::And => MIROperation::BoolAnd,
             BinaryOp::Or => MIROperation::BoolOr,
         };
+        
 
         let builder = self
             .current_function
@@ -610,7 +744,7 @@ impl MIRLoweringContext {
     fn lower_unary_op(&mut self, op: &UnaryOp, expr: &Expr, position: SourcePosition) -> MIRValue {
         let value = self.lower_expr(expr);
         let mir_op = match op {
-            UnaryOp::Neg => MIROperation::IntNeq,
+            UnaryOp::Neg => MIROperation::IntNeg,
             UnaryOp::Not => MIROperation::BoolNot,
         };
 

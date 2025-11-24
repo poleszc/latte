@@ -223,7 +223,7 @@ pub struct MIRClass {
     /// Class fields.
     pub fields: Vec<MIRField>,
     /// Class method names.
-    pub methods: Vec<StrID>,
+    pub methods: Vec<StrID>, // TODO: Remove that?
     pub vtable: Vec<StrID>,
     pub source_position: SourcePosition,
 }

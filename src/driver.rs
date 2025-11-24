@@ -74,8 +74,6 @@ pub fn run_compiler<
         }
     };
 
-    dbg!(&symbol_table);
-
     eprintln!("[Semantic] Semantic analysis completed successfully");
 
     // ============= MIR LOWERING ===============

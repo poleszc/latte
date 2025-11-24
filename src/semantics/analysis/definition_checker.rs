@@ -55,6 +55,8 @@ impl<'a> DefinitionChecker<'a> {
     fn add_class(&mut self, class_def: &ClassDef) {
         let mut fields: HashMap<StrID, (Type, SourcePosition)> = HashMap::new();
         let mut methods: HashMap<StrID, FunctionInfo> = HashMap::new();
+        let mut field_order = Vec::new();
+        let mut method_order = Vec::new();
 
         // Check for duplicate fields and methods. Extends are
         // not validated yet since we don't know the hierarchy.
@@ -71,6 +73,7 @@ impl<'a> DefinitionChecker<'a> {
                             });
                         } else {
                             fields.insert(ident.name, (typ.clone(), ident.position));
+                            field_order.push(ident.name);
                         }
                     }
                 }
@@ -96,6 +99,7 @@ impl<'a> DefinitionChecker<'a> {
                         });
                     } else {
                         methods.insert(method_ident.name, signature);
+                        method_order.push(method_ident.name);
                     }
                 }
             }
@@ -107,6 +111,8 @@ impl<'a> DefinitionChecker<'a> {
             parent: class_def.extends,
             fields,
             methods,
+            field_order,
+            method_order,
             position: class_def.position,
         };
 

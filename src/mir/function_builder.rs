@@ -127,6 +127,10 @@ impl MIRFunctionBuilder {
         id
     }
 
+    pub fn get_local_info(&self, id: LocalID) -> &LocalInfo {
+        self.locals.get(id.0).expect("Invalid LocalID")
+    }
+
     /// Creates the build MIRFunction. Consumes the builder object.
     pub fn build(self) -> MIRFunction {
         MIRFunction {

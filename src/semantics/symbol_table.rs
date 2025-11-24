@@ -10,6 +10,7 @@ use crate::{
     },
     utils::StrID,
 };
+use core::panic;
 use std::collections::HashMap;
 
 #[derive(Debug, Default)]
@@ -227,5 +228,83 @@ impl SymbolTable {
             }
         }
         all_methods
+    }
+
+    pub fn get_class_field_layout(&self, class_name: StrID) -> Vec<(StrID, Type, SourcePosition)> {
+        if let Some(class_info) = self.classes.get(&class_name) {
+            let mut layout = Vec::new();
+
+            if let Some(parent_ident) = &class_info.parent {
+                layout.extend(self.get_class_field_layout(parent_ident.name));
+            }
+
+            for field_name in &class_info.field_order {
+                let (typ, pos) = class_info.fields.get(field_name).unwrap();
+                layout.push((*field_name, typ.clone(), *pos));
+            }
+
+            return layout;
+        }
+        panic!(
+            "{}",
+            &format!("Class {} not found, but requested field layout", class_name)
+        )
+    }
+
+    pub fn get_class_vtable_layout(&self, class_name: StrID) -> Vec<FunctionInfo> {
+        if let Some(class_info) = self.classes.get(&class_name) {
+            let mut vtable_layout: Vec<FunctionInfo>;
+            let mut method_map: HashMap<StrID, usize> = HashMap::new();
+
+            // Add parent methods.
+            if let Some(parent_ident) = &class_info.parent {
+                vtable_layout = self.get_class_vtable_layout(parent_ident.name);
+                for (i, func_info) in vtable_layout.iter().enumerate() {
+                    method_map.insert(func_info.ident.name, i);
+                }
+            } else {
+                vtable_layout = Vec::new();
+            }
+
+            // Add our methods.
+            for method_name in &class_info.method_order {
+                let method_info = class_info.methods.get(method_name).unwrap();
+
+                // Override parent method.
+                if let Some(index) = method_map.get(method_name) {
+                    vtable_layout[*index] = method_info.clone();
+                } else {
+                    // Add new method.
+                    vtable_layout.push(method_info.clone());
+                }
+            }
+
+            return vtable_layout;
+        }
+        panic!(
+            "{}",
+            &format!(
+                "Class {} not found, but requested vtable layout",
+                class_name
+            )
+        )
+    }
+
+    pub fn find_method_owner(&self, mut class_name: StrID, method_name: StrID) -> Option<StrID> {
+        loop {
+            if let Some(class_info) = self.classes.get(&class_name) {
+                if class_info.methods.contains_key(&method_name) {
+                    return Some(class_name);
+                }
+
+                if let Some(parent) = &class_info.parent {
+                    class_name = parent.name;
+                } else {
+                    return None;
+                }
+            } else {
+                return None;
+            }
+        }
     }
 }
