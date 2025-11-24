@@ -122,6 +122,7 @@ pub enum MIRPlace {
         field_name: StrID,
         field_index: usize,
     },
+    // TODO: Is box needed here?
     Index {
         base: Box<MIRPlace>,
         index: Box<MIRValue>,

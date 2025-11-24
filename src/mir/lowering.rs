@@ -12,8 +12,8 @@ use crate::{
         function_builder::MIRFunctionBuilder, program_builder::MIRProgramBuilder,
     },
     parser::ast::{
-        Block, ClassDef, ClassEntryKind, Expr, ExprKind, FuncDef, Ident, Item, ItemKind, Program,
-        Stmt, StmtKind, TopDefKind, Type, TypeKind,
+        BinaryOp, Block, ClassDef, ClassEntryKind, Expr, ExprKind, FuncDef, Ident, Item, ItemKind,
+        Program, Stmt, StmtKind, TopDefKind, Type, TypeKind, UnaryOp,
     },
     semantics::SymbolTable,
     utils::StrID,
@@ -496,19 +496,54 @@ impl MIRLoweringContext {
 impl MIRLoweringContext {
     /// Lower expression and return it's place.
     fn lower_expr_as_place(&mut self, expr: &Expr) -> MIRPlace {
-        todo!()
+        match &expr.kind {
+            ExprKind::Var(ident) => {
+                let local_id = self
+                    .variable_map
+                    .get(&ident.name)
+                    .expect(&format!("Variable {} not found in map", ident.name));
+                MIRPlace::Local(*local_id)
+            }
+            ExprKind::ArrayAccess { array, index } => {
+                let array_place = self.lower_expr_as_place(array);
+                let index_val = self.lower_expr(&index);
+                MIRPlace::Index {
+                    base: Box::new(array_place),
+                    index: Box::new(index_val),
+                }
+            }
+            ExprKind::FieldAccess { object, field_name } => {
+                todo!("Lower expr as place: Field access")
+            }
+            _ => panic!("Expression is not an lvalue. This should be caught by semantic checker"),
+        }
     }
 
     fn lower_expr(&mut self, expr: &Expr) -> MIRValue {
         match &expr.kind {
-            ExprKind::Var(ident) => todo!(),
-            ExprKind::LiteralInt(_) => todo!(),
-            ExprKind::LiteralTrue => todo!(),
-            ExprKind::LiteralFalse => todo!(),
+            ExprKind::LiteralInt(val) => MIRValue::IntConst(*val),
+            ExprKind::LiteralTrue => MIRValue::BoolConst(true),
+            ExprKind::LiteralFalse => MIRValue::BoolConst(false),
             ExprKind::This => todo!(),
-            ExprKind::LiteralString(_) => todo!(),
-            ExprKind::LiteralNull => todo!(),
-            ExprKind::App { callee, args } => todo!(),
+            ExprKind::LiteralString(str) => MIRValue::StringConst(str.clone()),
+            ExprKind::LiteralNull => MIRValue::Null,
+            ExprKind::Var(ident) => {
+                let local_id = self.variable_map.get(&ident.name).expect(&format!(
+                    "Variable {} not found in the map",
+                    ident.name.to_string()
+                ));
+                MIRValue::Local(*local_id)
+            }
+            ExprKind::UnaryOp { op, expr } => self.lower_unary_op(op, expr, expr.position),
+            ExprKind::BinaryOp { op, lhs, rhs } => {
+                self.lower_binary_op(op, lhs, rhs, expr.position)
+            }
+            ExprKind::App { callee, args } => self.lower_call(callee, args, expr.position),
+            ExprKind::NewObject(typ) => self.lower_new_object(typ, expr.position),
+            ExprKind::NewArray { element_type, size } => {
+                self.lower_new_array(element_type, size, expr.position)
+            }
+
             ExprKind::ArrayAccess { array, index } => todo!(),
             ExprKind::FieldAccess { object, field_name } => todo!(),
             ExprKind::Method {
@@ -517,12 +552,35 @@ impl MIRLoweringContext {
                 args,
             } => todo!(),
             ExprKind::Paren(expr) => todo!(),
-            ExprKind::UnaryOp { op, expr } => todo!(),
-            ExprKind::BinaryOp { op, lhs, rhs } => todo!(),
-            ExprKind::NewObject(_) => todo!(),
-            ExprKind::NewArray { element_type, size } => todo!(),
             ExprKind::TypedNull(_) => todo!(),
             ExprKind::ExprTypedNull(expr) => todo!(),
         }
+    }
+
+    fn lower_binary_op(
+        &mut self,
+        op: &BinaryOp,
+        lhs: &Expr,
+        rhs: &Expr,
+        position: SourcePosition,
+    ) -> MIRValue {
+        todo!()
+    }
+    fn lower_unary_op(&mut self, op: &UnaryOp, expr: &Expr, position: SourcePosition) -> MIRValue {
+        todo!()
+    }
+    fn lower_call(&mut self, callee: &Expr, args: &[Expr], position: SourcePosition) -> MIRValue {
+        todo!()
+    }
+    fn lower_new_object(&mut self, typ: &Type, position: SourcePosition) -> MIRValue {
+        todo!()
+    }
+    fn lower_new_array(
+        &mut self,
+        element_type: &Type,
+        size: &Expr,
+        position: SourcePosition,
+    ) -> MIRValue {
+        todo!()
     }
 }
