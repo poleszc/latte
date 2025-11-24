@@ -1,6 +1,7 @@
 pub mod program_builder;
 pub mod function_builder;
 pub mod lowering;
+pub mod mir_display;
 
 
 

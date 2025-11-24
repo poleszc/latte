@@ -8,7 +8,7 @@ use clap::Parser;
 use crate::{
     LatteArgs,
     errors::CompilerError,
-    mir::{MIRProgram, lowering::MIRLoweringContext},
+    mir::{self, MIRProgram, lowering::MIRLoweringContext},
     parser::{
         self,
         ast::{self, Program},
@@ -80,7 +80,7 @@ pub fn run_compiler<
     let mut lowering_context = MIRLoweringContext::new(symbol_table);
     let mir_program = lowering_context.lower_program(&parsed_program);
     eprintln!("[MIR] Lowering to MIR completed successfully...");
-    dump_mir_to_json(&output_dir, file_stem, &mir_program)?;
+    dump_mir(&output_dir, file_stem, &mir_program)?;
     eprintln!("[MIR] Dumped MIR to JSON...");
 
     // TODO:
@@ -119,8 +119,8 @@ fn dump_ast_to_json(
     Ok(())
 }
 
-/// Dumps the MIR to a JSON file in a specified output_dir and a given file name.
-fn dump_mir_to_json(
+/// Dumps the MIR to a JSON file and a txt file in a specified output_dir and a given file name.
+fn dump_mir(
     output_dir: &PathBuf,
     file_stem: &str,
     mir_program: &MIRProgram,
@@ -139,6 +139,12 @@ fn dump_mir_to_json(
             e
         ))
     })?;
+
+    mir_program.dump_to_file(
+        PathBuf::from(&output_dir)
+            .join(format!("{}.mir.txt", file_stem))
+            .as_path(),
+    )?;
 
     println!(
         "[LATTE]: Successfully saved MIR to {}",
