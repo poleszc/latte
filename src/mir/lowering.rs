@@ -636,10 +636,52 @@ impl MIRLoweringContext {
     }
 
     fn lower_call(&mut self, callee: &Expr, args: &[Expr], position: SourcePosition) -> MIRValue {
-        todo!()
+        let func_ident = match &callee.kind {
+            ExprKind::Var(ident) => ident,
+            _ => panic!("MIR Lowering: only direct function calls are supported"),
+        };
+
+        // Lower arguments.
+        let arg_values: Vec<MIRValue> = args.iter().map(|arg| self.lower_expr(arg)).collect();
+
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower call: Func builder not set");
+
+        let return_type = self
+            .symbol_table
+            .lookup_function(func_ident)
+            .expect("Lower call: Func not found")
+            .return_type;
+
+        if !matches!(return_type.kind, TypeKind::Void) {
+            let temp = builder.create_temp(return_type);
+            builder.emit_call(
+                Some(MIRPlace::Temp(temp)),
+                func_ident.name,
+                arg_values,
+                position,
+            );
+            MIRValue::Temp(temp)
+        } else {
+            builder.emit_call(None, func_ident.name, arg_values, position);
+            MIRValue::Unit
+        }
     }
     fn lower_new_object(&mut self, typ: &Type, position: SourcePosition) -> MIRValue {
-        todo!()
+        let class_name = match &typ.kind {
+            TypeKind::Class(ident) => ident.name,
+            _ => panic!("New object requires class type"),
+        };
+
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower new object: Func builder not set");
+        let temp = builder.create_temp(typ.clone());
+        builder.emit_new_object(MIRPlace::Temp(temp), class_name, position);
+        MIRValue::Temp(temp)
     }
     fn lower_new_array(
         &mut self,
@@ -647,6 +689,21 @@ impl MIRLoweringContext {
         size: &Expr,
         position: SourcePosition,
     ) -> MIRValue {
-        todo!()
+        let size_val = self.lower_expr(size);
+
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower new array: Func builder not set");
+
+        let array_type = Type {
+            kind: TypeKind::Array(Box::new(element_type.clone())),
+            position,
+        };
+
+        let temp = builder.create_temp(array_type);
+        builder.emit_new_array(MIRPlace::Temp(temp), size_val, position);
+
+        MIRValue::Temp(temp)
     }
 }
