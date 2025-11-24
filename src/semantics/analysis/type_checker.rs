@@ -122,7 +122,7 @@ impl<'a> TypeChecker<'a> {
             UnaryOp::Not => matches!(typ.kind, TypeKind::Bool),
         }
     }
-    
+
     /// Get the result type of a unary operation.
     /// Assumes the operand type is valid for the operation.
     pub fn unary_op_result_type(
@@ -174,7 +174,7 @@ impl<'a> TypeChecker<'a> {
             },
         }
     }
-    
+
     /// Validate a type used for variable or field declaration.
     /// Void and Null types are not allowed for declarations.
     pub fn validate_variable_type(&self, typ: &Type) -> Result<(), SemanticError> {

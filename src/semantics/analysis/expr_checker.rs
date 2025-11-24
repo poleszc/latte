@@ -317,7 +317,7 @@ impl<'a> ExpressionChecker<'a> {
                 field_type.clone()
             } else {
                 self.ctx.add_error(SemanticError::UndefinedField {
-                    class_name: class_name.name, 
+                    class_name: class_name.name,
                     field_name: field_name.name.clone(),
                     position,
                     class_position: class_name.position,
@@ -363,10 +363,7 @@ impl<'a> ExpressionChecker<'a> {
 
         match &obj_type.kind {
             TypeKind::Class(class_name) => {
-                let all_methods = self
-                    .ctx
-                    .symbol_table
-                    .get_all_class_methods(class_name.name);
+                let all_methods = self.ctx.symbol_table.get_all_class_methods(class_name.name);
 
                 if let Some(method_info) = all_methods.get(&method_name.name) {
                     let method_info = method_info.clone();

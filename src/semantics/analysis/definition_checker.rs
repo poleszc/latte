@@ -56,7 +56,8 @@ impl<'a> DefinitionChecker<'a> {
         let mut fields: HashMap<StrID, (Type, SourcePosition)> = HashMap::new();
         let mut methods: HashMap<StrID, FunctionInfo> = HashMap::new();
 
-        // Check for duplicate fields and methods.
+        // Check for duplicate fields and methods. Extends are
+        // not validated yet since we don't know the hierarchy.
         for entry in &class_def.entries {
             match &entry.kind {
                 ClassEntryKind::Field(identifiers, typ) => {
