@@ -3,14 +3,17 @@
 #![allow(unused_variables)]
 use std::collections::HashMap;
 
+use clap::builder;
+
 use crate::{
+    SourcePosition,
     mir::{
-        LocalID, MIRClass, MIRFunction, MIRPlace, MIRProgram, MIRValue,
+        LocalID, MIRClass, MIRFunction, MIRInstruction, MIRPlace, MIRProgram, MIRValue,
         function_builder::MIRFunctionBuilder, program_builder::MIRProgramBuilder,
     },
     parser::ast::{
-        Block, ClassDef, ClassEntryKind, Expr, ExprKind, FuncDef, Ident, Item, Program, Stmt,
-        StmtKind, TopDefKind, Type, TypeKind,
+        Block, ClassDef, ClassEntryKind, Expr, ExprKind, FuncDef, Ident, Item, ItemKind, Program,
+        Stmt, StmtKind, TopDefKind, Type, TypeKind,
     },
     semantics::SymbolTable,
     utils::StrID,
@@ -74,7 +77,7 @@ impl MIRLoweringContext {
 // ======================
 impl MIRLoweringContext {
     fn lower_class(&mut self, class_def: &ClassDef) -> MIRClass {
-        todo!()
+        todo!("Lower class")
     }
 
     fn lower_method(&mut self, class_def: &ClassDef, method: &FuncDef) -> MIRFunction {
@@ -119,6 +122,18 @@ impl MIRLoweringContext {
         self.current_function.take().unwrap().build()
     }
 }
+// ======================
+// Utils.
+// ======================
+impl MIRLoweringContext {
+    fn place_to_value(&self, place: &MIRPlace) -> MIRValue {
+        match place {
+            MIRPlace::Local(local_id) => MIRValue::Local(*local_id),
+            MIRPlace::Temp(temp_id) => MIRValue::Temp(*temp_id),
+            _ => panic!("Cannot convert complex place to value"),
+        }
+    }
+}
 
 // ======================
 // Statement lowering.
@@ -134,17 +149,17 @@ impl MIRLoweringContext {
         match &stmt.kind {
             StmtKind::Empty => {}
             StmtKind::Block(block) => self.lower_block(block),
-            StmtKind::Decl(ty, items) => self.lower_declaration(ty, items),
-            StmtKind::Assign { target, value } => self.lower_assign(target, value),
-            StmtKind::Return { expr } => self.lower_return(expr),
-            StmtKind::Incr(expr) => self.lower_increment(expr),
-            StmtKind::Decr(expr) => self.lower_decrement(expr),
+            StmtKind::Decl(ty, items) => self.lower_declaration(ty, items, stmt.position),
+            StmtKind::Assign { target, value } => self.lower_assign(target, value, stmt.position),
+            StmtKind::Return { expr } => self.lower_return(expr, stmt.position),
+            StmtKind::Incr(expr) => self.lower_increment(expr, stmt.position),
+            StmtKind::Decr(expr) => self.lower_decrement(expr, stmt.position),
             StmtKind::If {
                 cond,
                 if_true,
                 if_false,
-            } => self.lower_if(cond, if_true, if_false),
-            StmtKind::While { cond, body } => self.lower_while(cond, body),
+            } => self.lower_if(cond, if_true, if_false, stmt.position),
+            StmtKind::While { cond, body } => self.lower_while(cond, body, stmt.position),
             StmtKind::For {
                 init,
                 cond,
@@ -156,7 +171,7 @@ impl MIRLoweringContext {
                 item_name,
                 collection,
                 body,
-            } => self.lower_for_each(element_type, item_name, collection, body),
+            } => self.lower_for_each(element_type, item_name, collection, body, stmt.position),
             StmtKind::Expr(expr) => {
                 self.lower_expr(expr);
             }
@@ -164,32 +179,192 @@ impl MIRLoweringContext {
         }
     }
 
-    fn lower_declaration(&mut self, typ: &Type, items: &Vec<Item>) {
-        todo!()
+    fn lower_declaration(&mut self, typ: &Type, items: &Vec<Item>, stmt_position: SourcePosition) {
+        for item in items {
+            match &item.kind {
+                ItemKind::NoInit(ident) => {
+                    let builder = self
+                        .current_function
+                        .as_mut()
+                        .expect("Lower declaration no init: Builder not set");
+                    let local_id = builder.create_local(Some(ident.name), typ.clone(), false, None);
+                    self.variable_map.insert(ident.name, local_id);
+                }
+                ItemKind::Init(ident, expr) => {
+                    let builder = self
+                        .current_function
+                        .as_mut()
+                        .expect("Lower declaration init: Builder not set");
+                    let local_id = builder.create_local(Some(ident.name), typ.clone(), false, None);
+                    self.variable_map.insert(ident.name, local_id);
+
+                    // Calculate the expression and assign to the var.
+                    let value = self.lower_expr(expr);
+                    let builder = self
+                        .current_function
+                        .as_mut()
+                        .expect("Lower declaration init: Func builder not set");
+                    builder.emit_assign(MIRPlace::Local(local_id), value, stmt_position);
+                }
+            }
+        }
     }
 
-    fn lower_assign(&mut self, target: &Expr, value: &Expr) {
-        todo!()
+    fn lower_assign(&mut self, target: &Expr, value: &Expr, stmt_position: SourcePosition) {
+        let place = self.lower_expr_as_place(target);
+        let val = self.lower_expr(value);
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower assign: Func builder not set");
+        builder.emit_assign(place, val, stmt_position);
     }
 
-    fn lower_return(&mut self, target: &Option<Box<Expr>>) {
-        todo!()
+    fn lower_return(&mut self, expr: &Option<Box<Expr>>, stmt_position: SourcePosition) {
+        let value = expr.as_ref().map(|e| self.lower_expr(e));
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower return: Func builder not set");
+        builder.emit_return(value, stmt_position);
     }
 
-    fn lower_increment(&mut self, expr: &Expr) {
-        todo!()
+    fn lower_increment(&mut self, expr: &Expr, stmt_position: SourcePosition) {
+        // i++ => {
+        //    temp = i + 1;
+        //    i = temp;
+        // }
+
+        let place = self.lower_expr_as_place(expr);
+        let val = self.place_to_value(&place);
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower increment: Func builder not set");
+
+        // temp = i + 1;
+        let temp = builder.create_temp(Type {
+            kind: TypeKind::Int,
+            position: expr.position,
+        });
+        builder.emit_int_add(
+            MIRPlace::Temp(temp),
+            val,
+            MIRValue::IntConst(1),
+            stmt_position,
+        );
+
+        // i = temp;
+        builder.emit_assign(place, MIRValue::Temp(temp), stmt_position);
     }
 
-    fn lower_decrement(&mut self, expr: &Expr) {
-        todo!()
+    fn lower_decrement(&mut self, expr: &Expr, stmt_position: SourcePosition) {
+        // i-- => {
+        //    temp = i - 1;
+        //    i = temp;
+        // }
+
+        let place = self.lower_expr_as_place(expr);
+        let val = self.place_to_value(&place);
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower increment: Func builder not set");
+
+        // temp = i - 1;
+        let temp = builder.create_temp(Type {
+            kind: TypeKind::Int,
+            position: expr.position,
+        });
+        builder.emit_int_sub(
+            MIRPlace::Temp(temp),
+            val,
+            MIRValue::IntConst(1),
+            stmt_position,
+        );
+
+        // i = temp;
+        builder.emit_assign(place, MIRValue::Temp(temp), stmt_position);
     }
 
-    fn lower_if(&mut self, cond: &Expr, if_true: &Stmt, if_false: &Option<Box<Stmt>>) {
-        todo!()
+    fn lower_if(
+        &mut self,
+        cond: &Expr,
+        if_true: &Stmt,
+        if_false: &Option<Box<Stmt>>,
+        stmt_position: SourcePosition,
+    ) {
+        // TODO: Do that better to not emit else block if it doesn't exist.
+        let cond_val = self.lower_expr(cond);
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower if: Func builder not set 1");
+
+        let true_block = builder.create_block();
+        let false_block = builder.create_block();
+        // Block we return to after if.
+        let merge_block = builder.create_block();
+
+        // Emit jumping to if blocks.
+        builder.emit_branch(cond_val, true_block, false_block, stmt_position);
+
+        // If true block.
+        builder.set_current_block(true_block);
+        self.lower_stmt(if_true);
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower if: Func builder not set 2");
+        builder.emit_jump(merge_block, stmt_position);
+
+        // If false block.
+        builder.set_current_block(false_block);
+        if let Some(else_stmt) = if_false {
+            self.lower_stmt(&else_stmt);
+        }
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower if: Func builder not set 3");
+        builder.emit_jump(merge_block, stmt_position);
+
+        // Go to the merge block
+        builder.set_current_block(merge_block);
     }
 
-    fn lower_while(&mut self, cond: &Expr, body: &Stmt) {
-        todo!()
+    fn lower_while(&mut self, cond: &Expr, body: &Stmt, stmt_position: SourcePosition) {
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower while: Func builder not set 1");
+        let loop_start = builder.create_block();
+        let loop_body = builder.create_block();
+        let loop_exit = builder.create_block();
+
+        // Jump to the condition check.
+        builder.emit_jump(loop_start, stmt_position);
+
+        // Loop condition check.
+        builder.set_current_block(loop_start);
+        let cond_val = self.lower_expr(cond);
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower while: Func builder not set 2");
+        builder.emit_branch(cond_val, loop_body, loop_exit, stmt_position);
+
+        // Loop body.
+        builder.set_current_block(loop_body);
+        self.lower_stmt(body);
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower while: Func builder not set 3");
+        builder.emit_jump(loop_start, stmt_position);
+
+        // Leave the loop.
+        builder.set_current_block(loop_exit);
     }
 
     fn lower_for(
@@ -199,7 +374,7 @@ impl MIRLoweringContext {
         post: &Option<Box<Expr>>,
         body: &Stmt,
     ) {
-        todo!()
+        todo!("MIR lower for")
     }
 
     fn lower_for_each(
@@ -208,8 +383,110 @@ impl MIRLoweringContext {
         item_name: &Ident,
         collection: &Expr,
         body: &Stmt,
+        stmt_position: SourcePosition,
     ) {
-        todo!()
+        // for(T a: collection) => {
+        //      i = 0;
+        //      T item;
+        //      while(i < collection.length) {
+        //          item = arr[i];
+        //          // ...
+        //          i = i + 1;
+        // }
+
+        let collection_val = self.lower_expr(collection);
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower for each: Func builder not set 1");
+
+        // i = 0;
+        let i_temp = builder.create_temp(Type {
+            kind: TypeKind::Int,
+            position: stmt_position,
+        });
+        builder.emit_assign(MIRPlace::Temp(i_temp), MIRValue::IntConst(0), stmt_position);
+
+        // T item;
+        let item_local =
+            builder.create_local(Some(item_name.name), element_type.clone(), false, None);
+        self.variable_map.insert(item_name.name, item_local);
+
+        let loop_start = builder.create_block();
+        let loop_body = builder.create_block();
+        let loop_exit = builder.create_block();
+
+        // Jump to the condition check.
+        builder.emit_jump(loop_start, stmt_position);
+
+        // Loop condition check.
+        builder.set_current_block(loop_start);
+
+        // temp = arr.length;
+        let length_temp = builder.create_temp(Type {
+            kind: TypeKind::Int,
+            position: stmt_position,
+        });
+        builder.emit_array_length(
+            MIRPlace::Temp(length_temp),
+            collection_val.clone(),
+            stmt_position,
+        );
+
+        // cond = i < length;
+        let cond_temp = builder.create_temp(Type {
+            kind: TypeKind::Bool,
+            position: stmt_position,
+        });
+        builder.emit_less_then(
+            MIRPlace::Temp(cond_temp),
+            MIRValue::Temp(i_temp),
+            MIRValue::Temp(length_temp),
+            stmt_position,
+        );
+        builder.emit_branch(
+            MIRValue::Temp(cond_temp),
+            loop_body,
+            loop_exit,
+            stmt_position,
+        );
+
+        // Loop body.
+        builder.set_current_block(loop_body);
+
+        builder.emit_array_get(
+            MIRPlace::Local(item_local),
+            collection_val.clone(),
+            MIRValue::Temp(i_temp),
+            stmt_position,
+        );
+
+        // Loop body.
+        self.lower_stmt(body);
+
+        // i = i + 1;
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower for each: Func builder not set 2");
+
+        let temp = builder.create_temp(Type {
+            kind: TypeKind::Int,
+            position: stmt_position,
+        });
+        builder.emit_int_add(
+            MIRPlace::Temp(temp),
+            MIRValue::Temp(i_temp),
+            MIRValue::IntConst(1),
+            stmt_position,
+        );
+        builder.emit_assign(MIRPlace::Temp(i_temp), MIRValue::Temp(temp), stmt_position);
+
+        // Jump to loop start.
+        builder.emit_jump(loop_start, stmt_position);
+
+        // Leave the loop.
+        builder.set_current_block(loop_exit);
     }
 }
 
