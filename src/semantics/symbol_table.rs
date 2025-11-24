@@ -145,7 +145,7 @@ impl SymbolTable {
         self.classes
             .get(&ident.name)
             .cloned()
-            .ok_or_else(|| SemanticError::UndefinedClass {
+            .ok_or(SemanticError::UndefinedClass {
                 name: ident.name,
                 position: ident.position,
             })
