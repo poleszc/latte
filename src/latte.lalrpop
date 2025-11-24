@@ -1,9 +1,10 @@
-use crate::parser::tokens::Token;
 use crate::errors::LexicalError;
+use crate::latte::utils::{make_unary, make_binary};
+use crate::parser::tokens::Token;
 use crate::parser::utils;
 use crate::parser::ast;
 use crate::SourcePosition;
-use crate::latte::utils::{make_unary, make_binary};
+use crate::utils::StrID;
 
 grammar;
 
@@ -74,7 +75,7 @@ extern {
 ////////////
 PositionedIdent: ast::Ident = {
     <start: @L> <i: "Identifier"> <end: @R> => ast::Ident {
-        name: i,
+        name: StrID::from(i),
         position: SourcePosition(start, end)
     },
 };
@@ -443,7 +444,7 @@ Expr7: Box<ast::Expr> = {
     <expr: Expr7> "." <field_name: PositionedIdent> => {
         let start_pos = expr.position.0;
         Box::new(ast::Expr {
-            kind: ast::ExprKind::FieldAccess { object: expr, field_name: field_name.clone() },
+            kind: ast::ExprKind::FieldAccess { object: expr, field_name },
             position: SourcePosition(start_pos, field_name.position.1)
         })
     },
@@ -518,7 +519,7 @@ Expr8: Box<ast::Expr> = {
         position: SourcePosition(start, end),
     }),
     <id: PositionedIdent> => Box::new(ast::Expr {
-        kind: ast::ExprKind::Var(id.clone()),
+        kind: ast::ExprKind::Var(id),
         position: id.position,
     }),
     "(" <Expr> ")",

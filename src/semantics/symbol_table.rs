@@ -8,15 +8,16 @@ use crate::{
         builtins,
         symbols::{ClassInfo, FunctionInfo, SymbolKind, VariableInfo},
     },
+    utils::StrID,
 };
 use std::collections::HashMap;
 
 #[derive(Debug, Default)]
 pub struct SymbolTable {
     /// Scope stack - mapping from name to symbol.
-    scopes: Vec<HashMap<String, SymbolKind>>,
+    scopes: Vec<HashMap<StrID, SymbolKind>>,
     /// Classes defined in the program.
-    classes: HashMap<String, ClassInfo>,
+    classes: HashMap<StrID, ClassInfo>,
 }
 
 // ============================
@@ -35,10 +36,7 @@ impl SymbolTable {
     /// Adds builtin functions to the scope.
     fn add_builtin_functions(&mut self) {
         for func_info in builtins::get_builtin_functions() {
-            self.scopes[0].insert(
-                func_info.ident.name.to_string(),
-                SymbolKind::Function(func_info),
-            );
+            self.scopes[0].insert(func_info.ident.name, SymbolKind::Function(func_info));
         }
     }
 
@@ -69,9 +67,9 @@ impl SymbolTable {
         }
 
         scope.insert(
-            ident.name.clone(),
+            ident.name,
             SymbolKind::Variable(VariableInfo {
-                ident: ident.clone(),
+                ident,
                 typ: var_info.typ,
             }),
         );
@@ -85,7 +83,7 @@ impl SymbolTable {
             .last_mut()
             .expect("Define function on empty scope");
 
-        let ident = function_info.ident.clone();
+        let ident = function_info.ident;
 
         if let Some(symbol) = scope.get(&ident.name) {
             let previous_position = symbol.get_source_position();
@@ -96,13 +94,13 @@ impl SymbolTable {
             });
         }
 
-        scope.insert(ident.name.clone(), SymbolKind::Function(function_info));
+        scope.insert(ident.name, SymbolKind::Function(function_info));
 
         Ok(())
     }
 
     pub fn define_class(&mut self, class_info: ClassInfo) -> Result<(), SemanticError> {
-        let ident = class_info.ident.clone();
+        let ident = class_info.ident;
         if let Some(symbol) = self.classes.get(&ident.name) {
             let previous_position = symbol.position;
             return Err(SemanticError::DuplicateClass {
@@ -112,7 +110,7 @@ impl SymbolTable {
             });
         }
 
-        self.classes.insert(ident.name.clone(), class_info);
+        self.classes.insert(ident.name, class_info);
         Ok(())
     }
 
@@ -125,7 +123,7 @@ impl SymbolTable {
         }
 
         Err(SemanticError::UndefinedVariable {
-            name: ident.name.clone(),
+            name: ident.name,
             position: ident.position,
         })
     }
@@ -138,7 +136,7 @@ impl SymbolTable {
         }
 
         Err(SemanticError::UndefinedFunction {
-            name: ident.name.clone(),
+            name: ident.name,
             position: ident.position,
         })
     }
@@ -147,23 +145,23 @@ impl SymbolTable {
         self.classes
             .get(&ident.name)
             .cloned()
-            .ok_or_else(|| SemanticError::UndefinedClass {
-                name: ident.name.clone(),
+            .ok_or(SemanticError::UndefinedClass {
+                name: ident.name,
                 position: ident.position,
             })
     }
 
-    pub fn lookup_method(&self, class_name: &str, method_name: &str) -> Option<FunctionInfo> {
+    pub fn lookup_method(&self, class_name: StrID, method_name: StrID) -> Option<FunctionInfo> {
         let mut current_class_name = class_name;
 
         loop {
-            if let Some(class_info) = self.classes.get(current_class_name) {
-                if let Some(method) = class_info.methods.get(method_name) {
+            if let Some(class_info) = self.classes.get(&current_class_name) {
+                if let Some(method) = class_info.methods.get(&method_name) {
                     return Some(method.clone());
                 }
 
                 if let Some(parent) = &class_info.parent {
-                    current_class_name = &parent.name;
+                    current_class_name = parent.name;
                 } else {
                     return None;
                 }
@@ -178,27 +176,27 @@ impl SymbolTable {
 // Utilities
 // ============================
 impl SymbolTable {
-    pub fn class_exists(&self, name: &str) -> bool {
-        self.classes.contains_key(name)
+    pub fn class_exists(&self, name: StrID) -> bool {
+        self.classes.contains_key(&name)
     }
 
     /// Recursively collects all fields from the parent classes.
     pub fn get_all_class_fields(
         &self,
-        class_name: &str,
-    ) -> HashMap<String, (Type, SourcePosition)> {
+        class_name: StrID,
+    ) -> HashMap<StrID, (Type, SourcePosition)> {
         let mut all_fields = HashMap::new();
         let mut current_class = class_name;
-        while let Some(class_info) = self.classes.get(current_class) {
+        while let Some(class_info) = self.classes.get(&current_class) {
             // TODO: Parent fields will be overridden if redefined. If this ok?
             for (field_name, field_info) in &class_info.fields {
                 if !all_fields.contains_key(field_name) {
-                    all_fields.insert(field_name.clone(), field_info.clone());
+                    all_fields.insert(*field_name, field_info.clone());
                 }
             }
 
             if let Some(parent) = &class_info.parent {
-                current_class = &parent.name;
+                current_class = parent.name;
             } else {
                 break;
             }
@@ -207,20 +205,20 @@ impl SymbolTable {
     }
 
     /// Recursively collects all method from the parent classes.
-    pub fn get_all_class_methods(&self, class_name: &str) -> HashMap<String, FunctionInfo> {
+    pub fn get_all_class_methods(&self, class_name: StrID) -> HashMap<StrID, FunctionInfo> {
         let mut all_methods = HashMap::new();
         let mut current_class = class_name;
 
-        while let Some(class_info) = self.classes.get(current_class) {
-            if let Some(class_info) = self.classes.get(current_class) {
+        while let Some(class_info) = self.classes.get(&current_class) {
+            if let Some(class_info) = self.classes.get(&current_class) {
                 for (method_name, method_sig) in &class_info.methods {
                     if !all_methods.contains_key(method_name) {
-                        all_methods.insert(method_name.clone(), method_sig.clone());
+                        all_methods.insert(*method_name, method_sig.clone());
                     }
                 }
 
                 if let Some(parent) = &class_info.parent {
-                    current_class = &parent.name;
+                    current_class = parent.name;
                 } else {
                     break;
                 }

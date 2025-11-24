@@ -15,3 +15,4 @@ target
 
 .vscode/
 *.json
+merge_project.fish

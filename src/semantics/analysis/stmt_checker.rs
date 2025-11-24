@@ -4,6 +4,7 @@ use crate::semantics::VariableInfo;
 use crate::semantics::analysis::context::SemanticContext;
 use crate::semantics::analysis::expr_checker::ExpressionChecker;
 use crate::semantics::analysis::return_checker::ReturnChecker;
+use crate::utils::StrID;
 
 pub struct StatementChecker<'a> {
     ctx: &'a mut SemanticContext,
@@ -51,7 +52,7 @@ impl<'a> StatementChecker<'a> {
     // Defines a variable in the current scope. Logs an error on duplicate definition.
     fn define_variable(&mut self, ident: &Ident, typ: &Type) {
         let var_info = VariableInfo {
-            ident: ident.clone(),
+            ident: *ident,
             typ: typ.clone(),
         };
         if let Err(e) = self.ctx.symbol_table.define_variable(var_info) {
@@ -120,10 +121,10 @@ impl<'a> StatementChecker<'a> {
                     let expr_type = ExpressionChecker::new(self.ctx).check(expr);
                     if !self.ctx.is_subtype(&expr_type, typ) {
                         self.ctx.add_error(SemanticError::DeclarationTypeMismatch {
-                            var_name: ident.name.clone(),
-                            expected: typ.to_string(),
+                            var_name: ident.name,
+                            expected: StrID::from(typ.to_string()),
                             decl_type_position: typ.position,
-                            found: expr_type.to_string(),
+                            found: StrID::from(expr_type.to_string()),
                             expr_position: expr.position,
                         });
                     }
@@ -143,8 +144,8 @@ impl<'a> StatementChecker<'a> {
 
         if !self.ctx.is_subtype(&value_type, &target_type) {
             self.ctx.add_error(SemanticError::AssignTypeMismatch {
-                lhs_type: target_type.to_string(),
-                rhs_type: value_type.to_string(),
+                lhs_type: StrID::from(target_type.to_string()),
+                rhs_type: StrID::from(value_type.to_string()),
                 lhs_position: target_type.position,
                 rhs_position: value_type.position,
             });
@@ -171,9 +172,9 @@ impl<'a> StatementChecker<'a> {
 
                 if !self.ctx.is_subtype(&expr_type, &return_type) {
                     self.ctx.add_error(SemanticError::InvalidReturnValue {
-                        expected: return_type.to_string(),
+                        expected: StrID::from(return_type.to_string()),
                         ret_type_position: return_type.position,
-                        found: expr_type.to_string(),
+                        found: StrID::from(expr_type.to_string()),
                         position: expr.position,
                     });
                 }
@@ -181,9 +182,9 @@ impl<'a> StatementChecker<'a> {
             None => {
                 if !matches!(return_type.kind, TypeKind::Void) {
                     self.ctx.add_error(SemanticError::InvalidReturnValue {
-                        expected: return_type.to_string(),
+                        expected: StrID::from(return_type.to_string()),
                         ret_type_position: return_type.position,
-                        found: "void".to_string(),
+                        found: StrID::from("void"),
                         position,
                     });
                 }
@@ -196,8 +197,8 @@ impl<'a> StatementChecker<'a> {
 
         if !matches!(expr_type.kind, TypeKind::Int | TypeKind::Error) {
             self.ctx.add_error(SemanticError::InvalidOperands {
-                operator: "++".to_string(),
-                operand: expr_type.to_string(),
+                operator: StrID::from("++"),
+                operand: StrID::from(expr_type.to_string()),
                 position: expr.position,
                 type_position: expr_type.position,
             });
@@ -211,8 +212,9 @@ impl<'a> StatementChecker<'a> {
 
         if !matches!(expr_type.kind, TypeKind::Int | TypeKind::Error) {
             self.ctx.add_error(SemanticError::InvalidOperands {
-                operator: "--".to_string(),
-                operand: expr_type.to_string(),
+                operator: StrID::from("--"),
+                // TODO: Implement type_to_strid?
+                operand: StrID::from(expr_type.to_string()),
                 position: expr.position,
                 type_position: expr_type.position,
             });
@@ -232,8 +234,8 @@ impl<'a> StatementChecker<'a> {
 
         if !matches!(cond_type.kind, TypeKind::Bool | TypeKind::Error) {
             self.ctx.add_error(SemanticError::TypeMismatch {
-                expected: "boolean".to_string(),
-                found: cond_type.to_string(),
+                expected: StrID::from("boolean"),
+                found: StrID::from(cond_type.to_string()),
                 position: cond.position,
             });
         }
@@ -254,8 +256,8 @@ impl<'a> StatementChecker<'a> {
 
         if !matches!(cond_type.kind, TypeKind::Bool | TypeKind::Error) {
             self.ctx.add_error(SemanticError::TypeMismatch {
-                expected: "boolean".to_string(),
-                found: cond_type.to_string(),
+                expected: StrID::from("boolean"),
+                found: StrID::from(cond_type.to_string()),
                 position: cond.position,
             });
         }
@@ -283,8 +285,8 @@ impl<'a> StatementChecker<'a> {
             let cond_type = ExpressionChecker::new(self.ctx).check(cond_expr);
             if !matches!(cond_type.kind, TypeKind::Bool | TypeKind::Error) {
                 self.ctx.add_error(SemanticError::TypeMismatch {
-                    expected: "boolean".to_string(),
-                    found: cond_type.to_string(),
+                    expected: StrID::from("boolean"),
+                    found: StrID::from(cond_type.to_string()),
                     position: cond_expr.position,
                 });
             }
@@ -311,16 +313,16 @@ impl<'a> StatementChecker<'a> {
         if let TypeKind::Array(inner) = &collection_type.kind {
             if !self.ctx.is_subtype(inner, element_type) {
                 self.ctx.add_error(SemanticError::ForEachTypeMismatch {
-                    variable_type: element_type.to_string(),
-                    collection_item_type: inner.to_string(),
+                    variable_type: StrID::from(element_type.to_string()),
+                    collection_item_type: StrID::from(inner.to_string()),
                     variable_position: element_type.position,
                     collection_position: collection.position,
                 });
             }
         } else {
             self.ctx.add_error(SemanticError::TypeMismatch {
-                expected: format!("{}[]", element_type),
-                found: collection_type.to_string(),
+                expected: StrID::from(format!("{}[]", element_type)),
+                found: StrID::from(collection_type.to_string()),
                 position: collection.position,
             });
         }
@@ -346,8 +348,7 @@ impl<'a> StatementChecker<'a> {
         // Add arguments to scope.
         for arg in &func.args {
             self.ctx.validate_variable_type(&arg.arg_type);
-            self.ctx
-                .define_variable(arg.name.clone(), arg.arg_type.clone());
+            self.ctx.define_variable(arg.name, arg.arg_type.clone());
         }
 
         self.visit_block(&func.body);
@@ -357,7 +358,7 @@ impl<'a> StatementChecker<'a> {
             && !ReturnChecker::function_guarantees_return(&func.body)
         {
             self.ctx.add_error(SemanticError::MissingReturn {
-                function_name: func.name.name.clone(),
+                function_name: func.name.name,
                 position: func.position,
             });
         }

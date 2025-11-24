@@ -1,6 +1,7 @@
 use super::diagnostics::{Diagnostic, ToDiagnostic};
 use crate::parser::ast::SourcePosition;
 use crate::semantics::builtins;
+use crate::utils::StrID;
 use std::ops::Range;
 
 /// Represents errors detected during semantic analysis (type checking, scoping, etc.).
@@ -8,114 +9,114 @@ use std::ops::Range;
 pub enum SemanticError {
     // ============ Undefined ============
     UndefinedVariable {
-        name: String,
+        name: StrID,
         position: SourcePosition,
     },
     UndefinedFunction {
-        name: String,
+        name: StrID,
         position: SourcePosition,
     },
     UndefinedClass {
-        name: String,
+        name: StrID,
         position: SourcePosition,
     },
     UndefinedField {
-        class_name: String,
-        field_name: String,
+        class_name: StrID,
+        field_name: StrID,
         position: SourcePosition,
         class_position: SourcePosition,
     },
     UndefinedMethod {
-        class_name: String,
-        method_name: String,
+        class_name: StrID,
+        method_name: StrID,
         position: SourcePosition,
         class_position: SourcePosition,
     },
     // ============ Duplicate ============
     DuplicateVariable {
-        name: String,
+        name: StrID,
         position: SourcePosition,
         previous_position: SourcePosition,
     },
     DuplicateFunction {
-        name: String,
+        name: StrID,
         position: SourcePosition,
         previous_position: SourcePosition,
     },
     DuplicateClass {
-        name: String,
+        name: StrID,
         position: SourcePosition,
         previous_position: SourcePosition,
     },
     DuplicateClassField {
-        class_name: String,
-        field_name: String,
+        class_name: StrID,
+        field_name: StrID,
         position: SourcePosition,
         previous_position: SourcePosition,
     },
     DuplicateMethod {
-        class_name: String,
-        method_name: String,
+        class_name: StrID,
+        method_name: StrID,
         position: SourcePosition,
         previous_position: SourcePosition,
     },
     // ============ Type Mismatch ============
     TypeMismatch {
-        expected: String,
-        found: String,
+        expected: StrID,
+        found: StrID,
         position: SourcePosition,
     },
     ForEachTypeMismatch {
-        variable_type: String,
-        collection_item_type: String,
+        variable_type: StrID,
+        collection_item_type: StrID,
         variable_position: SourcePosition,
         collection_position: SourcePosition,
     },
     ArgumentTypeMismatch {
-        expected: String,
-        found: String,
+        expected: StrID,
+        found: StrID,
         position: SourcePosition,
-        function_name: String,
+        function_name: StrID,
         argument_position: SourcePosition,
     },
     AssignTypeMismatch {
-        lhs_type: String,
-        rhs_type: String,
+        lhs_type: StrID,
+        rhs_type: StrID,
         lhs_position: SourcePosition,
         rhs_position: SourcePosition,
     },
     BinaryOpTypeMismatch {
-        lhs_type: String,
+        lhs_type: StrID,
         lhs_position: SourcePosition,
-        rhs_type: String,
+        rhs_type: StrID,
         rhs_position: SourcePosition,
     },
     DeclarationTypeMismatch {
-        var_name: String,
-        expected: String,
+        var_name: StrID,
+        expected: StrID,
         decl_type_position: SourcePosition,
-        found: String,
+        found: StrID,
         expr_position: SourcePosition,
     },
 
     // ============ Type Mismatch ============
     InvalidOperands {
-        operator: String,
-        operand: String,
+        operator: StrID,
+        operand: StrID,
         position: SourcePosition,
         type_position: SourcePosition,
     },
     WrongNumberOfArguments {
-        name: String,
+        name: StrID,
         expected: usize,
         found: usize,
         call_position: SourcePosition,
         function_position: SourcePosition,
     },
     InvalidReturnValue {
-        expected: String,
+        expected: StrID,
         ret_type_position: SourcePosition,
-        found: String,
+        found: StrID,
         position: SourcePosition,
     },
     InvalidVoidReturn {
@@ -129,8 +130,8 @@ pub enum SemanticError {
     },
     UndefinedMain,
     WrongMainReturnType {
-        expected: String,
-        found: String,
+        expected: StrID,
+        found: StrID,
         position: SourcePosition,
     },
     WrongNumberOfMainArguments {
@@ -139,32 +140,32 @@ pub enum SemanticError {
     },
     // ============ Invalid type ============
     InvalidVariableType {
-        found: String,
-        expected: Vec<String>,
+        found: StrID,
+        expected: Vec<StrID>,
         position: SourcePosition,
     },
     InvalidFunctionReturnType {
-        found: String,
-        expected: Vec<String>,
+        found: StrID,
+        expected: Vec<StrID>,
         position: SourcePosition,
     },
     InvalidVoidArrayType {
-        expected: Vec<String>,
+        expected: Vec<StrID>,
         position: SourcePosition,
     },
     InvalidNullCast {
-        found: String,
-        expected: Vec<String>,
+        found: StrID,
+        expected: Vec<StrID>,
         type_position: SourcePosition,
         expr_position: SourcePosition,
     },
     InvalidNullCastExpr {
-        expected: Vec<String>,
+        expected: Vec<StrID>,
         cast_position: SourcePosition,
         expr_position: SourcePosition,
     },
     MissingReturn {
-        function_name: String,
+        function_name: StrID,
         position: SourcePosition,
     },
 
@@ -174,12 +175,12 @@ pub enum SemanticError {
     },
     InheritanceCycle {
         // (subclass, superclass, extends_position)
-        cycle: Vec<(String, String, SourcePosition)>,
+        cycle: Vec<(StrID, StrID, SourcePosition)>,
     },
     InvalidOverride {
-        method_name: String,
-        parent_name: String,
-        reason: String,
+        method_name: StrID,
+        parent_name: StrID,
+        reason: StrID,
         position: SourcePosition,
     },
 }
@@ -303,7 +304,7 @@ impl ToDiagnostic for SemanticError {
                 let mut diag = Diagnostic::error("Argument type mismatch")
                     .label(range(position), format!("Expected type `{}`, but found `{}`", expected, found));
 
-                if let Some(signature) = builtins::get_builtin_signature(function_name) {
+                if let Some(signature) = builtins::get_builtin_signature(*function_name) {
                     diag = diag.note(format!("`{}` is a built-in function with signature: '{}'", function_name, signature));
                 } else {
                     diag = diag
@@ -371,7 +372,7 @@ impl ToDiagnostic for SemanticError {
             SemanticError::InvalidFunctionReturnType { found, expected, position } => {
                 Diagnostic::error("Invalid function return type")
                     .label(range(position), format!("`{}` is not a valid return type", found))
-                    .help(format!("Try one of: {}", expected.join(", ")))
+                    .help(format!("Try one of: {}", expected.iter().map(|str| str.to_string()).collect::<Vec<String>>().join(", ")))
             }
 
             // --- Main Function Errors ---
@@ -394,24 +395,24 @@ impl ToDiagnostic for SemanticError {
             SemanticError::InvalidVariableType { found, expected, position } => {
                 Diagnostic::error("Invalid variable type")
                     .label(range(position), format!("`{}` is not valid here", found))
-                    .help(format!("Valid types are: {}", expected.join(", ")))
+                    .help(format!("Valid types are: {}", expected.iter().map(|str| str.to_string()).collect::<Vec<String>>().join(", ")))
             }
             SemanticError::InvalidVoidArrayType { expected, position } => {
                 Diagnostic::error("Invalid array type")
                     .label(range(position), "`void` cannot be an array base type")
-                    .help(format!("Try one of: {}", expected.join(", ")))
+                    .help(format!("Try one of: {}", expected.iter().map(|str| str.to_string()).collect::<Vec<String>>().join(", ")))
             }
             SemanticError::InvalidNullCast { found, expected, type_position, expr_position } => {
                 Diagnostic::error("Invalid 'null' cast")
                     .label(range(expr_position), "In this cast expression")
                     .secondary_label(range(type_position), format!("Cannot cast null to `{}`", found))
-                    .help(format!("Valid cast targets: {}", expected.join(", ")))
+                    .help(format!("Valid cast targets: {}", expected.iter().map(|str| str.to_string()).collect::<Vec<String>>().join(", ")))
             }
             SemanticError::InvalidNullCastExpr { expected, cast_position, expr_position } => {
                 Diagnostic::error("Invalid 'null' cast expression")
                     .label(range(expr_position), "In this expression")
                     .secondary_label(range(cast_position), "Not a valid null cast")
-                    .help(format!("Try one of: {}", expected.join(", ")))
+                    .help(format!("Try one of: {}", expected.iter().map(|str| str.to_string()).collect::<Vec<String>>().join(", ")))
             }
 
             // --- Class/OOP Errors ---

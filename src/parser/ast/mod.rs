@@ -10,6 +10,8 @@ use serde::Serialize;
 pub use statements::*;
 pub use types::*;
 
+use crate::utils::StrID;
+
 /// COMMON AST TYPES ///
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Serialize)]
 pub struct SourcePosition(pub usize, pub usize);
@@ -21,8 +23,8 @@ impl From<(usize, usize)> for SourcePosition {
 }
 
 /// Identifier
-#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize)]
 pub struct Ident {
-    pub name: String,
+    pub name: StrID,
     pub position: SourcePosition,
 }

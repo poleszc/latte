@@ -1,6 +1,7 @@
 use crate::{
     SourcePosition,
     parser::ast::{Ident, Type},
+    utils::StrID,
 };
 use std::collections::HashMap;
 
@@ -22,8 +23,8 @@ pub struct FunctionInfo {
 pub struct ClassInfo {
     pub ident: Ident,
     pub parent: Option<Ident>,
-    pub fields: HashMap<String, (Type, SourcePosition)>,
-    pub methods: HashMap<String, FunctionInfo>,
+    pub fields: HashMap<StrID, (Type, SourcePosition)>,
+    pub methods: HashMap<StrID, FunctionInfo>,
     pub position: SourcePosition,
 }
 

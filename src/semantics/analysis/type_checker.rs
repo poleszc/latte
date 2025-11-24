@@ -1,6 +1,7 @@
 use crate::errors::SemanticError;
 use crate::parser::ast::{Ident, SourcePosition, Type, TypeKind};
 use crate::semantics::symbol_table::SymbolTable;
+use crate::utils::StrID;
 
 /// Type checker responsible for type comparison and validation logic.
 pub struct TypeChecker<'a> {
@@ -50,7 +51,7 @@ impl<'a> TypeChecker<'a> {
         if let (TypeKind::Class(sub_class), TypeKind::Class(super_class)) =
             (&subtype.kind, &supertype.kind)
         {
-            return self.is_class_subtype(&sub_class.name, &super_class.name);
+            return self.is_class_subtype(sub_class.name, super_class.name);
         }
 
         if let (TypeKind::Array(sub_inner), TypeKind::Array(super_inner)) =
@@ -63,22 +64,25 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Check if `subclass` is a subclass of `superclass` in the inheritance hierarchy.
-    fn is_class_subtype(&self, subclass: &str, superclass: &str) -> bool {
+    fn is_class_subtype(&self, subclass: StrID, superclass: StrID) -> bool {
         if subclass == superclass {
             return true;
         }
 
-        let mut current = subclass.to_string();
+        let mut current = subclass;
         loop {
-            if let Ok(class_info) = self.symbol_table.lookup_class(&Ident {
-                name: current.to_string(),
+            // TODO: Remove temporary ident creation? Why is that even here xd
+            let current_ident = Ident {
+                name: current,
                 position: SourcePosition(0, 0),
-            }) {
-                if let Some(parent) = class_info.parent {
+            };
+
+            if let Ok(class_info) = self.symbol_table.lookup_class(&current_ident) {
+                if let Some(parent) = &class_info.parent {
                     if parent.name == superclass {
                         return true;
                     }
-                    current = parent.name.clone();
+                    current = parent.name;
                 } else {
                     return false;
                 }
@@ -118,7 +122,7 @@ impl<'a> TypeChecker<'a> {
             UnaryOp::Not => matches!(typ.kind, TypeKind::Bool),
         }
     }
-    ///
+
     /// Get the result type of a unary operation.
     /// Assumes the operand type is valid for the operation.
     pub fn unary_op_result_type(
@@ -170,29 +174,30 @@ impl<'a> TypeChecker<'a> {
             },
         }
     }
+
     /// Validate a type used for variable or field declaration.
     /// Void and Null types are not allowed for declarations.
     pub fn validate_variable_type(&self, typ: &Type) -> Result<(), SemanticError> {
         let expected_types = vec![
-            "int".to_string(),
-            "bool".to_string(),
-            "string".to_string(),
-            "{ClassType}".to_string(),
-            "{ArrayType}".to_string(),
+            StrID::from("int"),
+            StrID::from("bool"),
+            StrID::from("string"),
+            StrID::from("{ClassType}"),
+            StrID::from("{ArrayType}"),
         ];
 
         match &typ.kind {
             TypeKind::Void | TypeKind::Null => {
                 return Err(SemanticError::InvalidVariableType {
-                    found: typ.to_string(),
+                    found: StrID::from(typ.to_string()),
                     expected: expected_types,
                     position: typ.position,
                 });
             }
             TypeKind::Class(ident) => {
-                if !self.symbol_table.class_exists(&ident.name) {
+                if !self.symbol_table.class_exists(ident.name) {
                     return Err(SemanticError::UndefinedClass {
-                        name: ident.name.clone(),
+                        name: ident.name,
                         position: ident.position,
                     });
                 }
@@ -200,13 +205,7 @@ impl<'a> TypeChecker<'a> {
             TypeKind::Array(inner) => {
                 if let TypeKind::Void = inner.kind {
                     return Err(SemanticError::InvalidVoidArrayType {
-                        expected: vec![
-                            "int".to_string(),
-                            "bool".to_string(),
-                            "string".to_string(),
-                            "{ClassType}".to_string(),
-                            "{ArrayType}".to_string(),
-                        ],
+                        expected: expected_types,
                         position: inner.position,
                     });
                 } else {
@@ -224,26 +223,26 @@ impl<'a> TypeChecker<'a> {
     /// Void is allowed, but Null is not.
     pub fn validate_function_return_type(&self, typ: &Type) -> Result<(), SemanticError> {
         let expected_types = vec![
-            "void".to_string(),
-            "int".to_string(),
-            "bool".to_string(),
-            "string".to_string(),
-            "{ClassType}".to_string(),
-            "{ArrayType}".to_string(),
+            StrID::from("void"),
+            StrID::from("int"),
+            StrID::from("bool"),
+            StrID::from("string"),
+            StrID::from("{ClassType}"),
+            StrID::from("{ArrayType}"),
         ];
 
         match &typ.kind {
             TypeKind::Null => {
                 return Err(SemanticError::InvalidVariableType {
-                    found: typ.to_string(),
+                    found: StrID::from(typ.to_string()),
                     expected: expected_types,
                     position: typ.position,
                 });
             }
             TypeKind::Class(ident) => {
-                if !self.symbol_table.class_exists(&ident.name) {
+                if !self.symbol_table.class_exists(ident.name) {
                     return Err(SemanticError::UndefinedClass {
-                        name: ident.name.clone(),
+                        name: ident.name,
                         position: ident.position,
                     });
                 }
@@ -251,14 +250,7 @@ impl<'a> TypeChecker<'a> {
             TypeKind::Array(inner) => {
                 if let TypeKind::Void = inner.kind {
                     return Err(SemanticError::InvalidVoidArrayType {
-                        expected: vec![
-                            "void".to_string(),
-                            "int".to_string(),
-                            "bool".to_string(),
-                            "string".to_string(),
-                            "{ClassType}".to_string(),
-                            "{ArrayType}".to_string(),
-                        ],
+                        expected: expected_types,
                         position: inner.position,
                     });
                 } else {
