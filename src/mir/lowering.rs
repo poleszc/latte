@@ -8,8 +8,8 @@ use clap::builder;
 use crate::{
     SourcePosition,
     mir::{
-        LocalID, MIRClass, MIRFunction, MIRInstruction, MIRPlace, MIRProgram, MIRValue,
-        function_builder::MIRFunctionBuilder, program_builder::MIRProgramBuilder,
+        LocalID, MIRClass, MIRFunction, MIRInstruction, MIROperation, MIRPlace, MIRProgram,
+        MIRValue, function_builder::MIRFunctionBuilder, program_builder::MIRProgramBuilder,
     },
     parser::ast::{
         BinaryOp, Block, ClassDef, ClassEntryKind, Expr, ExprKind, FuncDef, Ident, Item, ItemKind,
@@ -247,7 +247,8 @@ impl MIRLoweringContext {
             kind: TypeKind::Int,
             position: expr.position,
         });
-        builder.emit_int_add(
+        builder.emit_binary(
+            MIROperation::IntAdd,
             MIRPlace::Temp(temp),
             val,
             MIRValue::IntConst(1),
@@ -276,7 +277,8 @@ impl MIRLoweringContext {
             kind: TypeKind::Int,
             position: expr.position,
         });
-        builder.emit_int_sub(
+        builder.emit_binary(
+            MIROperation::IntSub,
             MIRPlace::Temp(temp),
             val,
             MIRValue::IntConst(1),
@@ -474,7 +476,8 @@ impl MIRLoweringContext {
             kind: TypeKind::Int,
             position: stmt_position,
         });
-        builder.emit_int_add(
+        builder.emit_binary(
+            MIROperation::IntAdd,
             MIRPlace::Temp(temp),
             MIRValue::Temp(i_temp),
             MIRValue::IntConst(1),
@@ -564,11 +567,74 @@ impl MIRLoweringContext {
         rhs: &Expr,
         position: SourcePosition,
     ) -> MIRValue {
-        todo!()
+        let lhs_val = self.lower_expr(lhs);
+        let rhs_val = self.lower_expr(rhs);
+
+        let mir_op = match op {
+            BinaryOp::Add => MIROperation::IntAdd,
+            BinaryOp::Sub => MIROperation::IntSub,
+            BinaryOp::Mul => MIROperation::IntMul,
+            BinaryOp::Div => MIROperation::IntDiv,
+            BinaryOp::Mod => MIROperation::IntMod,
+            BinaryOp::Eq => MIROperation::IntEq,
+            BinaryOp::Lt => MIROperation::IntLt,
+            BinaryOp::Le => MIROperation::IntLe,
+            BinaryOp::Gt => MIROperation::IntGt,
+            BinaryOp::Ge => MIROperation::IntGe,
+            BinaryOp::Neq => MIROperation::IntNeq,
+            BinaryOp::And => MIROperation::BoolAnd,
+            BinaryOp::Or => MIROperation::BoolOr,
+        };
+
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower binary op: Func builder not set");
+
+        let result_type = match op {
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => Type {
+                kind: TypeKind::Int,
+                position,
+            },
+            _ => Type {
+                kind: TypeKind::Bool,
+                position,
+            },
+        };
+
+        let temp = builder.create_temp(result_type);
+        builder.emit_binary(mir_op, MIRPlace::Temp(temp), lhs_val, rhs_val, position);
+        MIRValue::Temp(temp)
     }
+
     fn lower_unary_op(&mut self, op: &UnaryOp, expr: &Expr, position: SourcePosition) -> MIRValue {
-        todo!()
+        let value = self.lower_expr(expr);
+        let mir_op = match op {
+            UnaryOp::Neg => MIROperation::IntNeq,
+            UnaryOp::Not => MIROperation::BoolNot,
+        };
+
+        let result_type = match op {
+            UnaryOp::Neg => Type {
+                kind: TypeKind::Int,
+                position,
+            },
+            UnaryOp::Not => Type {
+                kind: TypeKind::Bool,
+                position,
+            },
+        };
+
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower binary op: Func builder not set");
+        let temp = builder.create_temp(result_type);
+        builder.emit_unary(mir_op, MIRPlace::Temp(temp), value, position);
+
+        MIRValue::Temp(temp)
     }
+
     fn lower_call(&mut self, callee: &Expr, args: &[Expr], position: SourcePosition) -> MIRValue {
         todo!()
     }

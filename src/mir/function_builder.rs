@@ -156,38 +156,37 @@ impl MIRFunctionBuilder {
         });
     }
 
-    // TODO: Add Mul/Div etc.
-    // TODO: EmitArithemtic?
-    pub fn emit_int_add(
+    pub fn emit_binary(
         &mut self,
+        operation: MIROperation,
         dest: MIRPlace,
         lhs: MIRValue,
         rhs: MIRValue,
         position: SourcePosition,
     ) {
         self.emit(MIRInstruction {
-            operation: MIROperation::IntAdd,
+            operation: operation,
             destination: Some(dest),
             operands: vec![lhs, rhs],
             source_position: position,
         });
     }
 
-    pub fn emit_int_sub(
+    pub fn emit_unary(
         &mut self,
+        operation: MIROperation,
         dest: MIRPlace,
-        lhs: MIRValue,
-        rhs: MIRValue,
+        value: MIRValue,
         position: SourcePosition,
     ) {
         self.emit(MIRInstruction {
-            operation: MIROperation::IntSub,
+            operation: operation,
             destination: Some(dest),
-            operands: vec![lhs, rhs],
+            operands: vec![value],
             source_position: position,
         });
     }
-    
+
     pub fn emit_less_then(
         &mut self,
         dest: MIRPlace,
@@ -201,15 +200,9 @@ impl MIRFunctionBuilder {
             operands: vec![lhs, rhs],
             source_position: position,
         });
-        
     }
 
-    pub fn emit_array_length(
-        &mut self,
-        dest: MIRPlace,
-        value: MIRValue,
-        position: SourcePosition,
-    ) {
+    pub fn emit_array_length(&mut self, dest: MIRPlace, value: MIRValue, position: SourcePosition) {
         self.emit(MIRInstruction {
             operation: MIROperation::ArrayLength,
             destination: Some(dest),
@@ -232,7 +225,6 @@ impl MIRFunctionBuilder {
             source_position: position,
         });
     }
-    
 
     pub fn emit_call(
         &mut self,
