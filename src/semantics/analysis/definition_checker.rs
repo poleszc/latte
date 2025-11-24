@@ -75,9 +75,9 @@ impl<'a> DefinitionChecker<'a> {
                     }
                 }
                 ClassEntryKind::Method(func_def) => {
-                    let method_ident = func_def.name.clone();
+                    let method_ident = func_def.name;
                     let signature = FunctionInfo {
-                        ident: method_ident.clone(),
+                        ident: method_ident,
                         return_type: func_def.return_type.clone(),
                         params: func_def
                             .args
@@ -103,8 +103,8 @@ impl<'a> DefinitionChecker<'a> {
 
         // Build class metadata and define the class in the symbol table.
         let class_info = ClassInfo {
-            ident: class_def.name.clone(),
-            parent: class_def.extends.clone(),
+            ident: class_def.name,
+            parent: class_def.extends,
             fields,
             methods,
             position: class_def.position,
@@ -116,7 +116,7 @@ impl<'a> DefinitionChecker<'a> {
     /// Forward declare a function.
     fn add_function(&mut self, func_def: &FuncDef) {
         let signature = FunctionInfo {
-            ident: func_def.name.clone(),
+            ident: func_def.name,
             return_type: func_def.return_type.clone(),
             params: func_def
                 .args
@@ -287,8 +287,7 @@ impl<'a> DefinitionChecker<'a> {
         // Add arguments to scope.
         for arg in &func.args {
             self.ctx.validate_variable_type(&arg.arg_type);
-            self.ctx
-                .define_variable(arg.name.clone(), arg.arg_type.clone());
+            self.ctx.define_variable(arg.name, arg.arg_type.clone());
         }
 
         StatementChecker::new(self.ctx).check_block(&func.body);
@@ -317,10 +316,7 @@ impl<'a> DefinitionChecker<'a> {
                 // Define class fields in scope, including superclasses.
                 let all_fields = self.ctx.symbol_table.get_all_class_fields(class.name.name);
                 for (name, (typ, position)) in all_fields {
-                    let ident = Ident {
-                        name: name,
-                        position,
-                    };
+                    let ident = Ident { name, position };
                     self.ctx.define_variable(ident, typ.clone());
                 }
 

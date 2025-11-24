@@ -69,7 +69,7 @@ impl SymbolTable {
         scope.insert(
             ident.name,
             SymbolKind::Variable(VariableInfo {
-                ident: ident,
+                ident,
                 typ: var_info.typ,
             }),
         );
@@ -100,7 +100,7 @@ impl SymbolTable {
     }
 
     pub fn define_class(&mut self, class_info: ClassInfo) -> Result<(), SemanticError> {
-        let ident = class_info.ident.clone();
+        let ident = class_info.ident;
         if let Some(symbol) = self.classes.get(&ident.name) {
             let previous_position = symbol.position;
             return Err(SemanticError::DuplicateClass {
@@ -110,7 +110,7 @@ impl SymbolTable {
             });
         }
 
-        self.classes.insert(ident.name.clone(), class_info);
+        self.classes.insert(ident.name, class_info);
         Ok(())
     }
 
@@ -123,7 +123,7 @@ impl SymbolTable {
         }
 
         Err(SemanticError::UndefinedVariable {
-            name: ident.name.clone(),
+            name: ident.name,
             position: ident.position,
         })
     }
@@ -136,7 +136,7 @@ impl SymbolTable {
         }
 
         Err(SemanticError::UndefinedFunction {
-            name: ident.name.clone(),
+            name: ident.name,
             position: ident.position,
         })
     }
@@ -146,7 +146,7 @@ impl SymbolTable {
             .get(&ident.name)
             .cloned()
             .ok_or_else(|| SemanticError::UndefinedClass {
-                name: ident.name.clone(),
+                name: ident.name,
                 position: ident.position,
             })
     }

@@ -203,7 +203,7 @@ impl<'a> ExpressionChecker<'a> {
                             self.ctx.error_type(outer_expr.position)
                         } else {
                             Type {
-                                kind: TypeKind::Class(ident.clone()),
+                                kind: TypeKind::Class(*ident),
                                 position: ident.position,
                             }
                         }
@@ -225,7 +225,7 @@ impl<'a> ExpressionChecker<'a> {
             ExprKind::This => {
                 if let Some(class_name) = &self.ctx.current_class {
                     let class_ident = Ident {
-                        name: class_name.clone(),
+                        name: *class_name,
                         position: outer_expr.position,
                     };
 
@@ -318,7 +318,7 @@ impl<'a> ExpressionChecker<'a> {
             } else {
                 self.ctx.add_error(SemanticError::UndefinedField {
                     class_name: class_name.name,
-                    field_name: field_name.name.clone(),
+                    field_name: field_name.name,
                     position,
                     class_position: class_name.position,
                 });
@@ -328,7 +328,7 @@ impl<'a> ExpressionChecker<'a> {
             if field_name.name != StrID::from("length") {
                 self.ctx.add_error(SemanticError::UndefinedField {
                     class_name: StrID::from(obj_type.to_string()),
-                    field_name: field_name.name.clone(),
+                    field_name: field_name.name,
                     position,
                     class_position: SourcePosition(0, 0),
                 });
@@ -375,8 +375,8 @@ impl<'a> ExpressionChecker<'a> {
                     }
                 } else {
                     self.ctx.add_error(SemanticError::UndefinedMethod {
-                        class_name: class_name.name.clone(),
-                        method_name: method_name.name.clone(),
+                        class_name: class_name.name,
+                        method_name: method_name.name,
                         position,
                         class_position: class_name.position,
                     });
@@ -465,10 +465,10 @@ impl<'a> ExpressionChecker<'a> {
         args: &[Expr],
         expr_position: SourcePosition,
     ) {
-        let func_ident = func_info.ident.clone();
+        let func_ident = func_info.ident;
         if args.len() != func_info.params.len() {
             self.ctx.add_error(SemanticError::WrongNumberOfArguments {
-                name: func_ident.name.clone(),
+                name: func_ident.name,
                 expected: func_info.params.len(),
                 found: args.len(),
                 call_position: expr_position,
@@ -485,7 +485,7 @@ impl<'a> ExpressionChecker<'a> {
                     expected: StrID::from(param.to_string()),
                     found: StrID::from(arg_type.to_string()),
                     position: expr.position,
-                    function_name: func_info.ident.name.clone(),
+                    function_name: func_info.ident.name,
                     argument_position: param.position,
                 });
             }

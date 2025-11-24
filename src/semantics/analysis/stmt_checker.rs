@@ -348,8 +348,7 @@ impl<'a> StatementChecker<'a> {
         // Add arguments to scope.
         for arg in &func.args {
             self.ctx.validate_variable_type(&arg.arg_type);
-            self.ctx
-                .define_variable(arg.name.clone(), arg.arg_type.clone());
+            self.ctx.define_variable(arg.name, arg.arg_type.clone());
         }
 
         self.visit_block(&func.body);
