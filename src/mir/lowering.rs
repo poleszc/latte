@@ -669,6 +669,7 @@ impl MIRLoweringContext {
             MIRValue::Unit
         }
     }
+
     fn lower_new_object(&mut self, typ: &Type, position: SourcePosition) -> MIRValue {
         let class_name = match &typ.kind {
             TypeKind::Class(ident) => ident.name,
@@ -683,6 +684,7 @@ impl MIRLoweringContext {
         builder.emit_new_object(MIRPlace::Temp(temp), class_name, position);
         MIRValue::Temp(temp)
     }
+
     fn lower_new_array(
         &mut self,
         element_type: &Type,
