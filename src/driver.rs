@@ -73,6 +73,9 @@ pub fn run_compiler<
             return Err(CompilerError::Other("Kajak".to_string()));
         }
     };
+
+    dbg!(&symbol_table);
+
     eprintln!("[Semantic] Semantic analysis completed successfully");
 
     // ============= MIR LOWERING ===============

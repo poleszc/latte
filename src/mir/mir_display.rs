@@ -155,7 +155,7 @@ impl fmt::Display for TempInfo {
 
 impl fmt::Display for MIRBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, " =========================================================");
+        writeln!(f, " =========================================================")?;
         writeln!(f, "  Block {} [entry]:", self.id.0)?;
         for instr in &self.instructions {
             writeln!(f, "    {}", instr)?;
