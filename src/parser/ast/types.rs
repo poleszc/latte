@@ -5,6 +5,7 @@ use serde::Serialize;
 use super::{Ident, SourcePosition};
 
 /// TYPES ///
+// TODO: Move that to type system.
 #[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum TypeKind {
     Int,

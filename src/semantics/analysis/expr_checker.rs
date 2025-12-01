@@ -1,8 +1,8 @@
 use crate::errors::SemanticError;
 use crate::parser::ast::TypeKind;
 use crate::parser::ast::*;
-use crate::semantics::FunctionInfo;
 use crate::semantics::analysis::context::SemanticContext;
+use crate::semantics::{FunctionInfo, tast};
 use crate::utils::StrID;
 
 pub struct ExpressionChecker<'a> {
@@ -20,7 +20,7 @@ impl<'a> ExpressionChecker<'a> {
     /// Perform a type check of an expression and return it's type.
     /// If expression if typed incorrectly we return an Error type
     /// to allow for error recovery.
-    pub fn check(&mut self, expr: &Expr) -> Type {
+    pub fn check(&mut self, expr: &Expr) -> tast::TExpr {
         self.visit_expr(expr)
     }
 }
@@ -98,79 +98,103 @@ impl<'a> ExpressionChecker<'a> {
 // Expression visitors.
 // ======================
 impl<'a> ExpressionChecker<'a> {
-    fn visit_expr(&mut self, outer_expr: &Expr) -> Type {
-        match &outer_expr.kind {
-            ExprKind::Var(ident) => match self.ctx.symbol_table.lookup_variable(ident) {
-                Ok(t) => t,
-                Err(e) => {
-                    self.ctx.add_error(e);
-                    self.ctx.error_type(ident.position)
-                }
-            },
-            ExprKind::LiteralInt(_) => Type {
-                kind: TypeKind::Int,
-                position: outer_expr.position,
-            },
-            ExprKind::LiteralTrue => Type {
-                kind: TypeKind::Bool,
-                position: outer_expr.position,
-            },
-            ExprKind::LiteralFalse => Type {
-                kind: TypeKind::Bool,
-                position: outer_expr.position,
-            },
-            ExprKind::LiteralString(_) => Type {
-                kind: TypeKind::String,
-                position: outer_expr.position,
-            },
-            ExprKind::LiteralNull => Type {
-                kind: TypeKind::Null,
-                position: outer_expr.position,
-            },
-            ExprKind::App { callee, args } => {
-                self.visit_application(callee, args, outer_expr.position)
+    fn visit_expr(&mut self, outer_expr: &Expr) -> tast::TExpr {
+        let position = outer_expr.position;
+        let (kind, typ) = match &outer_expr.kind {
+            ExprKind::Var(ident) => {
+                let resolved_type = match self.ctx.symbol_table.lookup_variable(ident) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        self.ctx.add_error(e);
+                        self.ctx.error_type(ident.position)
+                    }
+                };
+                (tast::TExprKind::Var(*ident), resolved_type)
             }
+            ExprKind::LiteralInt(val) => (
+                tast::TExprKind::LiteralInt(*val),
+                Type {
+                    kind: TypeKind::Int,
+                    position,
+                },
+            ),
+            ExprKind::LiteralTrue => (
+                tast::TExprKind::LiteralTrue,
+                Type {
+                    kind: TypeKind::Bool,
+                    position,
+                },
+            ),
+            ExprKind::LiteralFalse => (
+                tast::TExprKind::LiteralFalse,
+                Type {
+                    kind: TypeKind::Bool,
+                    position,
+                },
+            ),
+            ExprKind::LiteralString(s) => (
+                tast::TExprKind::LiteralString(s.clone()),
+                Type {
+                    kind: TypeKind::String,
+                    position,
+                },
+            ),
+            ExprKind::LiteralNull => (
+                tast::TExprKind::LiteralNull,
+                Type {
+                    kind: TypeKind::Null,
+                    position,
+                },
+            ),
+            ExprKind::App { callee, args } => self.visit_application(callee, args, position),
             ExprKind::ArrayAccess { array, index } => {
-                self.visit_array_access(array, index, outer_expr.position)
+                self.visit_array_access(array, index, position)
             }
             ExprKind::FieldAccess { object, field_name } => {
-                self.visit_field_access(object, field_name, outer_expr.position)
+                self.visit_field_access(object, field_name, position)
             }
             ExprKind::Method {
                 object,
                 method_name,
                 args,
-            } => self.visit_method_call(object, method_name, args, outer_expr.position),
-            ExprKind::Paren(inner) => self.visit_expr(inner),
-            ExprKind::UnaryOp { op, expr } => {
-                self.visit_unary_operator(op, expr, outer_expr.position)
+            } => self.visit_method_call(object, method_name, args, position),
+            ExprKind::Paren(inner) => {
+                let typed_inner = self.visit_expr(inner);
+                (
+                    tast::TExprKind::Paren(Box::new(typed_inner.clone())),
+                    typed_inner.typ,
+                )
             }
+            ExprKind::UnaryOp { op, expr } => self.visit_unary_operator(op, expr, position),
             ExprKind::BinaryOp { op, lhs, rhs } => {
-                self.visit_binary_operator(op, lhs, rhs, outer_expr.position)
+                self.visit_binary_operator(op, lhs, rhs, position)
             }
             ExprKind::NewObject(typ) => {
                 self.ctx.validate_variable_type(typ);
-                typ.clone()
+                (tast::TExprKind::NewObject(typ.clone()), typ.clone())
             }
             ExprKind::NewArray { element_type, size } => {
                 self.ctx.validate_variable_type(element_type);
-                let size_type = self.visit_expr(size);
-                if !matches!(size_type.kind, TypeKind::Int | TypeKind::Error) {
+                let typed_size = self.visit_expr(size);
+                if !matches!(typed_size.typ.kind, TypeKind::Int | TypeKind::Error) {
                     self.ctx.add_error(SemanticError::TypeMismatch {
                         expected: StrID::from("int"),
-                        found: StrID::from(size_type.to_string()),
+                        found: StrID::from(typed_size.typ.to_string()),
                         position: size.position,
                     });
                 }
-
-                Type {
+                let kind = tast::TExprKind::NewArray {
+                    element_type: element_type.clone(),
+                    size: Box::new(typed_size),
+                };
+                let typ = Type {
                     kind: TypeKind::Array(Box::new(element_type.clone())),
-                    position: outer_expr.position,
-                }
+                    position,
+                };
+                (kind, typ)
             }
             ExprKind::TypedNull(typ) => {
                 self.ctx.validate_variable_type(typ);
-
                 if matches!(typ.kind, TypeKind::Bool | TypeKind::Int | TypeKind::Void) {
                     let expected = vec![
                         StrID::from("{ClassType}"),
@@ -181,11 +205,10 @@ impl<'a> ExpressionChecker<'a> {
                         found: StrID::from(typ.to_string()),
                         expected,
                         type_position: typ.position,
-                        expr_position: outer_expr.position,
+                        expr_position: position,
                     });
                 }
-
-                typ.clone()
+                (tast::TExprKind::TypedNull(typ.clone()), typ.clone())
             }
             ExprKind::ExprTypedNull(expr) => {
                 let expected = vec![
@@ -193,54 +216,141 @@ impl<'a> ExpressionChecker<'a> {
                     StrID::from("{ArrayType}"),
                     StrID::from("{string}"),
                 ];
-                match &expr.kind {
+
+                let (resolved_type, inner_tast_expr) = match &expr.kind {
                     ExprKind::Var(ident) => {
                         if !self.ctx.symbol_table.class_exists(ident.name) {
                             self.ctx.add_error(SemanticError::UndefinedClass {
                                 name: ident.name,
                                 position: ident.position,
                             });
-                            self.ctx.error_type(outer_expr.position)
+
+                            let inner_tast = tast::TExpr {
+                                kind: tast::TExprKind::Var(*ident),
+                                position: expr.position,
+                                typ: self.ctx.error_type(expr.position),
+                            };
+
+                            (self.ctx.error_type(position), inner_tast)
                         } else {
-                            Type {
+                            let typ = Type {
                                 kind: TypeKind::Class(*ident),
                                 position: ident.position,
-                            }
+                            };
+
+                            let inner_tast = tast::TExpr {
+                                kind: tast::TExprKind::Var(*ident),
+                                position: expr.position,
+                                typ: typ.clone(),
+                            };
+
+                            (typ, inner_tast)
                         }
                     }
-                    ExprKind::LiteralString(_) => Type {
-                        kind: TypeKind::String,
-                        position: outer_expr.position,
-                    },
+                    ExprKind::LiteralString(s) => {
+                        let typ = Type {
+                            kind: TypeKind::String,
+                            position: outer_expr.position,
+                        };
+                        let inner_tast = tast::TExpr {
+                            kind: tast::TExprKind::LiteralString(s.clone()),
+                            position: expr.position,
+                            typ: typ.clone(),
+                        };
+
+                        (typ, inner_tast)
+                    }
+
                     _ => {
                         self.ctx.add_error(SemanticError::InvalidNullCastExpr {
                             expected,
                             cast_position: expr.position,
-                            expr_position: outer_expr.position,
+                            expr_position: position,
                         });
-                        self.ctx.error_type(outer_expr.position)
+                        // Tworzymy placeholder TAST, aby kontynuować analizę.
+                        let inner_tast = tast::TExpr {
+                            kind: tast::TExprKind::LiteralNull, // Placeholder
+                            position: expr.position,
+                            typ: self.ctx.error_type(expr.position),
+                        };
+                        (self.ctx.error_type(position), inner_tast)
                     }
-                }
+                };
+
+                (
+                    tast::TExprKind::ExprTypedNull(Box::new(inner_tast_expr)),
+                    resolved_type,
+                )
             }
             ExprKind::This => {
-                if let Some(class_name) = &self.ctx.current_class {
+                let typ = if let Some(class_name) = &self.ctx.current_class {
                     let class_ident = Ident {
                         name: *class_name,
-                        position: outer_expr.position,
+                        position,
                     };
-
                     Type {
                         kind: TypeKind::Class(class_ident),
-                        position: outer_expr.position,
+                        position,
                     }
                 } else {
-                    self.ctx.add_error(SemanticError::ThisUsedOutsideClass {
-                        position: outer_expr.position,
-                    });
-                    self.ctx.error_type(outer_expr.position)
-                }
+                    self.ctx
+                        .add_error(SemanticError::ThisUsedOutsideClass { position });
+                    self.ctx.error_type(position)
+                };
+                (tast::TExprKind::This, typ)
             }
+        };
+
+        tast::TExpr {
+            kind,
+            position,
+            typ,
         }
+    }
+
+    fn check_and_transform_arguments(
+        &mut self,
+        func_info: &FunctionInfo,
+        args: &[Expr],
+        call_position: SourcePosition,
+    ) -> Vec<tast::TExpr> {
+        let func_ident = func_info.ident;
+        if args.len() != func_info.params.len() {
+            self.ctx.add_error(SemanticError::WrongNumberOfArguments {
+                name: func_ident.name,
+                expected: func_info.params.len(),
+                found: args.len(),
+                call_position,
+                function_position: func_info.position,
+            });
+        }
+
+        let typed_args = args
+            .iter()
+            .zip(&func_info.params)
+            .map(|(arg_expr, param_type)| {
+                let typed_arg = self.visit_expr(arg_expr);
+                if !self.ctx.is_subtype(&typed_arg.typ, param_type) {
+                    self.ctx.add_error(SemanticError::ArgumentTypeMismatch {
+                        expected: StrID::from(param_type.to_string()),
+                        found: StrID::from(typed_arg.typ.to_string()),
+                        position: typed_arg.position,
+                        function_name: func_info.ident.name,
+                        argument_position: param_type.position,
+                    });
+                }
+                typed_arg
+            })
+            .collect();
+
+        // If more arguments are provided, we type check them.
+        if args.len() > func_info.params.len() {
+            args[func_info.params.len()..].iter().for_each(|arg| {
+                self.visit_expr(arg);
+            });
+        }
+
+        typed_args
     }
 
     fn visit_application(
@@ -248,58 +358,87 @@ impl<'a> ExpressionChecker<'a> {
         callee: &Expr,
         args: &[Expr],
         position: SourcePosition,
-    ) -> Type {
+    ) -> (tast::TExprKind, Type) {
         // TODO: For now we only support direct calls on function names. Change that to use function types.
         // TODO: implicit this.
         if let ExprKind::Var(name) = &callee.kind {
             match self.ctx.symbol_table.lookup_function(name) {
                 Ok(func_info) => {
-                    self.validate_function_call(&func_info, args, position);
-                    Type {
-                        kind: func_info.return_type.kind,
-                        position,
-                    }
+                    let typed_args = self.check_and_transform_arguments(&func_info, args, position);
+                    let return_type = func_info.return_type.clone();
+                    let typed_callee = tast::TExpr {
+                        kind: tast::TExprKind::Var(*name),
+                        position: callee.position,
+                        typ: Type {
+                            kind: TypeKind::Fun(Box::new(return_type.clone()), func_info.params),
+                            position: callee.position,
+                        },
+                    };
+                    let kind = tast::TExprKind::App {
+                        callee: Box::new(typed_callee),
+                        args: typed_args,
+                    };
+                    (kind, return_type)
                 }
                 Err(e) => {
                     self.ctx.add_error(e);
-                    // Even if function is not found, we visit arguments to find errors in them.
-                    for arg in args {
-                        self.visit_expr(arg);
-                    }
-                    self.ctx.error_type(position)
+                    let typed_args = args.iter().map(|arg| self.visit_expr(arg)).collect();
+                    let typed_callee = self.visit_expr(callee);
+                    let kind = tast::TExprKind::App {
+                        callee: Box::new(typed_callee),
+                        args: typed_args,
+                    };
+                    (kind, self.ctx.error_type(position))
                 }
             }
         } else {
-            // Fallback for generic expr (not handled by this parser logic usually)
-            self.ctx.error_type(position)
+            let typed_callee = self.visit_expr(callee);
+            let typed_args: Vec<tast::TExpr> =
+                args.iter().map(|arg| self.visit_expr(arg)).collect();
+            let kind = tast::TExprKind::App {
+                callee: Box::new(typed_callee),
+                args: typed_args,
+            };
+            (kind, self.ctx.error_type(position))
         }
     }
 
-    fn visit_array_access(&mut self, array: &Expr, index: &Expr, position: SourcePosition) -> Type {
-        let array_type = self.visit_expr(array);
-        let index_type = self.visit_expr(index);
+    fn visit_array_access(
+        &mut self,
+        array: &Expr,
+        index: &Expr,
+        position: SourcePosition,
+    ) -> (tast::TExprKind, Type) {
+        let typed_array = self.visit_expr(array);
+        let typed_index = self.visit_expr(index);
 
-        if !matches!(index_type.kind, TypeKind::Int | TypeKind::Error) {
+        if !matches!(typed_index.typ.kind, TypeKind::Int | TypeKind::Error) {
             self.ctx.add_error(SemanticError::TypeMismatch {
                 expected: StrID::from("int"),
-                found: StrID::from(index_type.to_string()),
+                found: StrID::from(typed_index.typ.to_string()),
                 position: index.position,
             });
         }
 
-        match &array_type.kind {
+        let kind = tast::TExprKind::ArrayAccess {
+            array: Box::new(typed_array.clone()),
+            index: Box::new(typed_index),
+        };
+
+        let typ = match &typed_array.typ.kind {
             TypeKind::Array(elem_type) => (**elem_type).clone(),
             TypeKind::Error => self.ctx.error_type(position),
             _ => {
                 self.ctx.add_error(SemanticError::InvalidOperands {
                     operator: StrID::from("[]"),
-                    operand: StrID::from(array_type.to_string()),
+                    operand: StrID::from(typed_array.typ.to_string()),
                     position,
-                    type_position: array_type.position,
+                    type_position: typed_array.typ.position,
                 });
                 self.ctx.error_type(position)
             }
-        }
+        };
+        (kind, typ)
     }
 
     fn visit_field_access(
@@ -307,12 +446,16 @@ impl<'a> ExpressionChecker<'a> {
         object: &Expr,
         field_name: &Ident,
         position: SourcePosition,
-    ) -> Type {
-        let obj_type = self.visit_expr(object);
+    ) -> (tast::TExprKind, Type) {
+        let typed_object = self.visit_expr(object);
 
-        if let TypeKind::Class(class_name) = obj_type.kind {
+        let kind = tast::TExprKind::FieldAccess {
+            object: Box::new(typed_object.clone()),
+            field_name: *field_name,
+        };
+
+        let typ = if let TypeKind::Class(class_name) = &typed_object.typ.kind {
             let all_fields = self.ctx.symbol_table.get_all_class_fields(class_name.name);
-
             if let Some((field_type, _)) = all_fields.get(&field_name.name) {
                 field_type.clone()
             } else {
@@ -324,10 +467,10 @@ impl<'a> ExpressionChecker<'a> {
                 });
                 self.ctx.error_type(position)
             }
-        } else if let TypeKind::String | TypeKind::Array(_) = obj_type.kind {
+        } else if let TypeKind::String | TypeKind::Array(_) = &typed_object.typ.kind {
             if field_name.name != StrID::from("length") {
                 self.ctx.add_error(SemanticError::UndefinedField {
-                    class_name: StrID::from(obj_type.to_string()),
+                    class_name: StrID::from(typed_object.typ.to_string()),
                     field_name: field_name.name,
                     position,
                     class_position: SourcePosition(0, 0),
@@ -339,17 +482,18 @@ impl<'a> ExpressionChecker<'a> {
                     position,
                 }
             }
-        } else if matches!(obj_type.kind, TypeKind::Error) {
+        } else if matches!(typed_object.typ.kind, TypeKind::Error) {
             self.ctx.error_type(position)
         } else {
             self.ctx.add_error(SemanticError::InvalidOperands {
                 operator: StrID::from("."),
-                operand: StrID::from(obj_type.to_string()),
+                operand: StrID::from(typed_object.typ.to_string()),
                 position,
-                type_position: obj_type.position,
+                type_position: typed_object.typ.position,
             });
             self.ctx.error_type(position)
-        }
+        };
+        (kind, typ)
     }
 
     fn visit_method_call(
@@ -358,21 +502,22 @@ impl<'a> ExpressionChecker<'a> {
         method_name: &Ident,
         args: &[Expr],
         position: SourcePosition,
-    ) -> Type {
-        let obj_type = self.visit_expr(callee);
+    ) -> (tast::TExprKind, Type) {
+        let typed_callee = self.visit_expr(callee);
 
-        match &obj_type.kind {
+        let (kind, typ) = match &typed_callee.typ.kind {
             TypeKind::Class(class_name) => {
                 let all_methods = self.ctx.symbol_table.get_all_class_methods(class_name.name);
-
                 if let Some(method_info) = all_methods.get(&method_name.name) {
                     let method_info = method_info.clone();
-                    self.validate_function_call(&method_info, args, position);
-
-                    Type {
-                        kind: method_info.return_type.kind.clone(),
-                        position,
-                    }
+                    let typed_args =
+                        self.check_and_transform_arguments(&method_info, args, position);
+                    let kind = tast::TExprKind::Method {
+                        object: Box::new(typed_callee.clone()),
+                        method_name: *method_name,
+                        args: typed_args,
+                    };
+                    (kind, method_info.return_type.clone())
                 } else {
                     self.ctx.add_error(SemanticError::UndefinedMethod {
                         class_name: class_name.name,
@@ -380,33 +525,41 @@ impl<'a> ExpressionChecker<'a> {
                         position,
                         class_position: class_name.position,
                     });
-                    // Visit args anyway.
-                    for arg in args {
-                        self.visit_expr(arg);
-                    }
-                    self.ctx.error_type(position)
+                    let typed_args = args.iter().map(|arg| self.visit_expr(arg)).collect();
+                    let kind = tast::TExprKind::Method {
+                        object: Box::new(typed_callee.clone()),
+                        method_name: *method_name,
+                        args: typed_args,
+                    };
+                    (kind, self.ctx.error_type(position))
                 }
             }
             TypeKind::Error => {
-                // Visit args anyway.
-                for arg in args {
-                    self.visit_expr(arg);
-                }
-                self.ctx.error_type(position)
+                let typed_args = args.iter().map(|arg| self.visit_expr(arg)).collect();
+                let kind = tast::TExprKind::Method {
+                    object: Box::new(typed_callee.clone()),
+                    method_name: *method_name,
+                    args: typed_args,
+                };
+                (kind, self.ctx.error_type(position))
             }
             _ => {
                 self.ctx.add_error(SemanticError::InvalidOperands {
                     operator: StrID::from(format!("method call .{}()", method_name.name)),
-                    operand: StrID::from(obj_type.to_string()),
+                    operand: StrID::from(typed_callee.typ.to_string()),
                     position,
-                    type_position: obj_type.position,
+                    type_position: typed_callee.typ.position,
                 });
-                for arg in args {
-                    self.visit_expr(arg);
-                }
-                self.ctx.error_type(position)
+                let typed_args = args.iter().map(|arg| self.visit_expr(arg)).collect();
+                let kind = tast::TExprKind::Method {
+                    object: Box::new(typed_callee.clone()),
+                    method_name: *method_name,
+                    args: typed_args,
+                };
+                (kind, self.ctx.error_type(position))
             }
-        }
+        };
+        (kind, typ)
     }
 
     fn visit_unary_operator(
@@ -414,20 +567,24 @@ impl<'a> ExpressionChecker<'a> {
         op: &UnaryOp,
         expr: &Expr,
         position: SourcePosition,
-    ) -> Type {
-        let expr_type = self.visit_expr(expr);
-
-        if !self.ctx.type_legal_for_unary_op(op, &expr_type)
-            && !matches!(expr_type.kind, TypeKind::Error)
+    ) -> (tast::TExprKind, Type) {
+        let typed_expr = self.visit_expr(expr);
+        if !self.ctx.type_legal_for_unary_op(op, &typed_expr.typ)
+            && !matches!(typed_expr.typ.kind, TypeKind::Error)
         {
             self.ctx.add_error(SemanticError::InvalidOperands {
                 operator: StrID::from(op.to_string()),
-                operand: StrID::from(expr_type.to_string()),
+                operand: StrID::from(typed_expr.typ.to_string()),
                 position: expr.position,
-                type_position: expr_type.position,
+                type_position: typed_expr.typ.position,
             });
         }
-        self.ctx.unary_op_result_type(op, position)
+        let result_type = self.ctx.unary_op_result_type(op, position);
+        let kind = tast::TExprKind::UnaryOp {
+            op: op.clone(),
+            expr: Box::new(typed_expr),
+        };
+        (kind, result_type)
     }
 
     fn visit_binary_operator(
@@ -436,17 +593,30 @@ impl<'a> ExpressionChecker<'a> {
         lhs: &Expr,
         rhs: &Expr,
         position: SourcePosition,
-    ) -> Type {
-        let lhs_type = self.visit_expr(lhs);
-        let rhs_type = self.visit_expr(rhs);
+    ) -> (tast::TExprKind, Type) {
+        let typed_lhs = self.visit_expr(lhs);
+        let typed_rhs = self.visit_expr(rhs);
 
         // Early return for error types to prevent cascading errors.
-        if matches!(lhs_type.kind, TypeKind::Error) || matches!(rhs_type.kind, TypeKind::Error) {
-            return self.ctx.binary_op_result_type(op, &lhs_type, position);
+        if matches!(typed_lhs.typ.kind, TypeKind::Error)
+            || matches!(typed_rhs.typ.kind, TypeKind::Error)
+        {
+            let kind = tast::TExprKind::BinaryOp {
+                op: op.clone(),
+                lhs: Box::new(typed_lhs.clone()),
+                rhs: Box::new(typed_rhs),
+            };
+            let typ = self.ctx.binary_op_result_type(op, &typed_lhs.typ, position);
+            return (kind, typ);
         }
 
-        self.validate_binary_operands(op, &lhs_type, &rhs_type, lhs.position, rhs.position);
-
+        self.validate_binary_operands(
+            op,
+            &typed_lhs.typ,
+            &typed_rhs.typ,
+            lhs.position,
+            rhs.position,
+        );
         if matches!(op, BinaryOp::Div | BinaryOp::Mod)
             && let ExprKind::LiteralInt(0) = rhs.kind
         {
@@ -454,8 +624,13 @@ impl<'a> ExpressionChecker<'a> {
                 position: rhs.position,
             });
         }
-
-        self.ctx.binary_op_result_type(op, &lhs_type, position)
+        let result_type = self.ctx.binary_op_result_type(op, &typed_lhs.typ, position);
+        let kind = tast::TExprKind::BinaryOp {
+            op: op.clone(),
+            lhs: Box::new(typed_lhs),
+            rhs: Box::new(typed_rhs),
+        };
+        (kind, result_type)
     }
 
     // TODO: Try to move that from here?
@@ -479,7 +654,7 @@ impl<'a> ExpressionChecker<'a> {
 
         // Type check arguments.
         for (expr, param) in args.iter().zip(&func_info.params) {
-            let arg_type = self.visit_expr(expr);
+            let arg_type = self.visit_expr(expr).typ;
             if !self.ctx.is_subtype(&arg_type, param) {
                 self.ctx.add_error(SemanticError::ArgumentTypeMismatch {
                     expected: StrID::from(param.to_string()),

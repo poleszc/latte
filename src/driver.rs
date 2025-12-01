@@ -77,12 +77,12 @@ pub fn run_compiler<
     eprintln!("[Semantic] Semantic analysis completed successfully");
 
     // ============= MIR LOWERING ===============
-    eprintln!("[MIR] Lowering to MIR...");
-    let mut lowering_context = MIRLoweringContext::new(symbol_table);
-    let mir_program = lowering_context.lower_program(&parsed_program);
-    eprintln!("[MIR] Lowering to MIR completed successfully...");
-    dump_mir(&output_dir, file_stem, &mir_program)?;
-    eprintln!("[MIR] Dumped MIR to JSON...");
+    // eprintln!("[MIR] Lowering to MIR...");
+    // let mut lowering_context = MIRLoweringContext::new(symbol_table);
+    // let mir_program = lowering_context.lower_program(&parsed_program);
+    // eprintln!("[MIR] Lowering to MIR completed successfully...");
+    // dump_mir(&output_dir, file_stem, &mir_program)?;
+    // eprintln!("[MIR] Dumped MIR to JSON...");
 
     // TODO:
     // - MIR Opts
