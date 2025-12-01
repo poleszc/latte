@@ -138,9 +138,10 @@ impl fmt::Display for LocalInfo {
         write!(f, "Type: {}", self.typ)?;
 
         if self.is_parameter
-            && let Some(idx) = self.parameter_index {
-                write!(f, ", Parameter #{}", idx)?;
-            }
+            && let Some(idx) = self.parameter_index
+        {
+            write!(f, ", Parameter #{}", idx)?;
+        }
 
         Ok(())
     }
@@ -154,7 +155,10 @@ impl fmt::Display for TempInfo {
 
 impl fmt::Display for MIRBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, " =========================================================")?;
+        writeln!(
+            f,
+            " ========================================================="
+        )?;
         writeln!(f, "  Block {} [entry]:", self.id.0)?;
         for instr in &self.instructions {
             writeln!(f, "    {}", instr)?;
@@ -252,31 +256,31 @@ impl fmt::Display for MIRProgram {
         writeln!(f, "│          MIR Program Dump                  │")?;
         writeln!(f, "╰────────────────────────────────────────────╯")?;
         writeln!(f)?;
-        
+
         if !self.classes.is_empty() {
             writeln!(f, "═══════════════════════════════════════════")?;
             writeln!(f, "                 CLASSES                   ")?;
             writeln!(f, "═══════════════════════════════════════════")?;
             writeln!(f)?;
-            
+
             for class in self.classes.values() {
                 writeln!(f, "{}", class)?;
             }
         }
-        
+
         if !self.functions.is_empty() {
             writeln!(f, "═══════════════════════════════════════════")?;
             writeln!(f, "                FUNCTIONS                  ")?;
             writeln!(f, "═══════════════════════════════════════════")?;
             writeln!(f)?;
-            
+
             for func_name in &self.function_order {
                 if let Some(func) = self.functions.get(func_name) {
                     writeln!(f, "{}", func)?;
                 }
             }
         }
-        
+
         Ok(())
     }
 }
@@ -285,13 +289,13 @@ impl MIRProgram {
     pub fn dump_to_file(&self, path: &std::path::Path) -> std::io::Result<()> {
         use std::fs::File;
         use std::io::Write;
-        
+
         let mut file = File::create(path)?;
         write!(file, "{}", self)?;
-        
+
         Ok(())
     }
-    
+
     pub fn dump_to_stderr(&self) {
         eprintln!("{}", self);
     }
@@ -301,7 +305,7 @@ impl MIRFunction {
     pub fn dump_to_stderr(&self) {
         eprintln!("{}", self);
     }
-    
+
     pub fn to_string_pretty(&self) -> String {
         format!("{}", self)
     }
@@ -313,11 +317,12 @@ impl MIRProgram {
         println!("│          MIR Program Summary               │");
         println!("╰────────────────────────────────────────────╯");
         println!();
-        
+
         if !self.classes.is_empty() {
             println!("Classes ({}): ", self.classes.len());
             for (name, class) in &self.classes {
-                let parent_str = class.parent
+                let parent_str = class
+                    .parent
                     .map(|p| format!(" extends {}", p))
                     .unwrap_or_default();
                 println!(
@@ -330,7 +335,7 @@ impl MIRProgram {
             }
             println!();
         }
-        
+
         if !self.functions.is_empty() {
             println!("Functions ({}): ", self.function_order.len());
             for func_name in &self.function_order {

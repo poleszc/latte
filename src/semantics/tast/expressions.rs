@@ -1,5 +1,7 @@
-use crate::{SourcePosition, parser::ast::{BinaryOp, Ident, Type, UnaryOp}};
-
+use crate::{
+    SourcePosition,
+    parser::ast::{BinaryOp, Ident, Type, UnaryOp},
+};
 
 #[derive(Debug, Clone)]
 pub struct TExpr {

@@ -46,6 +46,7 @@ impl fmt::Display for TypeKind {
 #[derive(Debug, PartialEq, Clone, Serialize)]
 pub struct Type {
     pub kind: TypeKind,
+    // TODO: remove source position from Type once it's moved to type system and store it only in the AST.
     pub position: SourcePosition,
 }
 impl fmt::Display for Type {

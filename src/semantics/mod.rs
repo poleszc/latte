@@ -9,7 +9,6 @@ pub use builtins::get_builtin_signature;
 pub use symbol_table::SymbolTable;
 pub use symbols::{ClassInfo, FunctionInfo, VariableInfo};
 
-
 pub struct SemanticAnalysisResult {
     /// The typed program.
     pub tast: tast::definitions::TProgram,

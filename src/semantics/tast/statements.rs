@@ -1,4 +1,8 @@
-use crate::{SourcePosition, parser::ast::{Ident, Type}, semantics::tast::expressions::TExpr};
+use crate::{
+    SourcePosition,
+    parser::ast::{Ident, Type},
+    semantics::tast::expressions::TExpr,
+};
 
 #[derive(Debug)]
 pub struct TBlock {
@@ -35,6 +39,7 @@ pub enum TStmtKind {
         cond: TExpr,
         body: Box<TStmt>,
     },
+    // TODO: Add nested functions and classic for loops.
     ForEach {
         element_type: Type,
         item_name: Ident,

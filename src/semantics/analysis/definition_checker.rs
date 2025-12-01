@@ -44,7 +44,7 @@ impl<'a> DefinitionChecker<'a> {
             .collect();
 
         self.validate_main();
-        
+
         tast::TProgram { defs: tast_defs }
     }
 }

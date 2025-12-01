@@ -1,21 +1,13 @@
-pub mod program_builder;
 pub mod function_builder;
 pub mod lowering;
 pub mod mir_display;
-
-
+pub mod program_builder;
 
 use std::{collections::HashMap, hash::Hash};
 
-
 use serde::Serialize;
 
-use crate::{
-    SourcePosition,
-    parser::ast::Type,
-    utils::StrID,
-};
-
+use crate::{SourcePosition, parser::ast::Type, utils::StrID};
 
 /// Unique identifier of a single block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
@@ -262,16 +254,16 @@ impl MIRProgram {
         }
     }
 
-    pub fn add_function(&mut self, function: MIRFunction)   {
+    pub fn add_function(&mut self, function: MIRFunction) {
         self.function_order.push(function.name);
         self.functions.insert(function.name, function);
     }
 
-    pub fn add_class(&mut self, class: MIRClass)   {
+    pub fn add_class(&mut self, class: MIRClass) {
         self.classes.insert(class.name, class);
     }
 }
- 
+
 impl Default for MIRProgram {
     fn default() -> Self {
         Self::new()

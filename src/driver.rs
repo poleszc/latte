@@ -8,7 +8,7 @@ use clap::Parser;
 use crate::{
     LatteArgs,
     errors::CompilerError,
-    mir::MIRProgram,
+    mir::{MIRProgram, lowering::MIRLoweringContext},
     parser::{
         self,
         ast::{self, Program},
@@ -62,7 +62,7 @@ pub fn run_compiler<
 
     // ============= SEMANTIC ANALYSIS ===============
     eprintln!("[Semantic] Running semantic analysis...");
-    let symbol_table = match SemanticChecker::check(&parsed_program) {
+    let semantic_analysis_result = match SemanticChecker::check(&parsed_program) {
         Ok(table) => table,
         Err(errors) => {
             for err in errors {
@@ -75,14 +75,16 @@ pub fn run_compiler<
     };
 
     eprintln!("[Semantic] Semantic analysis completed successfully");
+    dump_tast_to_json(&output_dir, file_stem, &parsed_program)?;
+    eprintln!("[Semantic] Dumped TAST to JSON...");
 
     // ============= MIR LOWERING ===============
-    // eprintln!("[MIR] Lowering to MIR...");
-    // let mut lowering_context = MIRLoweringContext::new(symbol_table);
-    // let mir_program = lowering_context.lower_program(&parsed_program);
-    // eprintln!("[MIR] Lowering to MIR completed successfully...");
-    // dump_mir(&output_dir, file_stem, &mir_program)?;
-    // eprintln!("[MIR] Dumped MIR to JSON...");
+    eprintln!("[MIR] Lowering to MIR...");
+    let mut lowering_context = MIRLoweringContext::new(semantic_analysis_result.symbol_table);
+    let mir_program = lowering_context.lower_program(&semantic_analysis_result.tast);
+    eprintln!("[MIR] Lowering to MIR completed successfully...");
+    dump_mir(&output_dir, file_stem, &mir_program)?;
+    eprintln!("[MIR] Dumped MIR to JSON...");
 
     // TODO:
     // - MIR Opts
@@ -93,6 +95,7 @@ pub fn run_compiler<
 }
 
 /// Dumps the AST to a JSON file in a specified output_dir and a given file name.
+// TODO: Move those somewhere
 fn dump_ast_to_json(
     output_dir: &PathBuf,
     file_stem: &str,
@@ -115,6 +118,33 @@ fn dump_ast_to_json(
 
     println!(
         "[LATTE]: Successfully parsed and saved AST to {}",
+        json_output_path.display()
+    );
+    Ok(())
+}
+
+fn dump_tast_to_json(
+    output_dir: &PathBuf,
+    file_stem: &str,
+    program: &Program,
+) -> Result<(), CompilerError> {
+    println!("[LATTE]: Dumping TAST to file");
+    let mut json_output_path = PathBuf::from(&output_dir);
+    json_output_path.push(format!("{}.tast.json", file_stem));
+
+    let json_string = serde_json::to_string_pretty(&program)
+        .map_err(|e| CompilerError::Other(format!("Failed to serialize TAST to JSON: {}", e)))?;
+
+    fs::write(&json_output_path, json_string).map_err(|e| {
+        CompilerError::Other(format!(
+            "Failed to write TAST to file '{}': {}",
+            json_output_path.display(),
+            e
+        ))
+    })?;
+
+    println!(
+        "[LATTE]: Successfully parsed and saved TAST to {}",
         json_output_path.display()
     );
     Ok(())

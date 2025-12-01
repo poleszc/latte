@@ -1,26 +1,25 @@
-// TODO: Remove those eventually.
-#![allow(dead_code)]
-#![allow(unused_variables)]
 use std::collections::HashMap;
-
 
 use crate::{
     SourcePosition,
     mir::{
-        LocalID, MIRClass, MIRField, MIRFunction, MIROperation, MIRPlace,
-        MIRProgram, MIRValue, function_builder::MIRFunctionBuilder,
-        program_builder::MIRProgramBuilder,
+        LocalID, MIRClass, MIRField, MIRFunction, MIROperation, MIRPlace, MIRProgram, MIRValue,
+        function_builder::MIRFunctionBuilder, program_builder::MIRProgramBuilder,
     },
-    parser::ast::{
-        BinaryOp, Block, ClassDef, ClassEntryKind, Expr, ExprKind, FuncDef, Ident, Item, ItemKind,
-        Program, Stmt, StmtKind, TopDefKind, Type, TypeKind, UnaryOp,
+    parser::ast::{BinaryOp, Ident, Type, TypeKind, UnaryOp},
+    semantics::{
+        symbol_table::SymbolTable,
+        tast::{
+            self, TClassDef, TClassEntryKind, TExpr, TExprKind, TFuncDef, TItemKind, TStmt,
+            TStmtKind, TTopDefKind,
+        },
     },
-    semantics::SymbolTable,
     utils::StrID,
 };
 
 pub struct MIRLoweringContext {
     symbol_table: SymbolTable,
+    // TODO: Try to remove that and make more use of the symbol table.
     variable_map: HashMap<StrID, LocalID>,
     current_function: Option<MIRFunctionBuilder>,
     current_class_fields: HashMap<StrID, (usize, Type)>,
@@ -40,21 +39,20 @@ impl MIRLoweringContext {
     }
 
     /// Main function performing the lowering for the whole program.
-    pub fn lower_program(&mut self, program: &Program) -> MIRProgram {
+    pub fn lower_program(&mut self, program: &tast::TProgram) -> MIRProgram {
         let mut builder = MIRProgramBuilder::new();
 
         // Lower all classes to MIR.
         for top_def in &program.defs {
-            if let TopDefKind::Class(class_def) = &top_def.kind {
+            if let TTopDefKind::Class(class_def) = &top_def.kind {
                 let mir_class = self.lower_class(class_def);
-                dbg!(&mir_class);
                 builder.add_class(mir_class);
             }
         }
 
         // Lower all functions to MIR.
         for top_def in &program.defs {
-            if let TopDefKind::Func(func_def) = &top_def.kind {
+            if let TTopDefKind::Func(func_def) = &top_def.kind {
                 let mir_function = self.lower_function(func_def);
                 builder.add_function(mir_function);
             }
@@ -62,7 +60,7 @@ impl MIRLoweringContext {
 
         // Lower all methods to MIR.
         for top_def in &program.defs {
-            if let TopDefKind::Class(class_def) = &top_def.kind {
+            if let TTopDefKind::Class(class_def) = &top_def.kind {
                 // Insert all class fields in the scope to have access to them in methods.
                 let class_fields = self
                     .symbol_table
@@ -73,7 +71,7 @@ impl MIRLoweringContext {
                 }
 
                 for entry in &class_def.entries {
-                    if let ClassEntryKind::Method(method) = &entry.kind {
+                    if let TClassEntryKind::Method(method) = &entry.kind {
                         let mir_function = self.lower_method(class_def, method);
                         builder.add_function(mir_function);
                     }
@@ -93,7 +91,7 @@ impl MIRLoweringContext {
         StrID::from(format!("{}_{}", class_name, method_name))
     }
 
-    fn lower_class(&mut self, class_def: &ClassDef) -> MIRClass {
+    fn lower_class(&mut self, class_def: &TClassDef) -> MIRClass {
         let class_name = class_def.name.name;
         let field_layout = self.symbol_table.get_class_field_layout(class_name);
 
@@ -134,7 +132,7 @@ impl MIRLoweringContext {
         }
     }
 
-    fn lower_method(&mut self, class_def: &ClassDef, method: &FuncDef) -> MIRFunction {
+    fn lower_method(&mut self, class_def: &TClassDef, method: &TFuncDef) -> MIRFunction {
         let mangled_name = self.mangle_method_name(class_def.name.name, method.name.name);
 
         // Insert this as first parameter.
@@ -176,6 +174,7 @@ impl MIRLoweringContext {
 
         // If a void function
         if matches!(method.return_type.kind, TypeKind::Void) {
+            // TODO: Make a utility which unwraps the builder.
             let builder = self
                 .current_function
                 .as_mut()
@@ -186,7 +185,8 @@ impl MIRLoweringContext {
         self.current_function.take().unwrap().build()
     }
 
-    fn lower_function(&mut self, func_def: &FuncDef) -> MIRFunction {
+    fn lower_function(&mut self, func_def: &TFuncDef) -> MIRFunction {
+        // TODO: This is duplicated with method validation. Fix that.
         let mut builder = MIRFunctionBuilder::new(
             func_def.name.name,
             func_def.return_type.clone(),
@@ -240,50 +240,49 @@ impl MIRLoweringContext {
 // Statement lowering.
 // ======================
 impl MIRLoweringContext {
-    fn lower_block(&mut self, block: &Block) {
+    fn lower_block(&mut self, block: &tast::TBlock) {
         for stmt in &block.stmts {
             self.lower_stmt(stmt);
         }
     }
 
-    fn lower_stmt(&mut self, stmt: &Stmt) {
+    fn lower_stmt(&mut self, stmt: &tast::TStmt) {
         match &stmt.kind {
-            StmtKind::Empty => {}
-            StmtKind::Block(block) => self.lower_block(block),
-            StmtKind::Decl(ty, items) => self.lower_declaration(ty, items, stmt.position),
-            StmtKind::Assign { target, value } => self.lower_assign(target, value, stmt.position),
-            StmtKind::Return { expr } => self.lower_return(expr, stmt.position),
-            StmtKind::Incr(expr) => self.lower_increment(expr, stmt.position),
-            StmtKind::Decr(expr) => self.lower_decrement(expr, stmt.position),
-            StmtKind::If {
+            TStmtKind::Empty => {}
+            TStmtKind::Block(block) => self.lower_block(block),
+            TStmtKind::Decl(ty, items) => self.lower_declaration(ty, items, stmt.position),
+            TStmtKind::Assign { target, value } => self.lower_assign(target, value, stmt.position),
+            TStmtKind::Return { expr } => self.lower_return(expr, stmt.position),
+            TStmtKind::Incr(expr) => self.lower_increment(expr, stmt.position),
+            TStmtKind::Decr(expr) => self.lower_decrement(expr, stmt.position),
+            TStmtKind::If {
                 cond,
                 if_true,
                 if_false,
             } => self.lower_if(cond, if_true, if_false, stmt.position),
-            StmtKind::While { cond, body } => self.lower_while(cond, body, stmt.position),
-            StmtKind::For {
-                init,
-                cond,
-                post,
-                body,
-            } => self.lower_for(init, cond, post, body),
-            StmtKind::ForEach {
+            TStmtKind::While { cond, body } => self.lower_while(cond, body, stmt.position),
+            // TODO: Add a classic for loop
+            TStmtKind::ForEach {
                 element_type,
                 item_name,
                 collection,
                 body,
             } => self.lower_for_each(element_type, item_name, collection, body, stmt.position),
-            StmtKind::Expr(expr) => {
+            TStmtKind::Expr(expr) => {
                 self.lower_expr(expr);
-            }
-            StmtKind::FuncDef(func_def) => todo!("Nested functions"),
+            } // TODO: Add nested functions
         }
     }
 
-    fn lower_declaration(&mut self, typ: &Type, items: &Vec<Item>, stmt_position: SourcePosition) {
+    fn lower_declaration(
+        &mut self,
+        typ: &Type,
+        items: &Vec<tast::TItem>,
+        stmt_position: SourcePosition,
+    ) {
         for item in items {
             match &item.kind {
-                ItemKind::NoInit(ident) => {
+                TItemKind::NoInit(ident) => {
                     let builder = self
                         .current_function
                         .as_mut()
@@ -291,7 +290,7 @@ impl MIRLoweringContext {
                     let local_id = builder.create_local(Some(ident.name), typ.clone(), false, None);
                     self.variable_map.insert(ident.name, local_id);
                 }
-                ItemKind::Init(ident, expr) => {
+                TItemKind::Init(ident, expr) => {
                     let builder = self
                         .current_function
                         .as_mut()
@@ -311,7 +310,7 @@ impl MIRLoweringContext {
         }
     }
 
-    fn lower_assign(&mut self, target: &Expr, value: &Expr, stmt_position: SourcePosition) {
+    fn lower_assign(&mut self, target: &TExpr, value: &TExpr, stmt_position: SourcePosition) {
         let place = self.lower_expr_as_place(target);
         let val = self.lower_expr(value);
         let builder = self
@@ -321,7 +320,7 @@ impl MIRLoweringContext {
         builder.emit_assign(place, val, stmt_position);
     }
 
-    fn lower_return(&mut self, expr: &Option<Box<Expr>>, stmt_position: SourcePosition) {
+    fn lower_return(&mut self, expr: &Option<tast::TExpr>, stmt_position: SourcePosition) {
         let value = expr.as_ref().map(|e| self.lower_expr(e));
         let builder = self
             .current_function
@@ -330,7 +329,7 @@ impl MIRLoweringContext {
         builder.emit_return(value, stmt_position);
     }
 
-    fn lower_increment(&mut self, expr: &Expr, stmt_position: SourcePosition) {
+    fn lower_increment(&mut self, expr: &TExpr, stmt_position: SourcePosition) {
         // i++ => {
         //    temp = i + 1;
         //    i = temp;
@@ -360,7 +359,7 @@ impl MIRLoweringContext {
         builder.emit_assign(place, MIRValue::Temp(temp), stmt_position);
     }
 
-    fn lower_decrement(&mut self, expr: &Expr, stmt_position: SourcePosition) {
+    fn lower_decrement(&mut self, expr: &TExpr, stmt_position: SourcePosition) {
         // i-- => {
         //    temp = i - 1;
         //    i = temp;
@@ -371,7 +370,7 @@ impl MIRLoweringContext {
         let builder = self
             .current_function
             .as_mut()
-            .expect("Lower increment: Func builder not set");
+            .expect("Lower decrement: Func builder not set");
 
         // temp = i - 1;
         let temp = builder.create_temp(Type {
@@ -392,51 +391,72 @@ impl MIRLoweringContext {
 
     fn lower_if(
         &mut self,
-        cond: &Expr,
-        if_true: &Stmt,
-        if_false: &Option<Box<Stmt>>,
+        cond: &TExpr,
+        if_true: &TStmt,
+        if_false: &Option<Box<TStmt>>,
         stmt_position: SourcePosition,
     ) {
-        // TODO: Do that better to not emit else block if it doesn't exist.
         let cond_val = self.lower_expr(cond);
-        let builder = self
-            .current_function
-            .as_mut()
-            .expect("Lower if: Func builder not set 1");
 
-        let true_block = builder.create_block();
-        let false_block = builder.create_block();
-        // Block we return to after if.
-        let merge_block = builder.create_block();
+        if let Some(if_false) = if_false {
+            // Else exists.
+            let builder = self
+                .current_function
+                .as_mut()
+                .expect("Lower if: Func builder not set 1");
 
-        // Emit jumping to if blocks.
-        builder.emit_branch(cond_val, true_block, false_block, stmt_position);
+            let true_block = builder.create_block();
+            let false_block = builder.create_block();
+            let merge_block = builder.create_block();
 
-        // If true block.
-        builder.set_current_block(true_block);
-        self.lower_stmt(if_true);
-        let builder = self
-            .current_function
-            .as_mut()
-            .expect("Lower if: Func builder not set 2");
-        builder.emit_jump(merge_block, stmt_position);
+            builder.emit_branch(cond_val, true_block, false_block, stmt_position);
 
-        // If false block.
-        builder.set_current_block(false_block);
-        if let Some(else_stmt) = if_false {
-            self.lower_stmt(else_stmt);
+            // Lower the true block.
+            builder.set_current_block(true_block);
+            self.lower_stmt(if_true);
+            let builder = self
+                .current_function
+                .as_mut()
+                .expect("Lower if: Func builder not set 2");
+            builder.emit_jump(merge_block, stmt_position);
+
+            // Lower the false block.
+            builder.set_current_block(false_block);
+            self.lower_stmt(if_false);
+            let builder = self
+                .current_function
+                .as_mut()
+                .expect("Lower if: Func builder not set 2");
+            builder.emit_jump(merge_block, stmt_position);
+
+            // Continue to the merge block
+            builder.set_current_block(merge_block);
+        } else {
+            // Else doesn't exists.
+            let builder = self
+                .current_function
+                .as_mut()
+                .expect("Lower if: Func builder not set 1");
+
+            let true_block = builder.create_block();
+            let merge_block = builder.create_block();
+
+            builder.emit_branch(cond_val, true_block, merge_block, stmt_position);
+
+            // Lower the true block.
+            builder.set_current_block(true_block);
+            self.lower_stmt(if_true);
+            let builder = self
+                .current_function
+                .as_mut()
+                .expect("Lower if: Func builder not set 2");
+            builder.emit_jump(merge_block, stmt_position);
+            // Continue to the merge block
+            builder.set_current_block(merge_block);
         }
-        let builder = self
-            .current_function
-            .as_mut()
-            .expect("Lower if: Func builder not set 3");
-        builder.emit_jump(merge_block, stmt_position);
-
-        // Go to the merge block
-        builder.set_current_block(merge_block);
     }
 
-    fn lower_while(&mut self, cond: &Expr, body: &Stmt, stmt_position: SourcePosition) {
+    fn lower_while(&mut self, cond: &TExpr, body: &TStmt, stmt_position: SourcePosition) {
         let builder = self
             .current_function
             .as_mut()
@@ -470,22 +490,12 @@ impl MIRLoweringContext {
         builder.set_current_block(loop_exit);
     }
 
-    fn lower_for(
-        &mut self,
-        init: &Option<Box<Stmt>>,
-        cond: &Option<Box<Expr>>,
-        post: &Option<Box<Expr>>,
-        body: &Stmt,
-    ) {
-        todo!("MIR lower for")
-    }
-
     fn lower_for_each(
         &mut self,
         element_type: &Type,
         item_name: &Ident,
-        collection: &Expr,
-        body: &Stmt,
+        collection: &TExpr,
+        body: &TStmt,
         stmt_position: SourcePosition,
     ) {
         // for(T a: collection) => {
@@ -599,16 +609,16 @@ impl MIRLoweringContext {
 // ======================
 impl MIRLoweringContext {
     /// Lower expression and return it's place.
-    fn lower_expr_as_place(&mut self, expr: &Expr) -> MIRPlace {
+    fn lower_expr_as_place(&mut self, expr: &TExpr) -> MIRPlace {
         match &expr.kind {
-            ExprKind::Var(ident) => {
+            TExprKind::Var(ident) => {
                 // First look for the identifier in the local variables.
                 if let Some(local_id) = self.variable_map.get(&ident.name) {
                     return MIRPlace::Local(*local_id);
                 }
 
                 // If not found look in the class fields.
-                if let Some((field_index, t)) = self.current_class_fields.get(&ident.name) {
+                if let Some((field_index, _)) = self.current_class_fields.get(&ident.name) {
                     // Retrieve 'this' from locals. It should always exist.
                     let this_local_id = *self
                         .variable_map
@@ -622,8 +632,8 @@ impl MIRLoweringContext {
                         .as_ref()
                         .expect("Lower expr as place: func builder not set");
                     let this_info = builder.get_local_info(this_local_id);
-                    let class_name = if let TypeKind::Class(class_name) = &this_info.typ.kind {
-                        class_name.name
+                    let class_name = if let TypeKind::Class(class_ident) = &this_info.typ.kind {
+                        class_ident.name
                     } else {
                         panic!("'this' is not a class type")
                     };
@@ -635,9 +645,12 @@ impl MIRLoweringContext {
                         field_index: *field_index,
                     };
                 }
-                panic!("Local variable not found in locals and method fields");
+                panic!(
+                    "Variable {} not found in locals and class fields",
+                    ident.name
+                );
             }
-            ExprKind::ArrayAccess { array, index } => {
+            tast::TExprKind::ArrayAccess { array, index } => {
                 let array_place = self.lower_expr_as_place(array);
                 let index_val = self.lower_expr(index);
                 MIRPlace::Index {
@@ -645,77 +658,151 @@ impl MIRLoweringContext {
                     index: Box::new(index_val),
                 }
             }
-            ExprKind::FieldAccess { object, field_name } => {
-                todo!("Lower expr as place: Field access")
+            tast::TExprKind::FieldAccess { object, field_name } => {
+                let object_place = self.lower_expr_as_place(object);
+                let class_name = if let TypeKind::Class(ident) = &object.typ.kind {
+                    ident.name
+                } else {
+                    panic!("Field access on non-class type");
+                };
+                let field_layout = self.symbol_table.get_class_field_layout(class_name);
+                // TODO: Map for faster lookup?
+                let (field_index, _) = field_layout
+                    .iter()
+                    .enumerate()
+                    .find(|(_, (name, _, _))| *name == field_name.name)
+                    .unwrap();
+
+                MIRPlace::Field {
+                    base: Box::new(object_place),
+                    class_name,
+                    field_name: field_name.name,
+                    field_index,
+                }
             }
             _ => panic!("Expression is not an lvalue. This should be caught by semantic checker"),
         }
     }
 
-    fn lower_expr(&mut self, expr: &Expr) -> MIRValue {
+    fn lower_expr(&mut self, expr: &TExpr) -> MIRValue {
         match &expr.kind {
-            ExprKind::LiteralInt(val) => MIRValue::IntConst(*val),
-            ExprKind::LiteralTrue => MIRValue::BoolConst(true),
-            ExprKind::LiteralFalse => MIRValue::BoolConst(false),
-            ExprKind::This => todo!(),
-            ExprKind::LiteralString(str) => MIRValue::StringConst(str.clone()),
-            ExprKind::LiteralNull => MIRValue::Null,
-            ExprKind::Var(ident) => {
-                let local_id = self.variable_map.get(&ident.name).unwrap_or_else(|| panic!("Variable '{}' not found in the map",
-                    ident.name));
+            tast::TExprKind::LiteralInt(val) => MIRValue::IntConst(*val),
+            tast::TExprKind::LiteralTrue => MIRValue::BoolConst(true),
+            tast::TExprKind::LiteralFalse => MIRValue::BoolConst(false),
+            tast::TExprKind::This => {
+                // TODO: This may be bugged.
+                let local_id = self.variable_map.get(&StrID::from("this")).unwrap();
                 MIRValue::Local(*local_id)
             }
-            ExprKind::UnaryOp { op, expr } => self.lower_unary_op(op, expr, expr.position),
-            ExprKind::BinaryOp { op, lhs, rhs } => {
-                self.lower_binary_op(op, lhs, rhs, expr.position)
+            tast::TExprKind::LiteralString(str) => MIRValue::StringConst(str.clone()),
+            tast::TExprKind::LiteralNull | tast::TExprKind::TypedNull(_) => MIRValue::Null,
+            tast::TExprKind::Var(_) => {
+                let place = self.lower_expr_as_place(expr);
+                self.lower_place_as_value(&place, &expr.typ)
             }
-            ExprKind::App { callee, args } => self.lower_call(callee, args, expr.position),
-            ExprKind::NewObject(typ) => self.lower_new_object(typ, expr.position),
-            ExprKind::NewArray { element_type, size } => {
+            tast::TExprKind::UnaryOp { op, expr } => self.lower_unary_op(op, expr),
+            tast::TExprKind::BinaryOp { op, lhs, rhs } => self.lower_binary_op(op, lhs, rhs),
+            tast::TExprKind::App { callee, args } => self.lower_call(callee, args, expr.position),
+            tast::TExprKind::NewObject(typ) => self.lower_new_object(typ, expr.position),
+            tast::TExprKind::NewArray { element_type, size } => {
                 self.lower_new_array(element_type, size, expr.position)
             }
-
-            ExprKind::ArrayAccess { array, index } => todo!(),
-            ExprKind::FieldAccess { object, field_name } => todo!(),
-            ExprKind::Method {
+            tast::TExprKind::ArrayAccess { .. } => {
+                let place = self.lower_expr_as_place(expr);
+                self.lower_place_as_value(&place, &expr.typ)
+            }
+            tast::TExprKind::FieldAccess { .. } => {
+                let place = self.lower_expr_as_place(expr);
+                self.lower_place_as_value(&place, &expr.typ)
+            }
+            tast::TExprKind::Method {
                 object,
                 method_name,
                 args,
-            } => todo!(),
-            ExprKind::Paren(expr) => todo!(),
-            ExprKind::TypedNull(_) => todo!(),
-            ExprKind::ExprTypedNull(expr) => todo!(),
+            } => self.lower_method_call(object, method_name.name, args, expr.position, &expr.typ),
+            tast::TExprKind::Paren(expr) => self.lower_expr(expr),
+            tast::TExprKind::ExprTypedNull(_) => MIRValue::Null,
         }
     }
 
-    fn lower_binary_op(
-        &mut self,
-        op: &BinaryOp,
-        lhs: &Expr,
-        rhs: &Expr,
-        position: SourcePosition,
-    ) -> MIRValue {
+    fn lower_place_as_value(&mut self, place: &MIRPlace, typ: &Type) -> MIRValue {
+        match place {
+            MIRPlace::Local(id) => MIRValue::Local(*id),
+            MIRPlace::Temp(id) => MIRValue::Temp(*id),
+            MIRPlace::Field {
+                base, field_index, ..
+            } => {
+                let obj_value = self.place_to_value(base);
+                let builder = self
+                    .current_function
+                    .as_mut()
+                    .expect("Lower place as value: builder not set 1");
+                let temp_dest = builder.create_temp(typ.clone());
+                // TODO: Probably remove position from here.
+                builder.emit_field_get(
+                    MIRPlace::Temp(temp_dest),
+                    obj_value,
+                    *field_index,
+                    typ.position,
+                );
+                MIRValue::Temp(temp_dest)
+            }
+            MIRPlace::Index { base, index } => {
+                let array_value = self.place_to_value(base);
+                let builder = self
+                    .current_function
+                    .as_mut()
+                    .expect("Lower place as value: builder not set 2");
+                let temp_dest = builder.create_temp(typ.clone());
+                // TODO: Probably remove position from here.
+                builder.emit_array_get(
+                    MIRPlace::Temp(temp_dest),
+                    array_value,
+                    *index.clone(),
+                    typ.position,
+                );
+                MIRValue::Temp(temp_dest)
+            }
+        }
+    }
+
+    fn lower_binary_op(&mut self, op: &BinaryOp, lhs: &TExpr, rhs: &TExpr) -> MIRValue {
         let lhs_val = self.lower_expr(lhs);
         let rhs_val = self.lower_expr(rhs);
-        
-        // TODO: We need notice the difference if expr is of type lhs.
 
         let mir_op = match op {
-            BinaryOp::Add => MIROperation::IntAdd,
+            BinaryOp::Add => {
+                if matches!(lhs.typ.kind, TypeKind::String) {
+                    MIROperation::StringConcat
+                } else {
+                    MIROperation::IntAdd
+                }
+            }
             BinaryOp::Sub => MIROperation::IntSub,
             BinaryOp::Mul => MIROperation::IntMul,
             BinaryOp::Div => MIROperation::IntDiv,
             BinaryOp::Mod => MIROperation::IntMod,
-            BinaryOp::Eq => MIROperation::IntEq,
+            BinaryOp::Eq => {
+                if matches!(lhs.typ.kind, TypeKind::String) {
+                    MIROperation::StringEq
+                } else {
+                    MIROperation::IntEq
+                }
+            }
+            BinaryOp::Neq => {
+                if matches!(lhs.typ.kind, TypeKind::String) {
+                    MIROperation::StringNeq
+                } else {
+                    MIROperation::IntNeq
+                }
+            }
             BinaryOp::Lt => MIROperation::IntLt,
             BinaryOp::Le => MIROperation::IntLe,
             BinaryOp::Gt => MIROperation::IntGt,
             BinaryOp::Ge => MIROperation::IntGe,
-            BinaryOp::Neq => MIROperation::IntNeq,
             BinaryOp::And => MIROperation::BoolAnd,
             BinaryOp::Or => MIROperation::BoolOr,
         };
-        
 
         let builder = self
             .current_function
@@ -723,52 +810,40 @@ impl MIRLoweringContext {
             .expect("Lower binary op: Func builder not set");
 
         let result_type = match op {
-            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => Type {
-                kind: TypeKind::Int,
-                position,
-            },
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
+                lhs.typ.clone()
+            }
             _ => Type {
                 kind: TypeKind::Bool,
-                position,
+                position: lhs.position,
             },
         };
 
         let temp = builder.create_temp(result_type);
-        builder.emit_binary(mir_op, MIRPlace::Temp(temp), lhs_val, rhs_val, position);
+        builder.emit_binary(mir_op, MIRPlace::Temp(temp), lhs_val, rhs_val, lhs.position);
         MIRValue::Temp(temp)
     }
 
-    fn lower_unary_op(&mut self, op: &UnaryOp, expr: &Expr, position: SourcePosition) -> MIRValue {
+    fn lower_unary_op(&mut self, op: &UnaryOp, expr: &TExpr) -> MIRValue {
         let value = self.lower_expr(expr);
         let mir_op = match op {
             UnaryOp::Neg => MIROperation::IntNeg,
             UnaryOp::Not => MIROperation::BoolNot,
         };
 
-        let result_type = match op {
-            UnaryOp::Neg => Type {
-                kind: TypeKind::Int,
-                position,
-            },
-            UnaryOp::Not => Type {
-                kind: TypeKind::Bool,
-                position,
-            },
-        };
-
         let builder = self
             .current_function
             .as_mut()
-            .expect("Lower binary op: Func builder not set");
-        let temp = builder.create_temp(result_type);
-        builder.emit_unary(mir_op, MIRPlace::Temp(temp), value, position);
+            .expect("Lower unary op: Func builder not set");
+        let temp = builder.create_temp(expr.typ.clone());
+        builder.emit_unary(mir_op, MIRPlace::Temp(temp), value, expr.position);
 
         MIRValue::Temp(temp)
     }
 
-    fn lower_call(&mut self, callee: &Expr, args: &[Expr], position: SourcePosition) -> MIRValue {
+    fn lower_call(&mut self, callee: &TExpr, args: &[TExpr], position: SourcePosition) -> MIRValue {
         let func_ident = match &callee.kind {
-            ExprKind::Var(ident) => ident,
+            tast::TExprKind::Var(ident) => ident,
             _ => panic!("MIR Lowering: only direct function calls are supported"),
         };
 
@@ -780,11 +855,14 @@ impl MIRLoweringContext {
             .as_mut()
             .expect("Lower call: Func builder not set");
 
-        let return_type = self
-            .symbol_table
-            .lookup_function(func_ident)
-            .expect("Lower call: Func not found")
-            .return_type;
+        if !matches!(callee.typ.kind, TypeKind::Fun(..)) {
+            panic!("Callee is not a function type");
+        }
+        let return_type = if let TypeKind::Fun(ret, _) = &callee.typ.kind {
+            (**ret).clone()
+        } else {
+            unreachable!()
+        };
 
         if !matches!(return_type.kind, TypeKind::Void) {
             let temp = builder.create_temp(return_type);
@@ -797,6 +875,48 @@ impl MIRLoweringContext {
             MIRValue::Temp(temp)
         } else {
             builder.emit_call(None, func_ident.name, arg_values, position);
+            MIRValue::Unit
+        }
+    }
+
+    fn lower_method_call(
+        &mut self,
+        object: &TExpr,
+        method_name: StrID,
+        args: &[TExpr],
+        position: SourcePosition,
+        return_type: &Type,
+    ) -> MIRValue {
+        let object_val = self.lower_expr(object);
+        let arg_values: Vec<MIRValue> = args.iter().map(|arg| self.lower_expr(arg)).collect();
+
+        let class_name = if let TypeKind::Class(ident) = &object.typ.kind {
+            ident.name
+        } else {
+            panic!("Method call on non-class type");
+        };
+
+        let vtable = self.symbol_table.get_class_vtable_layout(class_name);
+        let (vtable_index, _) = vtable
+            .iter()
+            .enumerate()
+            .find(|(_, func_info)| func_info.ident.name == method_name)
+            .expect("Method not found in vtable");
+
+        let builder = self.current_function.as_mut().unwrap();
+
+        if !matches!(return_type.kind, TypeKind::Void) {
+            let temp = builder.create_temp(return_type.clone());
+            builder.emit_virtual_call(
+                Some(MIRPlace::Temp(temp)),
+                object_val,
+                vtable_index,
+                arg_values,
+                position,
+            );
+            MIRValue::Temp(temp)
+        } else {
+            builder.emit_virtual_call(None, object_val, vtable_index, arg_values, position);
             MIRValue::Unit
         }
     }
@@ -819,7 +939,7 @@ impl MIRLoweringContext {
     fn lower_new_array(
         &mut self,
         element_type: &Type,
-        size: &Expr,
+        size: &TExpr,
         position: SourcePosition,
     ) -> MIRValue {
         let size_val = self.lower_expr(size);

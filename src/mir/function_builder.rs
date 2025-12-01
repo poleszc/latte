@@ -251,6 +251,28 @@ impl MIRFunctionBuilder {
         });
     }
 
+    pub fn emit_virtual_call(
+        &mut self,
+        dest: Option<MIRPlace>,
+        object: MIRValue,
+        vtable_index: usize,
+        args: Vec<MIRValue>,
+        position: SourcePosition,
+    ) {
+        self.emit(MIRInstruction {
+            operation: MIROperation::VCall,
+            destination: dest,
+            operands: {
+                // [object, index, arg1, arg2, ...]
+                let mut operands = vec![object, MIRValue::IntConst(vtable_index as i32)];
+                // Add function arguments.
+                operands.extend(args);
+                operands
+            },
+            source_position: position,
+        });
+    }
+
     pub fn emit_new_object(&mut self, dest: MIRPlace, class_name: StrID, position: SourcePosition) {
         self.emit(MIRInstruction {
             operation: MIROperation::NewObject,
