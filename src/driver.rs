@@ -90,6 +90,8 @@ pub fn run_compiler<
     // - MIR Opts
     // - LIR lowering (SSA)
     // - LLVM lowering (SSA)
+    // - Detect unused functions and variables. 
+    // - Skip empty functions?
 
     Ok(())
 }

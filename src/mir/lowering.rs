@@ -766,7 +766,74 @@ impl MIRLoweringContext {
         }
     }
 
+    fn lower_logic_op(&mut self, op: &BinaryOp, lhs: &TExpr, rhs: &TExpr) -> MIRValue {
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower logic op: builder not set 1");
+
+        let res_temp = builder.create_temp(Type {
+            kind: TypeKind::Bool,
+            position: lhs.position,
+        });
+
+        // Lower the left side.
+        let lhs_val = self.lower_expr(lhs);
+
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower logic op: builder not set 2");
+
+        let eval_rhs_block = builder.create_block();
+        let end_block = builder.create_block();
+
+        match op {
+            BinaryOp::And => {
+                // Emit the default value for short-circuit AND.
+                builder.emit_assign(
+                    MIRPlace::Temp(res_temp),
+                    MIRValue::BoolConst(false),
+                    lhs.position,
+                );
+
+                // If expression is true, we move to the next block. If false we skip the rhs.
+                builder.emit_branch(lhs_val, eval_rhs_block, end_block, lhs.position);
+            }
+            BinaryOp::Or => {
+                // Emit the default value for short-circuit OR.
+                builder.emit_assign(
+                    MIRPlace::Temp(res_temp),
+                    MIRValue::BoolConst(true),
+                    lhs.position,
+                );
+                // If expression is true, we move to the end block. If false we move to the rhs.
+                builder.emit_branch(lhs_val, end_block, eval_rhs_block, rhs.position);
+            }
+            _ => unreachable!("Non logic op in lower logic op"),
+        }
+
+        // Now we evaluate the right side.
+        builder.set_current_block(eval_rhs_block);
+        let rhs_val = self.lower_expr(rhs);
+        let builder = self
+            .current_function
+            .as_mut()
+            .expect("Lower logic op: builder not set 3");
+
+        builder.emit_assign(MIRPlace::Temp(res_temp), rhs_val, rhs.position);
+        builder.emit_jump(end_block, rhs.position);
+        builder.set_current_block(end_block);
+        MIRValue::Temp(res_temp)
+    }
+
     fn lower_binary_op(&mut self, op: &BinaryOp, lhs: &TExpr, rhs: &TExpr) -> MIRValue {
+        // If a logic op is encountered we have to lower it lazily.
+        if matches!(op, BinaryOp::And | BinaryOp::Or) {
+            return self.lower_logic_op(op, lhs, rhs);
+        }
+
+        // Otherwise it's simple.
         let lhs_val = self.lower_expr(lhs);
         let rhs_val = self.lower_expr(rhs);
 
@@ -800,8 +867,7 @@ impl MIRLoweringContext {
             BinaryOp::Le => MIROperation::IntLe,
             BinaryOp::Gt => MIROperation::IntGt,
             BinaryOp::Ge => MIROperation::IntGe,
-            BinaryOp::And => MIROperation::BoolAnd,
-            BinaryOp::Or => MIROperation::BoolOr,
+            _ => unreachable!("Logic ops should be handled separately"),
         };
 
         let builder = self
