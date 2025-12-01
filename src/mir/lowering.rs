@@ -1,7 +1,7 @@
 // TODO: Remove those eventually.
 #![allow(dead_code)]
 #![allow(unused_variables)]
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 
 use crate::{
@@ -661,10 +661,8 @@ impl MIRLoweringContext {
             ExprKind::LiteralString(str) => MIRValue::StringConst(str.clone()),
             ExprKind::LiteralNull => MIRValue::Null,
             ExprKind::Var(ident) => {
-                let local_id = self.variable_map.get(&ident.name).expect(&format!(
-                    "Variable '{}' not found in the map",
-                    ident.name
-                ));
+                let local_id = self.variable_map.get(&ident.name).unwrap_or_else(|| panic!("Variable '{}' not found in the map",
+                    ident.name));
                 MIRValue::Local(*local_id)
             }
             ExprKind::UnaryOp { op, expr } => self.lower_unary_op(op, expr, expr.position),

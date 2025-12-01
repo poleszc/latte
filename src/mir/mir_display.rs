@@ -137,11 +137,10 @@ impl fmt::Display for LocalInfo {
 
         write!(f, "Type: {}", self.typ)?;
 
-        if self.is_parameter {
-            if let Some(idx) = self.parameter_index {
+        if self.is_parameter
+            && let Some(idx) = self.parameter_index {
                 write!(f, ", Parameter #{}", idx)?;
             }
-        }
 
         Ok(())
     }
@@ -260,7 +259,7 @@ impl fmt::Display for MIRProgram {
             writeln!(f, "═══════════════════════════════════════════")?;
             writeln!(f)?;
             
-            for (_, class) in &self.classes {
+            for class in self.classes.values() {
                 writeln!(f, "{}", class)?;
             }
         }

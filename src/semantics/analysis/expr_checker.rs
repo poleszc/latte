@@ -632,38 +632,4 @@ impl<'a> ExpressionChecker<'a> {
         };
         (kind, result_type)
     }
-
-    // TODO: Try to move that from here?
-    fn validate_function_call(
-        &mut self,
-        func_info: &FunctionInfo,
-        args: &[Expr],
-        expr_position: SourcePosition,
-    ) {
-        let func_ident = func_info.ident;
-        if args.len() != func_info.params.len() {
-            self.ctx.add_error(SemanticError::WrongNumberOfArguments {
-                name: func_ident.name,
-                expected: func_info.params.len(),
-                found: args.len(),
-                call_position: expr_position,
-                function_position: func_info.position,
-            });
-            // Don't return here, check types of what we have if possible or just mismatch
-        }
-
-        // Type check arguments.
-        for (expr, param) in args.iter().zip(&func_info.params) {
-            let arg_type = self.visit_expr(expr).typ;
-            if !self.ctx.is_subtype(&arg_type, param) {
-                self.ctx.add_error(SemanticError::ArgumentTypeMismatch {
-                    expected: StrID::from(param.to_string()),
-                    found: StrID::from(arg_type.to_string()),
-                    position: expr.position,
-                    function_name: func_info.ident.name,
-                    argument_position: param.position,
-                });
-            }
-        }
-    }
 }
