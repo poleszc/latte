@@ -16,8 +16,8 @@ fn main() {
     generate_extensions_semantic_tests().expect("Generate extensions semantic tests failed");
     generate_basic_mir_lowering_tests().expect("Generate basic MIR lowering tests failed");
     generate_extra_mir_lowering_tests().expect("Generate extra MIR lowering tests failed");
-    // generate_extensions_mir_lowering_tests()
-    //     .expect("Generate extensions MIR lowering tests failed");
+    generate_extensions_mir_lowering_tests()
+        .expect("Generate extensions MIR lowering tests failed");
 }
 
 /// ===================== LEXER ======================
@@ -343,7 +343,7 @@ fn generate_extra_mir_lowering_tests() -> io::Result<()> {
 }
 
 
-fn _generate_extensions_mir_lowering_tests() -> io::Result<()> {
+fn generate_extensions_mir_lowering_tests() -> io::Result<()> {
     let out_dir = env::var("OUT_DIR").expect("OUT_DIR env variable not set");
 
     let mut parsing_file =
@@ -356,18 +356,18 @@ fn _generate_extensions_mir_lowering_tests() -> io::Result<()> {
             .join("good")
             .join("extensions")
             .join("arrays"),
-        Path::new("tests")
-            .join("good")
-            .join("extensions")
-            .join("objects"),
-        Path::new("tests")
-            .join("good")
-            .join("extensions")
-            .join("struct"),
-        Path::new("tests")
-            .join("good")
-            .join("extensions")
-            .join("virtual"),
+        // Path::new("tests")
+        //     .join("good")
+        //     .join("extensions")
+        //     .join("objects"),
+        // Path::new("tests")
+        //     .join("good")
+        //     .join("extensions")
+        //     .join("struct"),
+        // Path::new("tests")
+        //     .join("good")
+        //     .join("extensions")
+        //     .join("virtual"),
     ];
 
     for directory in pass_test_dir_paths {
@@ -389,7 +389,6 @@ fn _generate_extensions_mir_lowering_tests() -> io::Result<()> {
         }
     }
 
-    println!("cargo:rerun-if-changed=tests/good/extra");
     println!("cargo:rerun-if-changed=tests/good/extensions");
     Ok(())
 }

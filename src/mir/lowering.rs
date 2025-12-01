@@ -9,9 +9,10 @@ use crate::{
     parser::ast::{BinaryOp, Ident, Type, TypeKind, UnaryOp},
     semantics::{
         symbol_table::SymbolTable,
+        tast::{TBlock, TItem, TProgram},
         tast::{
-            self, TClassDef, TClassEntryKind, TExpr, TExprKind, TFuncDef, TItemKind, TStmt,
-            TStmtKind, TTopDefKind,
+            TClassDef, TClassEntryKind, TExpr, TExprKind, TFuncDef, TItemKind, TStmt, TStmtKind,
+            TTopDefKind,
         },
     },
     utils::StrID,
@@ -39,7 +40,7 @@ impl MIRLoweringContext {
     }
 
     /// Main function performing the lowering for the whole program.
-    pub fn lower_program(&mut self, program: &tast::TProgram) -> MIRProgram {
+    pub fn lower_program(&mut self, program: &TProgram) -> MIRProgram {
         let mut builder = MIRProgramBuilder::new();
 
         // Lower all classes to MIR.
@@ -242,13 +243,13 @@ impl MIRLoweringContext {
 // Statement lowering.
 // ======================
 impl MIRLoweringContext {
-    fn lower_block(&mut self, block: &tast::TBlock) {
+    fn lower_block(&mut self, block: &TBlock) {
         for stmt in &block.stmts {
             self.lower_stmt(stmt);
         }
     }
 
-    fn lower_stmt(&mut self, stmt: &tast::TStmt) {
+    fn lower_stmt(&mut self, stmt: &TStmt) {
         match &stmt.kind {
             TStmtKind::Empty => {}
             TStmtKind::Block(block) => self.lower_block(block),
@@ -276,12 +277,7 @@ impl MIRLoweringContext {
         }
     }
 
-    fn lower_declaration(
-        &mut self,
-        typ: &Type,
-        items: &Vec<tast::TItem>,
-        stmt_position: SourcePosition,
-    ) {
+    fn lower_declaration(&mut self, typ: &Type, items: &Vec<TItem>, stmt_position: SourcePosition) {
         for item in items {
             match &item.kind {
                 TItemKind::NoInit(ident) => {
@@ -322,7 +318,7 @@ impl MIRLoweringContext {
         builder.emit_assign(place, val, stmt_position);
     }
 
-    fn lower_return(&mut self, expr: &Option<tast::TExpr>, stmt_position: SourcePosition) {
+    fn lower_return(&mut self, expr: &Option<TExpr>, stmt_position: SourcePosition) {
         let value = expr.as_ref().map(|e| self.lower_expr(e));
         let builder = self
             .current_function
@@ -672,7 +668,7 @@ impl MIRLoweringContext {
                     ident.name
                 );
             }
-            tast::TExprKind::ArrayAccess { array, index } => {
+            TExprKind::ArrayAccess { array, index } => {
                 let array_place = self.lower_expr_as_place(array);
                 let index_val = self.lower_expr(index);
                 MIRPlace::Index {
@@ -680,7 +676,7 @@ impl MIRLoweringContext {
                     index: Box::new(index_val),
                 }
             }
-            tast::TExprKind::FieldAccess { object, field_name } => {
+            TExprKind::FieldAccess { object, field_name } => {
                 let object_place = self.lower_expr_as_place(object);
                 let class_name = if let TypeKind::Class(ident) = &object.typ.kind {
                     ident.name
@@ -706,44 +702,99 @@ impl MIRLoweringContext {
         }
     }
 
+    fn lower_field_access(&mut self, object: &TExpr, field_name: Ident) -> MIRValue {
+        // array.length.
+        //
+        match &object.typ.kind {
+            TypeKind::String => {
+                if field_name.name == StrID::from("length") {
+                    let array_val = self.lower_expr(object);
+                    let builder = self
+                        .current_function
+                        .as_mut()
+                        .expect("Lower field access: func builder not set 1");
+
+                    let temp = builder.create_temp(Type {
+                        kind: TypeKind::Int,
+                        position: object.position,
+                    });
+                    builder.emit_string_length(MIRPlace::Temp(temp), array_val, object.position);
+                    return MIRValue::Temp(temp);
+                } else {
+                    panic!(
+                        "String field access got invalid field: {}",
+                        field_name.name.to_string()
+                    );
+                }
+            }
+            TypeKind::Array(_) => {
+                if field_name.name == StrID::from("length") {
+                    let array_val = self.lower_expr(object);
+                    let builder = self
+                        .current_function
+                        .as_mut()
+                        .expect("Lower field access: func builder not set 1");
+
+                    let temp = builder.create_temp(Type {
+                        kind: TypeKind::Int,
+                        position: object.position,
+                    });
+                    builder.emit_array_length(MIRPlace::Temp(temp), array_val, object.position);
+                    return MIRValue::Temp(temp);
+                } else {
+                    panic!(
+                        "Array field access got invalid field: {}",
+                        field_name.name.to_string()
+                    );
+                }
+            }
+            TypeKind::Class(_) => {
+                let place = self.lower_expr_as_place(object);
+                self.lower_place_as_value(&place, &object.typ)
+            }
+            _ => {
+                panic!("Field access got invalid type: {}", object.typ.to_string());
+            }
+        }
+    }
+
     fn lower_expr(&mut self, expr: &TExpr) -> MIRValue {
         match &expr.kind {
-            tast::TExprKind::LiteralInt(val) => MIRValue::IntConst(*val),
-            tast::TExprKind::LiteralTrue => MIRValue::BoolConst(true),
-            tast::TExprKind::LiteralFalse => MIRValue::BoolConst(false),
-            tast::TExprKind::This => {
+            TExprKind::LiteralInt(val) => MIRValue::IntConst(*val),
+            TExprKind::LiteralTrue => MIRValue::BoolConst(true),
+            TExprKind::LiteralFalse => MIRValue::BoolConst(false),
+            TExprKind::This => {
                 // TODO: This may be bugged.
                 let local_id = self.variable_map.get(&StrID::from("this")).unwrap();
                 MIRValue::Local(*local_id)
             }
-            tast::TExprKind::LiteralString(str) => MIRValue::StringConst(str.clone()),
-            tast::TExprKind::LiteralNull | tast::TExprKind::TypedNull(_) => MIRValue::Null,
-            tast::TExprKind::Var(_) => {
+            TExprKind::LiteralString(str) => MIRValue::StringConst(str.clone()),
+            TExprKind::LiteralNull | TExprKind::TypedNull(_) => MIRValue::Null,
+            TExprKind::Var(_) => {
                 let place = self.lower_expr_as_place(expr);
                 self.lower_place_as_value(&place, &expr.typ)
             }
-            tast::TExprKind::UnaryOp { op, expr } => self.lower_unary_op(op, expr),
-            tast::TExprKind::BinaryOp { op, lhs, rhs } => self.lower_binary_op(op, lhs, rhs),
-            tast::TExprKind::App { callee, args } => self.lower_call(callee, args, expr.position),
-            tast::TExprKind::NewObject(typ) => self.lower_new_object(typ, expr.position),
-            tast::TExprKind::NewArray { element_type, size } => {
+            TExprKind::UnaryOp { op, expr } => self.lower_unary_op(op, expr),
+            TExprKind::BinaryOp { op, lhs, rhs } => self.lower_binary_op(op, lhs, rhs),
+            TExprKind::App { callee, args } => self.lower_call(callee, args, expr.position),
+            TExprKind::NewObject(typ) => self.lower_new_object(typ, expr.position),
+            TExprKind::NewArray { element_type, size } => {
                 self.lower_new_array(element_type, size, expr.position)
             }
-            tast::TExprKind::ArrayAccess { .. } => {
+            TExprKind::ArrayAccess { .. } => {
                 let place = self.lower_expr_as_place(expr);
                 self.lower_place_as_value(&place, &expr.typ)
             }
-            tast::TExprKind::FieldAccess { .. } => {
-                let place = self.lower_expr_as_place(expr);
-                self.lower_place_as_value(&place, &expr.typ)
+            TExprKind::FieldAccess { object, field_name } => {
+                self.lower_field_access(object, *field_name)
             }
-            tast::TExprKind::Method {
+            TExprKind::Method {
                 object,
                 method_name,
                 args,
             } => self.lower_method_call(object, method_name.name, args, expr.position, &expr.typ),
-            tast::TExprKind::Paren(expr) => self.lower_expr(expr),
-            tast::TExprKind::ExprTypedNull(_) => MIRValue::Null,
+            TExprKind::Paren(expr) => self.lower_expr(expr),
+            TExprKind::ExprTypedNull(_) => MIRValue::Null,
         }
     }
 
@@ -931,7 +982,7 @@ impl MIRLoweringContext {
 
     fn lower_call(&mut self, callee: &TExpr, args: &[TExpr], position: SourcePosition) -> MIRValue {
         let func_ident = match &callee.kind {
-            tast::TExprKind::Var(ident) => ident,
+            TExprKind::Var(ident) => ident,
             _ => panic!("MIR Lowering: only direct function calls are supported"),
         };
 
@@ -947,13 +998,13 @@ impl MIRLoweringContext {
             panic!("Callee is not a function type");
         }
         let return_type = if let TypeKind::Fun(ret, _) = &callee.typ.kind {
-            (**ret).clone()
+            (*ret).clone()
         } else {
             unreachable!()
         };
 
         if !matches!(return_type.kind, TypeKind::Void) {
-            let temp = builder.create_temp(return_type);
+            let temp = builder.create_temp(*return_type);
             builder.emit_call(
                 Some(MIRPlace::Temp(temp)),
                 func_ident.name,

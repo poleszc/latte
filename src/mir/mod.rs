@@ -70,6 +70,7 @@ pub enum MIROperation {
     StringConcat,
     StringEq,
     StringNeq,
+    StringLength,
 
     // Array
     NewArray, // new arr[10]

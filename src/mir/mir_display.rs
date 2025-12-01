@@ -57,6 +57,7 @@ impl fmt::Display for MIROperation {
             MIROperation::StringConcat => "StringConcat",
             MIROperation::StringEq => "StringEq",
             MIROperation::StringNeq => "StringNeq",
+            MIROperation::StringLength => "StringLength",
             MIROperation::Call => "Call",
             MIROperation::VCall => "VCall",
             MIROperation::NewArray => "NewArray",
