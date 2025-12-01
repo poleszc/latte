@@ -92,7 +92,7 @@ pub fn assert_mir_lowering_pass(input_path: &str) {
         SemanticChecker::check(&ast).expect("Expected semantic analysis to succeed, but it failed");
 
     let mut lowering_context = MIRLoweringContext::new(semantic_result.symbol_table);
-    let mir_program = lowering_context.lower_program(&semantic_result.tast);
+    let _ = lowering_context.lower_program(&semantic_result.tast);
     // If we got here, it means the semantic analysis passed. Think of a better way to test for that.
 }
 
