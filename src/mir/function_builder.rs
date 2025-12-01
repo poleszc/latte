@@ -169,7 +169,7 @@ impl MIRFunctionBuilder {
         position: SourcePosition,
     ) {
         self.emit(MIRInstruction {
-            operation: operation,
+            operation,
             destination: Some(dest),
             operands: vec![lhs, rhs],
             source_position: position,

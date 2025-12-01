@@ -8,7 +8,7 @@ use clap::Parser;
 use crate::{
     LatteArgs,
     errors::CompilerError,
-    mir::{self, MIRProgram, lowering::MIRLoweringContext},
+    mir::MIRProgram,
     parser::{
         self,
         ast::{self, Program},

@@ -8,7 +8,6 @@ pub mod type_checker;
 use crate::errors::SemanticError;
 use crate::parser::ast::Program;
 use crate::semantics::SemanticAnalysisResult;
-use crate::semantics::SymbolTable;
 
 use context::SemanticContext;
 use definition_checker::DefinitionChecker;
@@ -36,7 +35,7 @@ impl SemanticChecker {
 
         if checker.ctx.errors.is_empty() {
             Ok(SemanticAnalysisResult {
-                tast: tast,
+                tast,
                 symbol_table: checker.ctx.symbol_table,
             })
         } else {

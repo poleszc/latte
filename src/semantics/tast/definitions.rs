@@ -1,6 +1,5 @@
-use crate::parser::ast::{Arg, BinaryOp, Ident, SourcePosition, Type, UnaryOp};
+use crate::parser::ast::{Arg, Ident, SourcePosition, Type};
 use crate::semantics::tast::statements::TBlock;
-use crate::utils::StrID;
 
 #[derive(Debug)]
 pub struct TProgram {

@@ -3,12 +3,11 @@
 #![allow(unused_variables)]
 use std::{collections::HashMap, hash::Hash};
 
-use clap::builder::{self, Str};
 
 use crate::{
     SourcePosition,
     mir::{
-        self, LocalID, MIRClass, MIRField, MIRFunction, MIRInstruction, MIROperation, MIRPlace,
+        LocalID, MIRClass, MIRField, MIRFunction, MIROperation, MIRPlace,
         MIRProgram, MIRValue, function_builder::MIRFunctionBuilder,
         program_builder::MIRProgramBuilder,
     },
@@ -425,7 +424,7 @@ impl MIRLoweringContext {
         // If false block.
         builder.set_current_block(false_block);
         if let Some(else_stmt) = if_false {
-            self.lower_stmt(&else_stmt);
+            self.lower_stmt(else_stmt);
         }
         let builder = self
             .current_function
@@ -640,7 +639,7 @@ impl MIRLoweringContext {
             }
             ExprKind::ArrayAccess { array, index } => {
                 let array_place = self.lower_expr_as_place(array);
-                let index_val = self.lower_expr(&index);
+                let index_val = self.lower_expr(index);
                 MIRPlace::Index {
                     base: Box::new(array_place),
                     index: Box::new(index_val),
@@ -664,7 +663,7 @@ impl MIRLoweringContext {
             ExprKind::Var(ident) => {
                 let local_id = self.variable_map.get(&ident.name).expect(&format!(
                     "Variable '{}' not found in the map",
-                    ident.name.to_string()
+                    ident.name
                 ));
                 MIRValue::Local(*local_id)
             }

@@ -115,7 +115,7 @@ impl<'a> StatementChecker<'a> {
         }
     }
 
-    fn visit_declaration(&mut self, typ: &Type, items: &Vec<Item>) -> tast::TStmtKind {
+    fn visit_declaration(&mut self, typ: &Type, items: &[Item]) -> tast::TStmtKind {
         self.ctx.validate_variable_type(typ);
         let typed_items = items
             .iter()
