@@ -217,7 +217,9 @@ impl MIRLoweringContext {
                 .current_function
                 .as_mut()
                 .expect("Lower function: builder not set");
-            builder.emit_return(None, func_def.position);
+            if !builder.is_current_block_terminated() {
+                builder.emit_return(None, func_def.position);
+            }
         }
 
         self.current_function.take().unwrap().build()
@@ -418,7 +420,11 @@ impl MIRLoweringContext {
                 .current_function
                 .as_mut()
                 .expect("Lower if: Func builder not set 2");
-            builder.emit_jump(merge_block, stmt_position);
+
+            // Set the jump, only if the block is not terminated already.
+            if !builder.is_current_block_terminated() {
+                builder.emit_jump(merge_block, stmt_position);
+            }
 
             // Lower the false block.
             builder.set_current_block(false_block);
@@ -427,7 +433,11 @@ impl MIRLoweringContext {
                 .current_function
                 .as_mut()
                 .expect("Lower if: Func builder not set 2");
-            builder.emit_jump(merge_block, stmt_position);
+
+            // Set the jump, only if the block is not terminated already.
+            if !builder.is_current_block_terminated() {
+                builder.emit_jump(merge_block, stmt_position);
+            }
 
             // Continue to the merge block
             builder.set_current_block(merge_block);
@@ -450,7 +460,12 @@ impl MIRLoweringContext {
                 .current_function
                 .as_mut()
                 .expect("Lower if: Func builder not set 2");
-            builder.emit_jump(merge_block, stmt_position);
+
+            // Set the jump, only if the block is not terminated already.
+            if !builder.is_current_block_terminated() {
+                builder.emit_jump(merge_block, stmt_position);
+            }
+
             // Continue to the merge block
             builder.set_current_block(merge_block);
         }
@@ -484,7 +499,10 @@ impl MIRLoweringContext {
             .current_function
             .as_mut()
             .expect("Lower while: Func builder not set 3");
-        builder.emit_jump(loop_start, stmt_position);
+
+        if !builder.is_current_block_terminated() {
+            builder.emit_jump(loop_start, stmt_position);
+        }
 
         // Leave the loop.
         builder.set_current_block(loop_exit);
@@ -530,7 +548,9 @@ impl MIRLoweringContext {
         let loop_exit = builder.create_block();
 
         // Jump to the condition check.
-        builder.emit_jump(loop_start, stmt_position);
+        if !builder.is_current_block_terminated() {
+            builder.emit_jump(loop_start, stmt_position);
+        }
 
         // Loop condition check.
         builder.set_current_block(loop_start);
@@ -583,21 +603,23 @@ impl MIRLoweringContext {
             .as_mut()
             .expect("Lower for each: Func builder not set 2");
 
-        let temp = builder.create_temp(Type {
-            kind: TypeKind::Int,
-            position: stmt_position,
-        });
-        builder.emit_binary(
-            MIROperation::IntAdd,
-            MIRPlace::Temp(temp),
-            MIRValue::Temp(i_temp),
-            MIRValue::IntConst(1),
-            stmt_position,
-        );
-        builder.emit_assign(MIRPlace::Temp(i_temp), MIRValue::Temp(temp), stmt_position);
+        if !builder.is_current_block_terminated() {
+            let temp = builder.create_temp(Type {
+                kind: TypeKind::Int,
+                position: stmt_position,
+            });
+            builder.emit_binary(
+                MIROperation::IntAdd,
+                MIRPlace::Temp(temp),
+                MIRValue::Temp(i_temp),
+                MIRValue::IntConst(1),
+                stmt_position,
+            );
+            builder.emit_assign(MIRPlace::Temp(i_temp), MIRValue::Temp(temp), stmt_position);
 
-        // Jump to loop start.
-        builder.emit_jump(loop_start, stmt_position);
+            // Jump to loop start.
+            builder.emit_jump(loop_start, stmt_position);
+        }
 
         // Leave the loop.
         builder.set_current_block(loop_exit);

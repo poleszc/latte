@@ -1,3 +1,4 @@
+use core::panic;
 use std::collections::HashMap;
 
 use crate::{SourcePosition, mir::*, parser::ast::Type, utils::StrID};
@@ -56,11 +57,7 @@ impl MIRFunctionBuilder {
         let block = MIRBlock {
             id,
             instructions: Vec::new(),
-            // TODO: Think about that.
-            terminator: MIRTerminator::Return {
-                value: None,
-                position: SourcePosition(0, 0),
-            },
+            terminator: None,
         };
 
         self.blocks.insert(id, block);
@@ -94,8 +91,20 @@ impl MIRFunctionBuilder {
         let block = self
             .blocks
             .get_mut(&block_id)
-            .expect("Set Terminator: Block doesn't exist");
-        block.terminator = terminator;
+            .expect("Set Terminator:Block doesn't exist");
+        if block.terminator.is_some() {
+            panic!("Terminator set twice for a block");
+        }
+        block.terminator = Some(terminator);
+    }
+
+    pub fn is_current_block_terminated(&self) -> bool {
+        let block_id = self.current_block();
+        let block = self
+            .blocks
+            .get(&block_id)
+            .expect("Set Terminator:Block doesn't exist");
+        block.terminator.is_some()
     }
 
     /// Create a new local variable for a current block.

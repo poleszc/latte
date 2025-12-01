@@ -163,7 +163,11 @@ impl fmt::Display for MIRBlock {
         for instr in &self.instructions {
             writeln!(f, "    {}", instr)?;
         }
-        writeln!(f, "    {}", self.terminator)?;
+        if let Some(terminator) = &self.terminator {
+            writeln!(f, "    {}", terminator)?;
+        } else {
+            writeln!(f, "    {}", "NONE")?;
+        }
 
         Ok(())
     }

@@ -157,7 +157,7 @@ pub struct MIRBlock {
     /// List of instructions with no terminator.
     pub instructions: Vec<MIRInstruction>,
     /// The block terminator instruction.
-    pub terminator: MIRTerminator,
+    pub terminator: Option<MIRTerminator>,
 }
 
 /// Single local variable information.
