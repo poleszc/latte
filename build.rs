@@ -342,7 +342,6 @@ fn generate_extra_mir_lowering_tests() -> io::Result<()> {
     Ok(())
 }
 
-
 fn generate_extensions_mir_lowering_tests() -> io::Result<()> {
     let out_dir = env::var("OUT_DIR").expect("OUT_DIR env variable not set");
 

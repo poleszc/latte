@@ -224,7 +224,12 @@ impl MIRFunctionBuilder {
         });
     }
 
-    pub fn emit_string_length(&mut self, dest: MIRPlace, value: MIRValue, position: SourcePosition) {
+    pub fn emit_string_length(
+        &mut self,
+        dest: MIRPlace,
+        value: MIRValue,
+        position: SourcePosition,
+    ) {
         self.emit(MIRInstruction {
             operation: MIROperation::StringLength,
             destination: Some(dest),
