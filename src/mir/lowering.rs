@@ -669,15 +669,27 @@ impl MIRLoweringContext {
                 );
             }
             TExprKind::ArrayAccess { array, index } => {
-                let array_place = self.lower_expr_as_place(array);
+                let array_val = self.lower_expr(array);
+                let array_place = match array_val {
+                    MIRValue::Local(local_id) => MIRPlace::Local(local_id),
+                    MIRValue::Temp(temp_id) => MIRPlace::Temp(temp_id),
+                    _ => panic!("Array base must be a Local or Temp variable"),
+                };
                 let index_val = self.lower_expr(index);
+
                 MIRPlace::Index {
                     base: Box::new(array_place),
                     index: Box::new(index_val),
                 }
             }
             TExprKind::FieldAccess { object, field_name } => {
-                let object_place = self.lower_expr_as_place(object);
+                let object_val = self.lower_expr(object);
+                let object_place = match object_val {
+                    MIRValue::Local(local_id) => MIRPlace::Local(local_id),
+                    MIRValue::Temp(temp_id) => MIRPlace::Temp(temp_id),
+                    _ => panic!("Object base must be a Local or Temp variable"),
+                };
+
                 let class_name = if let TypeKind::Class(ident) = &object.typ.kind {
                     ident.name
                 } else {
@@ -697,6 +709,14 @@ impl MIRLoweringContext {
                     field_name: field_name.name,
                     field_index,
                 }
+            }
+            TExprKind::Paren(inner) => self.lower_expr_as_place(inner),
+            TExprKind::This => {
+                let local = self
+                    .variable_map
+                    .get(&StrID::from("this"))
+                    .expect("this not found");
+                MIRPlace::Local(*local)
             }
             _ => panic!("Expression is not an lvalue. This should be caught by semantic checker"),
         }
