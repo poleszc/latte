@@ -356,14 +356,14 @@ fn generate_extensions_mir_lowering_tests() -> io::Result<()> {
             .join("good")
             .join("extensions")
             .join("arrays"),
+        Path::new("tests")
+            .join("good")
+            .join("extensions")
+            .join("struct"),
         // Path::new("tests")
         //     .join("good")
         //     .join("extensions")
         //     .join("objects"),
-        // Path::new("tests")
-        //     .join("good")
-        //     .join("extensions")
-        //     .join("struct"),
         // Path::new("tests")
         //     .join("good")
         //     .join("extensions")
