@@ -739,12 +739,9 @@ impl MIRLoweringContext {
                         position: object.position,
                     });
                     builder.emit_string_length(MIRPlace::Temp(temp), array_val, object.position);
-                    return MIRValue::Temp(temp);
+                    MIRValue::Temp(temp)
                 } else {
-                    panic!(
-                        "String field access got invalid field: {}",
-                        field_name.name.to_string()
-                    );
+                    panic!("String field access got invalid field: {}", field_name.name);
                 }
             }
             TypeKind::Array(_) => {
@@ -760,12 +757,9 @@ impl MIRLoweringContext {
                         position: object.position,
                     });
                     builder.emit_array_length(MIRPlace::Temp(temp), array_val, object.position);
-                    return MIRValue::Temp(temp);
+                    MIRValue::Temp(temp)
                 } else {
-                    panic!(
-                        "Array field access got invalid field: {}",
-                        field_name.name.to_string()
-                    );
+                    panic!("Array field access got invalid field: {}", field_name.name);
                 }
             }
             TypeKind::Class(_) => {
@@ -773,7 +767,7 @@ impl MIRLoweringContext {
                 self.lower_place_as_value(&place, &object.typ)
             }
             _ => {
-                panic!("Field access got invalid type: {}", object.typ.to_string());
+                panic!("Field access got invalid type: {}", object.typ);
             }
         }
     }
