@@ -15,4 +15,7 @@ target
 
 .vscode/
 *.json
+*.mir.txt
 merge_project.fish
+latte.txt
+test_progress.md

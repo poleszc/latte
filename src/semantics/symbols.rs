@@ -25,6 +25,8 @@ pub struct ClassInfo {
     pub parent: Option<Ident>,
     pub fields: HashMap<StrID, (Type, SourcePosition)>,
     pub methods: HashMap<StrID, FunctionInfo>,
+    pub field_order: Vec<StrID>,
+    pub method_order: Vec<StrID>,
     pub position: SourcePosition,
 }
 

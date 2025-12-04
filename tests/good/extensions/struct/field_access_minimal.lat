@@ -1,0 +1,19 @@
+class Kajak {
+	Kajak poprzedni, nastepny;
+	int wartosc;
+}
+
+class list {
+    int elem;
+    int[] array;
+    Kajak kajak;
+}
+
+int main() {
+    list a = new list;
+    a.elem++;
+    a.array[0]++;
+    a.kajak.wartosc = 23;
+
+    return a.elem;
+}

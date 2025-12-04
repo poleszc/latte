@@ -1,6 +1,12 @@
 class A {
     int a;
+    boolean d;
     int foo() {
+        //int x = a;
+        int y = this.a;
+        return 1;
+    }
+    int bar() {
         int x = a;
         int y = this.a;
         return 1;

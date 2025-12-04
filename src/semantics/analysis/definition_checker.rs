@@ -3,7 +3,7 @@ use crate::parser::ast::*;
 use crate::semantics::analysis::context::SemanticContext;
 use crate::semantics::analysis::return_checker::ReturnChecker;
 use crate::semantics::analysis::stmt_checker::StatementChecker;
-use crate::semantics::{ClassInfo, FunctionInfo};
+use crate::semantics::{ClassInfo, FunctionInfo, tast};
 use crate::utils::StrID;
 use std::collections::HashMap;
 
@@ -21,7 +21,7 @@ impl<'a> DefinitionChecker<'a> {
 
     /// Main function to perform a type check of a program.
     /// Logs errors in the context in case of errors.
-    pub fn check_program(&mut self, program: &Program) {
+    pub fn check_program(&mut self, program: &Program) -> tast::TProgram {
         // Forward declare all functions and classes in the global scope.
         for top_def in &program.defs {
             match &top_def.kind {
@@ -37,12 +37,15 @@ impl<'a> DefinitionChecker<'a> {
             }
         }
 
-        // Now we type check the functions and methods.
-        for top_def in &program.defs {
-            self.visit_top_def(top_def);
-        }
+        let tast_defs = program
+            .defs
+            .iter()
+            .map(|top_def| self.visit_top_def(top_def))
+            .collect();
 
         self.validate_main();
+
+        tast::TProgram { defs: tast_defs }
     }
 }
 
@@ -55,6 +58,8 @@ impl<'a> DefinitionChecker<'a> {
     fn add_class(&mut self, class_def: &ClassDef) {
         let mut fields: HashMap<StrID, (Type, SourcePosition)> = HashMap::new();
         let mut methods: HashMap<StrID, FunctionInfo> = HashMap::new();
+        let mut field_order = Vec::new();
+        let mut method_order = Vec::new();
 
         // Check for duplicate fields and methods. Extends are
         // not validated yet since we don't know the hierarchy.
@@ -71,6 +76,7 @@ impl<'a> DefinitionChecker<'a> {
                             });
                         } else {
                             fields.insert(ident.name, (typ.clone(), ident.position));
+                            field_order.push(ident.name);
                         }
                     }
                 }
@@ -96,6 +102,7 @@ impl<'a> DefinitionChecker<'a> {
                         });
                     } else {
                         methods.insert(method_ident.name, signature);
+                        method_order.push(method_ident.name);
                     }
                 }
             }
@@ -107,6 +114,8 @@ impl<'a> DefinitionChecker<'a> {
             parent: class_def.extends,
             fields,
             methods,
+            field_order,
+            method_order,
             position: class_def.position,
         };
 
@@ -267,15 +276,22 @@ impl<'a> DefinitionChecker<'a> {
 // Definition visitors.
 // ======================
 impl<'a> DefinitionChecker<'a> {
-    fn visit_top_def(&mut self, top_def: &TopDef) {
-        match &top_def.kind {
-            TopDefKind::Func(func_def) => self.visit_function_definition(func_def),
-            TopDefKind::Class(class_def) => self.visit_class_definition(class_def),
+    fn visit_top_def(&mut self, top_def: &TopDef) -> tast::TTopDef {
+        let kind = match &top_def.kind {
+            TopDefKind::Func(func_def) => {
+                tast::TTopDefKind::Func(self.visit_function_definition(func_def))
+            }
+            TopDefKind::Class(class_def) => {
+                tast::TTopDefKind::Class(self.visit_class_definition(class_def))
+            }
+        };
+        tast::TTopDef {
+            kind,
+            position: top_def.position,
         }
     }
-    pub fn visit_function_definition(&mut self, func: &FuncDef) {
+    pub fn visit_function_definition(&mut self, func: &FuncDef) -> tast::TFuncDef {
         self.ctx.symbol_table.enter_scope();
-
         self.ctx.validate_function_return_type(&func.return_type);
 
         // TODO: Try to use parametrized lifetime here to avoid cloning?
@@ -290,7 +306,7 @@ impl<'a> DefinitionChecker<'a> {
             self.ctx.define_variable(arg.name, arg.arg_type.clone());
         }
 
-        StatementChecker::new(self.ctx).check_block(&func.body);
+        let typed_body = StatementChecker::new(self.ctx).check_block(&func.body);
 
         // Check if function is guaranteed to return.
         if !matches!(func.return_type.kind, TypeKind::Void)
@@ -304,27 +320,55 @@ impl<'a> DefinitionChecker<'a> {
 
         self.ctx.current_return_type = previous_return_type;
         self.ctx.symbol_table.leave_scope();
+
+        tast::TFuncDef {
+            name: func.name,
+            return_type: func.return_type.clone(),
+            args: func.args.clone(),
+            body: typed_body,
+            position: func.position,
+        }
     }
 
-    fn visit_class_definition(&mut self, class: &ClassDef) {
+    fn visit_class_definition(&mut self, class: &ClassDef) -> tast::TClassDef {
         self.ctx.current_class = Some(class.name.name);
 
+        let mut typed_entries = vec![];
         for entry in &class.entries {
-            if let ClassEntryKind::Method(method) = &entry.kind {
-                self.ctx.symbol_table.enter_scope();
+            let typed_entry_kind = match &entry.kind {
+                ClassEntryKind::Method(func_def) => {
+                    self.ctx.symbol_table.enter_scope();
 
-                // Define class fields in scope, including superclasses.
-                let all_fields = self.ctx.symbol_table.get_all_class_fields(class.name.name);
-                for (name, (typ, position)) in all_fields {
-                    let ident = Ident { name, position };
-                    self.ctx.define_variable(ident, typ.clone());
+                    // Define class fields in scope, including superclasses.
+                    let all_fields = self.ctx.symbol_table.get_all_class_fields(class.name.name);
+                    for (name, (typ, position)) in all_fields {
+                        self.ctx
+                            .define_variable(Ident { name, position }, typ.clone());
+                    }
+
+                    let typed_method =
+                        tast::TClassEntryKind::Method(self.visit_function_definition(func_def));
+                    self.ctx.symbol_table.leave_scope();
+                    typed_method
                 }
+                ClassEntryKind::Field(idents, typ) => {
+                    tast::TClassEntryKind::Field(idents.clone(), typ.clone())
+                }
+            };
 
-                self.visit_function_definition(method);
-                self.ctx.symbol_table.leave_scope();
-            }
+            typed_entries.push(tast::TClassEntry {
+                kind: typed_entry_kind,
+                position: entry.position,
+            });
         }
         self.ctx.current_class = None;
+
+        tast::TClassDef {
+            name: class.name,
+            extends: class.extends,
+            entries: typed_entries,
+            position: class.position,
+        }
     }
 
     fn validate_main(&mut self) {

@@ -7,6 +7,7 @@ pub mod config;
 pub mod driver;
 pub mod errors;
 pub mod llvm;
+pub mod mir;
 pub mod parser;
 pub mod semantics;
 pub mod utils;
