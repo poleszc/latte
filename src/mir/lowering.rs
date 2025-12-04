@@ -181,7 +181,9 @@ impl MIRLoweringContext {
                 .current_function
                 .as_mut()
                 .expect("Lower method: builder not set");
-            builder.emit_return(None, method.position);
+            if !builder.is_current_block_terminated() {
+                builder.emit_return(None, method.position);
+            }
         }
 
         self.current_function.take().unwrap().build()

@@ -359,14 +359,14 @@ fn generate_extensions_mir_lowering_tests() -> io::Result<()> {
             .join("good")
             .join("extensions")
             .join("struct"),
-        // Path::new("tests")
-        //     .join("good")
-        //     .join("extensions")
-        //     .join("objects"),
-        // Path::new("tests")
-        //     .join("good")
-        //     .join("extensions")
-        //     .join("virtual"),
+        Path::new("tests")
+            .join("good")
+            .join("extensions")
+            .join("objects"),
+        Path::new("tests")
+            .join("good")
+            .join("extensions")
+            .join("virtual"),
     ];
 
     for directory in pass_test_dir_paths {
