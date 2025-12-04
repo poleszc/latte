@@ -1,6 +1,3 @@
-// TODO: Remove those eventually.
-#![allow(dead_code)]
-#![allow(unused_variables)]
 use crate::{
     errors::SemanticError,
     parser::ast::*,
@@ -10,7 +7,6 @@ use crate::{
     },
     utils::StrID,
 };
-use core::panic;
 use std::collections::HashMap;
 
 #[derive(Debug, Default)]
@@ -211,18 +207,14 @@ impl SymbolTable {
         let mut current_class = class_name;
 
         while let Some(class_info) = self.classes.get(&current_class) {
-            if let Some(class_info) = self.classes.get(&current_class) {
-                for (method_name, method_sig) in &class_info.methods {
-                    if !all_methods.contains_key(method_name) {
-                        all_methods.insert(*method_name, method_sig.clone());
-                    }
+            for (method_name, method_sig) in &class_info.methods {
+                if !all_methods.contains_key(method_name) {
+                    all_methods.insert(*method_name, method_sig.clone());
                 }
+            }
 
-                if let Some(parent) = &class_info.parent {
-                    current_class = parent.name;
-                } else {
-                    break;
-                }
+            if let Some(parent) = &class_info.parent {
+                current_class = parent.name;
             } else {
                 break;
             }

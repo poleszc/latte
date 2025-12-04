@@ -98,6 +98,7 @@ impl MIRFunctionBuilder {
         block.terminator = Some(terminator);
     }
 
+    /// Is the current block terminated.
     pub fn is_current_block_terminated(&self) -> bool {
         let block_id = self.current_block();
         let block = self

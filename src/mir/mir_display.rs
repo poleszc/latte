@@ -257,15 +257,15 @@ impl fmt::Display for MIRClass {
 
 impl fmt::Display for MIRProgram {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "╭────────────────────────────────────────────╮")?;
-        writeln!(f, "│          MIR Program Dump                  │")?;
-        writeln!(f, "╰────────────────────────────────────────────╯")?;
+        writeln!(f, "╭───────────────────────────────╮")?;
+        writeln!(f, "│          MIR Program          │")?;
+        writeln!(f, "╰───────────────────────────────╯")?;
         writeln!(f)?;
 
         if !self.classes.is_empty() {
-            writeln!(f, "═══════════════════════════════════════════")?;
+            writeln!(f, "-------------------------------------------")?;
             writeln!(f, "                 CLASSES                   ")?;
-            writeln!(f, "═══════════════════════════════════════════")?;
+            writeln!(f, "-------------------------------------------")?;
             writeln!(f)?;
 
             for class in self.classes.values() {
@@ -274,9 +274,9 @@ impl fmt::Display for MIRProgram {
         }
 
         if !self.functions.is_empty() {
-            writeln!(f, "═══════════════════════════════════════════")?;
+            writeln!(f, "-------------------------------------------")?;
             writeln!(f, "                FUNCTIONS                  ")?;
-            writeln!(f, "═══════════════════════════════════════════")?;
+            writeln!(f, "-------------------------------------------")?;
             writeln!(f)?;
 
             for func_name in &self.function_order {
@@ -318,11 +318,6 @@ impl MIRFunction {
 
 impl MIRProgram {
     pub fn dump_summary(&self) {
-        println!("╭────────────────────────────────────────────╮");
-        println!("│          MIR Program Summary               │");
-        println!("╰────────────────────────────────────────────╯");
-        println!();
-
         if !self.classes.is_empty() {
             println!("Classes ({}): ", self.classes.len());
             for (name, class) in &self.classes {
