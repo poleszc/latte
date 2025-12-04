@@ -1,12 +1,3 @@
-// autor: Pawel Magryta pm262455
-
-
-
-
-
-
-
-
 int main(){
 	int dlugoscListy = 30;
 	listaTest(dlugoscListy );

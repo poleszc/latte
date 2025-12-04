@@ -1,3 +1,4 @@
+use core::panic;
 use std::collections::HashMap;
 
 use crate::{
@@ -229,15 +230,7 @@ impl MIRLoweringContext {
 // ======================
 // Utils.
 // ======================
-impl MIRLoweringContext {
-    fn place_to_value(&self, place: &MIRPlace) -> MIRValue {
-        match place {
-            MIRPlace::Local(local_id) => MIRValue::Local(*local_id),
-            MIRPlace::Temp(temp_id) => MIRValue::Temp(*temp_id),
-            _ => panic!("Cannot convert complex place to value"),
-        }
-    }
-}
+impl MIRLoweringContext {}
 
 // ======================
 // Statement lowering.
@@ -334,7 +327,7 @@ impl MIRLoweringContext {
         // }
 
         let place = self.lower_expr_as_place(expr);
-        let val = self.place_to_value(&place);
+        let val = self.lower_place_as_value(&place, &expr.typ);
         let builder = self
             .current_function
             .as_mut()
@@ -364,7 +357,7 @@ impl MIRLoweringContext {
         // }
 
         let place = self.lower_expr_as_place(expr);
-        let val = self.place_to_value(&place);
+        let val = self.lower_place_as_value(&place, &expr.typ);
         let builder = self
             .current_function
             .as_mut()
@@ -723,10 +716,9 @@ impl MIRLoweringContext {
     }
 
     fn lower_field_access(&mut self, object: &TExpr, field_name: Ident) -> MIRValue {
-        // array.length.
-        //
         match &object.typ.kind {
             TypeKind::String => {
+                println!("Lower field access: String length");
                 if field_name.name == StrID::from("length") {
                     let array_val = self.lower_expr(object);
                     let builder = self
@@ -745,6 +737,7 @@ impl MIRLoweringContext {
                 }
             }
             TypeKind::Array(_) => {
+                println!("Lower field access: Array length");
                 if field_name.name == StrID::from("length") {
                     let array_val = self.lower_expr(object);
                     let builder = self
@@ -763,8 +756,31 @@ impl MIRLoweringContext {
                 }
             }
             TypeKind::Class(_) => {
-                let place = self.lower_expr_as_place(object);
-                self.lower_place_as_value(&place, &object.typ)
+                println!("Lower field access: Class");
+                let object_place = self.lower_expr_as_place(object);
+                let class_name = if let TypeKind::Class(ident) = &object.typ.kind {
+                    ident.name
+                } else {
+                    panic!(
+                        "Field access on non-class type. This should be caught by the semantic checker"
+                    );
+                };
+
+                // TODO: Make this a map.
+                let field_layout = self.symbol_table.get_class_field_layout(class_name);
+                let (field_index, (field_name, typ, _)) = field_layout
+                    .iter()
+                    .enumerate()
+                    .find(|(_, (name, _, _))| *name == field_name.name).expect("Field name not found during lowering. This should be caught by the semantic checker.");
+
+                let field_place = MIRPlace::Field {
+                    base: Box::new(object_place),
+                    class_name,
+                    field_name: *field_name,
+                    field_index,
+                };
+
+                self.lower_place_as_value(&field_place, typ)
             }
             _ => {
                 panic!("Field access got invalid type: {}", object.typ);
@@ -817,9 +833,20 @@ impl MIRLoweringContext {
             MIRPlace::Local(id) => MIRValue::Local(*id),
             MIRPlace::Temp(id) => MIRValue::Temp(*id),
             MIRPlace::Field {
-                base, field_index, ..
+                base,
+                field_index,
+                class_name,
+                ..
             } => {
-                let obj_value = self.place_to_value(base);
+                let base_type = Type {
+                    kind: TypeKind::Class(Ident {
+                        name: *class_name,
+                        position: typ.position,
+                    }),
+                    position: typ.position,
+                };
+
+                let obj_value = self.lower_place_as_value(base, &base_type);
                 let builder = self
                     .current_function
                     .as_mut()
@@ -835,7 +862,7 @@ impl MIRLoweringContext {
                 MIRValue::Temp(temp_dest)
             }
             MIRPlace::Index { base, index } => {
-                let array_value = self.place_to_value(base);
+                let array_value = self.lower_place_as_value(base, typ);
                 let builder = self
                     .current_function
                     .as_mut()
