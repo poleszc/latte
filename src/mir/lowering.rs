@@ -603,10 +603,7 @@ impl MIRLoweringContext {
                 // If not found look in the class fields.
                 if let Some((field_index, _)) = self.resolve_field(ident.name) {
                     // Retrieve 'this' from locals. It should always exist.
-                    let this_local_id = *self
-                        .variable_map
-                        .get(&StrID::from("this"))
-                        .expect("'this' not found in method context");
+                    let this_local_id = self.get_this_local();
                     let this_place = MIRPlace::Local(this_local_id);
 
                     // Now find the field place.
