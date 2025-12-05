@@ -588,114 +588,139 @@ impl MIRLoweringContext {
 }
 
 // ======================
-// Expression lowering.
+// LValue lowering.
 // ======================
 impl MIRLoweringContext {
-    /// Lower expression and return it's place.
-    fn lower_expr_as_place(&mut self, expr: &TExpr) -> MIRPlace {
-        match &expr.kind {
-            TExprKind::Var(ident) => {
-                // First look for the identifier in the local variables.
-                if let Some(local_id) = self.resolve_variable(ident.name) {
-                    return MIRPlace::Local(local_id);
-                }
+    /// Lower a "variable" and returns it's place.
+    /// Also handles class members accessed directly, not through "this".
+    fn lower_variable_as_place(&mut self, ident: &Ident) -> MIRPlace {
+        // First look for the identifier in the local variables.
+        if let Some(local_id) = self.resolve_variable(ident.name) {
+            return MIRPlace::Local(local_id);
+        }
 
-                // If not found look in the class fields.
-                if let Some((field_index, _)) = self.resolve_field(ident.name) {
-                    // Retrieve 'this' from locals. It should always exist.
-                    let this_local_id = self.get_this_local();
-                    let this_place = MIRPlace::Local(this_local_id);
+        // If not found look in the current class fields.
+        if let Some((field_index, _)) = self.resolve_field(ident.name) {
+            // Retrieve 'this' from locals. It should always exist when lowering methods.
+            let this_local_id = self.get_this_local();
+            let this_place = MIRPlace::Local(this_local_id);
 
-                    // Now find the field place.
-                    let this_info = self.builder().get_local_info(this_local_id);
-                    let class_name = if let TypeKind::Class(class_ident) = &this_info.typ.kind {
-                        class_ident.name
-                    } else {
-                        panic!("'this' is not a class type")
-                    };
+            // Now find the field place.
+            let this_info = self.builder().get_local_info(this_local_id);
+            let class_name = if let TypeKind::Class(class_ident) = &this_info.typ.kind {
+                class_ident.name
+            } else {
+                panic!("'this' is not a class type")
+            };
 
-                    return MIRPlace::Field {
-                        base: Box::new(this_place),
-                        class_name,
-                        field_name: ident.name,
-                        field_index: field_index,
-                    };
-                }
-                panic!(
-                    "Variable {} not found in locals and class fields",
-                    ident.name
-                );
-            }
-            TExprKind::ArrayAccess { array, index } => {
-                let array_val = self.lower_expr(array);
-                let array_place = match array_val {
-                    MIRValue::Local(local_id) => MIRPlace::Local(local_id),
-                    MIRValue::Temp(temp_id) => MIRPlace::Temp(temp_id),
-                    _ => panic!("Array base must be a Local or Temp variable"),
-                };
-                let index_val = self.lower_expr(index);
+            return MIRPlace::Field {
+                base: Box::new(this_place),
+                class_name,
+                field_name: ident.name,
+                field_index: field_index,
+            };
+        }
+        panic!(
+            "Variable {} not found in locals and class fields",
+            ident.name
+        );
+    }
 
-                MIRPlace::Index {
-                    base: Box::new(array_place),
-                    index: Box::new(index_val),
-                }
-            }
-            TExprKind::FieldAccess { object, field_name } => {
-                let object_val = self.lower_expr(object);
-                let object_place = match object_val {
-                    MIRValue::Local(local_id) => MIRPlace::Local(local_id),
-                    MIRValue::Temp(temp_id) => MIRPlace::Temp(temp_id),
-                    _ => panic!("Object base must be a Local or Temp variable"),
-                };
+    /// Lower an array access expression and return it's place.
+    fn lower_array_access_as_place(&mut self, array: &TExpr, index: &TExpr) -> MIRPlace {
+        let array_val = self.lower_expr(array);
+        let array_place = match array_val {
+            MIRValue::Local(local_id) => MIRPlace::Local(local_id),
+            MIRValue::Temp(temp_id) => MIRPlace::Temp(temp_id),
+            _ => panic!("Array base must be a Local or Temp variable"),
+        };
+        let index_val = self.lower_expr(index);
 
-                let class_name = if let TypeKind::Class(ident) = &object.typ.kind {
-                    ident.name
-                } else {
-                    panic!("Field access on non-class type");
-                };
-                let field_layout = self.symbol_table.get_class_field_layout(class_name);
-                // TODO: Map for faster lookup?
-                let (field_index, _) = field_layout
-                    .iter()
-                    .enumerate()
-                    .find(|(_, (name, _, _))| *name == field_name.name)
-                    .unwrap();
-
-                MIRPlace::Field {
-                    base: Box::new(object_place),
-                    class_name,
-                    field_name: field_name.name,
-                    field_index,
-                }
-            }
-            TExprKind::Paren(inner) => self.lower_expr_as_place(inner),
-            TExprKind::This => {
-                let local = self
-                    .variable_map
-                    .get(&StrID::from("this"))
-                    .expect("this not found");
-                MIRPlace::Local(*local)
-            }
-            _ => panic!("Expression is not an lvalue. This should be caught by semantic checker"),
+        MIRPlace::Index {
+            base: Box::new(array_place),
+            index: Box::new(index_val),
         }
     }
 
-    fn lower_field_access(&mut self, object: &TExpr, field_name: Ident) -> MIRValue {
-        match &object.typ.kind {
+    /// Lower an field access expression and return it's place.
+    fn lower_field_access_as_place(&mut self, object: &TExpr, field_name: Ident) -> MIRPlace {
+        let object_val = self.lower_expr(object);
+        let object_place = match object_val {
+            MIRValue::Local(local_id) => MIRPlace::Local(local_id),
+            MIRValue::Temp(temp_id) => MIRPlace::Temp(temp_id),
+            _ => panic!("Object base must be a Local or Temp variable"),
+        };
+
+        let class_name = if let TypeKind::Class(ident) = &object.typ.kind {
+            ident.name
+        } else {
+            panic!("Field access on non-class type");
+        };
+        let field_layout = self.symbol_table.get_class_field_layout(class_name);
+        // TODO: Map for faster lookup?
+        let (field_index, _) = field_layout
+            .iter()
+            .enumerate()
+            .find(|(_, (name, _, _))| *name == field_name.name)
+            .unwrap();
+
+        MIRPlace::Field {
+            base: Box::new(object_place),
+            class_name,
+            field_name: field_name.name,
+            field_index,
+        }
+    }
+
+    /// Lower expression and return it's place.
+    fn lower_expr_as_place(&mut self, expr: &TExpr) -> MIRPlace {
+        match &expr.kind {
+            TExprKind::Var(ident) => self.lower_variable_as_place(ident),
+            TExprKind::ArrayAccess { array, index } => {
+                self.lower_array_access_as_place(array, index)
+            }
+            TExprKind::FieldAccess { object, field_name } => {
+                self.lower_field_access_as_place(object, *field_name)
+            }
+            // I assume a parenthesis expression is an lvalue. This means code like this: '(object).field' is considered valid.
+            TExprKind::Paren(inner) => self.lower_expr_as_place(inner),
+            TExprKind::This => MIRPlace::Local(self.get_this_local()),
+            _ => panic!("Expression is not an lvalue. This should be caught by semantic checker"),
+        }
+    }
+}
+
+// ======================
+// Expression lowering.
+// ======================
+impl MIRLoweringContext {
+    fn lower_string_length(&mut self, string_expr: &TExpr) -> MIRValue {
+        let string_val = self.lower_expr(string_expr);
+        let temp = self.builder().create_temp(Type {
+            kind: TypeKind::Int,
+            position: string_expr.position,
+        });
+        self.builder()
+            .emit_string_length(MIRPlace::Temp(temp), string_val, string_expr.position);
+        MIRValue::Temp(temp)
+    }
+
+    fn lower_array_length(&mut self, array_expr: &TExpr) -> MIRValue {
+        let array_val = self.lower_expr(array_expr);
+        let temp = self.builder().create_temp(Type {
+            kind: TypeKind::Int,
+            position: array_expr.position,
+        });
+        self.builder()
+            .emit_array_length(MIRPlace::Temp(temp), array_val, array_expr.position);
+        MIRValue::Temp(temp)
+    }
+
+    fn lower_field_access(&mut self, base_expr: &TExpr, field_name: Ident) -> MIRValue {
+        match &base_expr.typ.kind {
             TypeKind::String => {
-                println!("Lower field access: String length");
                 if field_name.name == StrID::from("length") {
-                    let array_val = self.lower_expr(object);
-                    let temp = self.builder().create_temp(Type {
-                        kind: TypeKind::Int,
-                        position: object.position,
-                    });
-                    self.builder().emit_string_length(
-                        MIRPlace::Temp(temp),
-                        array_val,
-                        object.position,
-                    );
-                    MIRValue::Temp(temp)
+                    self.lower_string_length(base_expr)
                 } else {
                     panic!("String field access got invalid field: {}", field_name.name);
                 }
@@ -703,25 +728,15 @@ impl MIRLoweringContext {
             TypeKind::Array(_) => {
                 println!("Lower field access: Array length");
                 if field_name.name == StrID::from("length") {
-                    let array_val = self.lower_expr(object);
-                    let temp = self.builder().create_temp(Type {
-                        kind: TypeKind::Int,
-                        position: object.position,
-                    });
-                    self.builder().emit_array_length(
-                        MIRPlace::Temp(temp),
-                        array_val,
-                        object.position,
-                    );
-                    MIRValue::Temp(temp)
+                    self.lower_array_length(base_expr)
                 } else {
                     panic!("Array field access got invalid field: {}", field_name.name);
                 }
             }
             TypeKind::Class(_) => {
                 println!("Lower field access: Class");
-                let object_place = self.lower_expr_as_place(object);
-                let class_name = if let TypeKind::Class(ident) = &object.typ.kind {
+                let object_place = self.lower_expr_as_place(base_expr);
+                let class_name = if let TypeKind::Class(ident) = &base_expr.typ.kind {
                     ident.name
                 } else {
                     panic!(
@@ -746,7 +761,7 @@ impl MIRLoweringContext {
                 self.lower_place_as_value(&field_place, typ)
             }
             _ => {
-                panic!("Field access got invalid type: {}", object.typ);
+                panic!("Field access got invalid type: {}", base_expr.typ);
             }
         }
     }
