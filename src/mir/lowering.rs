@@ -899,19 +899,10 @@ impl MIRLoweringContext {
         MIRValue::Temp(res_temp)
     }
 
-    fn lower_binary_op(&mut self, op: &BinaryOp, lhs: &TExpr, rhs: &TExpr) -> MIRValue {
-        // If a logic op is encountered we have to lower it lazily.
-        if matches!(op, BinaryOp::And | BinaryOp::Or) {
-            return self.lower_logic_op(op, lhs, rhs);
-        }
-
-        // Otherwise it's simple.
-        let lhs_val = self.lower_expr(lhs);
-        let rhs_val = self.lower_expr(rhs);
-
-        let mir_op = match op {
+    fn binary_op_to_mir(&self, op: &BinaryOp, lhs_type: &Type) -> MIROperation {
+        match op {
             BinaryOp::Add => {
-                if matches!(lhs.typ.kind, TypeKind::String) {
+                if matches!(lhs_type.kind, TypeKind::String) {
                     MIROperation::StringConcat
                 } else {
                     MIROperation::IntAdd
@@ -922,14 +913,14 @@ impl MIRLoweringContext {
             BinaryOp::Div => MIROperation::IntDiv,
             BinaryOp::Mod => MIROperation::IntMod,
             BinaryOp::Eq => {
-                if matches!(lhs.typ.kind, TypeKind::String) {
+                if matches!(lhs_type.kind, TypeKind::String) {
                     MIROperation::StringEq
                 } else {
                     MIROperation::IntEq
                 }
             }
             BinaryOp::Neq => {
-                if matches!(lhs.typ.kind, TypeKind::String) {
+                if matches!(lhs_type.kind, TypeKind::String) {
                     MIROperation::StringNeq
                 } else {
                     MIROperation::IntNeq
@@ -940,17 +931,37 @@ impl MIRLoweringContext {
             BinaryOp::Gt => MIROperation::IntGt,
             BinaryOp::Ge => MIROperation::IntGe,
             _ => unreachable!("Logic ops should be handled separately"),
-        };
+        }
+    }
 
-        let result_type = match op {
+    fn binary_op_result_type(
+        &self,
+        op: &BinaryOp,
+        lhs_type: &Type,
+        position: SourcePosition,
+    ) -> Type {
+        match op {
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
-                lhs.typ.clone()
+                lhs_type.clone()
             }
             _ => Type {
                 kind: TypeKind::Bool,
-                position: lhs.position,
+                position,
             },
-        };
+        }
+    }
+
+    fn lower_binary_op(&mut self, op: &BinaryOp, lhs: &TExpr, rhs: &TExpr) -> MIRValue {
+        // If a logic op is encountered we have to lower it lazily.
+        if matches!(op, BinaryOp::And | BinaryOp::Or) {
+            return self.lower_logic_op(op, lhs, rhs);
+        }
+
+        // Otherwise it's simple.
+        let lhs_val = self.lower_expr(lhs);
+        let rhs_val = self.lower_expr(rhs);
+        let mir_op = self.binary_op_to_mir(op, &lhs.typ);
+        let result_type = self.binary_op_result_type(op, &lhs.typ, lhs.position);
 
         let temp = self.builder().create_temp(result_type);
         self.builder()
