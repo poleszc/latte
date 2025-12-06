@@ -27,44 +27,6 @@ pub struct MIRLoweringContext {
     current_class_fields: HashMap<StrID, (usize, Type)>,
 }
 
-/// Helpers
-impl MIRLoweringContext {
-    /// Get a mutable reference to the current function builder.
-    /// Panic if not set, since this should never happen.
-    fn builder(&mut self) -> &mut MIRFunctionBuilder {
-        self.current_function
-            .as_mut()
-            .expect("Function builder not set")
-    }
-
-    /// Get the reference to the current function builder.
-    /// Panic if not set, since this should never happen.
-    fn builder_ref(&mut self) -> &MIRFunctionBuilder {
-        self.current_function
-            .as_ref()
-            .expect("Function builder not set")
-    }
-
-    /// Variable name to LocalId.
-    fn resolve_variable(&self, name: StrID) -> Option<LocalID> {
-        self.variable_map.get(&name).copied()
-    }
-
-    /// Field name to (offset, type)
-    fn resolve_field(&self, name: StrID) -> Option<(usize, Type)> {
-        self.current_class_fields.get(&name).cloned()
-    }
-
-    /// Get 'this' local variable.
-    /// Panic if not found, since those errors should be checked by the type checker.
-    fn get_this_local(&self) -> LocalID {
-        self.variable_map
-            .get(&StrID::from("this"))
-            .cloned()
-            .expect("'this' not found")
-    }
-}
-
 // ======================
 // Basic functionality.
 // ======================
@@ -120,6 +82,94 @@ impl MIRLoweringContext {
             }
         }
         builder.build()
+    }
+}
+
+// ======================
+// Helpers.
+// ======================
+impl MIRLoweringContext {
+    /// Get a mutable reference to the current function builder.
+    /// Panic if not set, since this should never happen.
+    fn builder(&mut self) -> &mut MIRFunctionBuilder {
+        self.current_function
+            .as_mut()
+            .expect("Function builder not set")
+    }
+
+    /// Variable name to LocalId.
+    fn resolve_variable(&self, name: StrID) -> Option<LocalID> {
+        self.variable_map.get(&name).copied()
+    }
+
+    /// Field name to (offset, type)
+    fn resolve_field(&self, name: StrID) -> Option<(usize, Type)> {
+        self.current_class_fields.get(&name).cloned()
+    }
+
+    /// Get 'this' local variable.
+    /// Panic if not found, since those errors should be checked by the type checker.
+    fn get_this_local(&self) -> LocalID {
+        self.variable_map
+            .get(&StrID::from("this"))
+            .cloned()
+            .expect("'this' not found")
+    }
+
+    fn mangle_method_name(&self, class_name: StrID, method_name: StrID) -> StrID {
+        StrID::from(format!("{}_{}", class_name, method_name))
+    }
+
+    fn binary_op_to_mir(&self, op: &BinaryOp, lhs_type: &Type) -> MIROperation {
+        match op {
+            BinaryOp::Add => {
+                if matches!(lhs_type.kind, TypeKind::String) {
+                    MIROperation::StringConcat
+                } else {
+                    MIROperation::IntAdd
+                }
+            }
+            BinaryOp::Sub => MIROperation::IntSub,
+            BinaryOp::Mul => MIROperation::IntMul,
+            BinaryOp::Div => MIROperation::IntDiv,
+            BinaryOp::Mod => MIROperation::IntMod,
+            BinaryOp::Eq => {
+                if matches!(lhs_type.kind, TypeKind::String) {
+                    MIROperation::StringEq
+                } else {
+                    MIROperation::IntEq
+                }
+            }
+            BinaryOp::Neq => {
+                if matches!(lhs_type.kind, TypeKind::String) {
+                    MIROperation::StringNeq
+                } else {
+                    MIROperation::IntNeq
+                }
+            }
+            BinaryOp::Lt => MIROperation::IntLt,
+            BinaryOp::Le => MIROperation::IntLe,
+            BinaryOp::Gt => MIROperation::IntGt,
+            BinaryOp::Ge => MIROperation::IntGe,
+            _ => unreachable!("Logic ops should be handled separately"),
+        }
+    }
+
+    fn binary_op_result_type(
+        &self,
+        op: &BinaryOp,
+        lhs_type: &Type,
+        position: SourcePosition,
+    ) -> Type {
+        match op {
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
+                lhs_type.clone()
+            }
+            _ => Type {
+                kind: TypeKind::Bool,
+                position,
+            },
+        }
     }
 }
 
@@ -899,58 +949,6 @@ impl MIRLoweringContext {
         MIRValue::Temp(res_temp)
     }
 
-    fn binary_op_to_mir(&self, op: &BinaryOp, lhs_type: &Type) -> MIROperation {
-        match op {
-            BinaryOp::Add => {
-                if matches!(lhs_type.kind, TypeKind::String) {
-                    MIROperation::StringConcat
-                } else {
-                    MIROperation::IntAdd
-                }
-            }
-            BinaryOp::Sub => MIROperation::IntSub,
-            BinaryOp::Mul => MIROperation::IntMul,
-            BinaryOp::Div => MIROperation::IntDiv,
-            BinaryOp::Mod => MIROperation::IntMod,
-            BinaryOp::Eq => {
-                if matches!(lhs_type.kind, TypeKind::String) {
-                    MIROperation::StringEq
-                } else {
-                    MIROperation::IntEq
-                }
-            }
-            BinaryOp::Neq => {
-                if matches!(lhs_type.kind, TypeKind::String) {
-                    MIROperation::StringNeq
-                } else {
-                    MIROperation::IntNeq
-                }
-            }
-            BinaryOp::Lt => MIROperation::IntLt,
-            BinaryOp::Le => MIROperation::IntLe,
-            BinaryOp::Gt => MIROperation::IntGt,
-            BinaryOp::Ge => MIROperation::IntGe,
-            _ => unreachable!("Logic ops should be handled separately"),
-        }
-    }
-
-    fn binary_op_result_type(
-        &self,
-        op: &BinaryOp,
-        lhs_type: &Type,
-        position: SourcePosition,
-    ) -> Type {
-        match op {
-            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
-                lhs_type.clone()
-            }
-            _ => Type {
-                kind: TypeKind::Bool,
-                position,
-            },
-        }
-    }
-
     fn lower_binary_op(&mut self, op: &BinaryOp, lhs: &TExpr, rhs: &TExpr) -> MIRValue {
         // If a logic op is encountered we have to lower it lazily.
         if matches!(op, BinaryOp::And | BinaryOp::Or) {
@@ -1088,12 +1086,5 @@ impl MIRLoweringContext {
             .emit_new_array(MIRPlace::Temp(temp), size_val, position);
 
         MIRValue::Temp(temp)
-    }
-}
-
-/// Other
-impl MIRLoweringContext {
-    fn mangle_method_name(&self, class_name: StrID, method_name: StrID) -> StrID {
-        StrID::from(format!("{}_{}", class_name, method_name))
     }
 }
