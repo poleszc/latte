@@ -327,6 +327,7 @@ impl MIRFunctionBuilder {
             source_position: position,
         });
     }
+
     pub fn emit_field_set(
         &mut self,
         object: MIRValue,
