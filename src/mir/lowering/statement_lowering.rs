@@ -1,10 +1,9 @@
 use super::MIRLoweringContext;
 use crate::{
+    SourcePosition,
     mir::*,
     parser::ast::{Ident, Type, TypeKind},
     semantics::tast::{TBlock, TExpr, TItem, TItemKind, TStmt, TStmtKind},
-    utils::StrID,
-    SourcePosition,
 };
 
 // ======================

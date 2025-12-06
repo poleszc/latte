@@ -80,7 +80,7 @@ pub fn run_compiler<
 
     // ============= MIR LOWERING ===============
     eprintln!("[MIR] Lowering to MIR...");
-    let mut mir_program = mir::lower_to_mir(
+    let mir_program = mir::lower_to_mir(
         &semantic_analysis_result.tast,
         semantic_analysis_result.symbol_table,
     );

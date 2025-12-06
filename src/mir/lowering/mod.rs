@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use crate::{
     SourcePosition,
     mir::{builders::*, *},
-    parser::ast::{BinaryOp, Ident, Type, TypeKind},
+    parser::ast::{BinaryOp, Type, TypeKind},
     semantics::{
         symbol_table::SymbolTable,
-        tast::{TClassDef, TClassEntryKind, TFuncDef, TProgram, TTopDefKind},
+        tast::{TClassEntryKind, TProgram, TTopDefKind},
     },
     utils::StrID,
 };

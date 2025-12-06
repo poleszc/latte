@@ -52,7 +52,7 @@ impl MIRLoweringContext {
                 base: Box::new(this_place),
                 class_name,
                 field_name: ident.name,
-                field_index: field_index,
+                field_index,
             };
         }
         panic!(
@@ -106,5 +106,4 @@ impl MIRLoweringContext {
             field_index,
         }
     }
-
 }
