@@ -8,7 +8,7 @@ use clap::Parser;
 use crate::{
     LatteArgs,
     errors::CompilerError,
-    mir::{MIRProgram, lowering::MIRLoweringContext},
+    mir::{self, MIRProgram},
     parser::{
         self,
         ast::{self, Program},
@@ -80,8 +80,10 @@ pub fn run_compiler<
 
     // ============= MIR LOWERING ===============
     eprintln!("[MIR] Lowering to MIR...");
-    let mut lowering_context = MIRLoweringContext::new(semantic_analysis_result.symbol_table);
-    let mir_program = lowering_context.lower_program(&semantic_analysis_result.tast);
+    let mir_program = mir::lower_to_mir(
+        &semantic_analysis_result.tast,
+        semantic_analysis_result.symbol_table,
+    );
     eprintln!("[MIR] Lowering to MIR completed successfully...");
     dump_mir(&output_dir, file_stem, &mir_program)?;
     eprintln!("[MIR] Dumped MIR to JSON...");
