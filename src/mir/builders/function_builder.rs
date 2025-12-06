@@ -1,7 +1,5 @@
-use core::panic;
-use std::collections::HashMap;
-
 use crate::{SourcePosition, mir::*, parser::ast::Type, utils::StrID};
+use std::collections::HashMap;
 
 /// Builder for MIR functions.
 pub struct MIRFunctionBuilder {

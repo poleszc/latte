@@ -1,4 +1,9 @@
-use latte::{CompilerError, mir::lowering::MIRLoweringContext, parser, semantics::SemanticChecker};
+use latte::{
+    CompilerError,
+    mir::{self},
+    parser,
+    semantics::SemanticChecker,
+};
 
 pub fn assert_parsing_succeeds(input_path: &str) {
     let source_code = std::fs::read_to_string(input_path)
@@ -91,8 +96,7 @@ pub fn assert_mir_lowering_pass(input_path: &str) {
     let semantic_result =
         SemanticChecker::check(&ast).expect("Expected semantic analysis to succeed, but it failed");
 
-    let mut lowering_context = MIRLoweringContext::new(semantic_result.symbol_table);
-    let _ = lowering_context.lower_program(&semantic_result.tast);
+    let _ = mir::lower_to_mir(&semantic_result.tast, semantic_result.symbol_table);
     // If we got here, it means the semantic analysis passed. Think of a better way to test for that.
 }
 
