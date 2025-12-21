@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 // TODO: remove json serialization?
 
 use clap::builder::Str;
@@ -36,6 +36,7 @@ pub enum LIRValue {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum LIROperation {
     Phi,
+    Assign,
 
     // Arithmetic
     IntAdd,

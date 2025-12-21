@@ -9,7 +9,7 @@ impl fmt::Display for RegisterID {
 
 impl fmt::Display for BlockID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "bb{}", self.0)
+        write!(f, "B{}", self.0)
     }
 }
 
@@ -30,36 +30,37 @@ impl fmt::Display for LIRValue {
 impl fmt::Display for LIROperation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
-            LIROperation::Phi => "phi",
-            LIROperation::IntAdd => "add",
-            LIROperation::IntSub => "sub",
-            LIROperation::IntMul => "mul",
-            LIROperation::IntDiv => "div",
-            LIROperation::IntMod => "mod",
-            LIROperation::IntNeg => "neg",
-            LIROperation::IntLt => "lt",
-            LIROperation::IntLe => "le",
-            LIROperation::IntGt => "gt",
-            LIROperation::IntGe => "ge",
-            LIROperation::IntEq => "eq",
-            LIROperation::IntNeq => "neq",
-            LIROperation::BoolNot => "not",
-            LIROperation::BoolAnd => "and",
-            LIROperation::BoolOr => "or",
-            LIROperation::StringConcat => "strcat",
-            LIROperation::StringEq => "streq",
-            LIROperation::StringNeq => "strneq",
-            LIROperation::StringLength => "strlen",
-            LIROperation::Call => "call",
-            LIROperation::VCall => "vcall",
-            LIROperation::NewArray => "newarray",
-            LIROperation::ArrayGet => "arrget",
-            LIROperation::ArraySet => "arrset",
-            LIROperation::ArrayLength => "arrlen",
-            LIROperation::NewObject => "newobj",
-            LIROperation::FieldGet => "getfield",
-            LIROperation::FieldSet => "setfield",
-            LIROperation::IsNull => "isnull",
+            LIROperation::Phi => "Phi",
+            LIROperation::IntAdd => "Add",
+            LIROperation::IntSub => "Sub",
+            LIROperation::IntMul => "Mul",
+            LIROperation::IntDiv => "Div",
+            LIROperation::IntMod => "Mod",
+            LIROperation::IntNeg => "Neg",
+            LIROperation::IntLt => "Lt",
+            LIROperation::IntLe => "Le",
+            LIROperation::IntGt => "Gt",
+            LIROperation::IntGe => "Ge",
+            LIROperation::IntEq => "Eq",
+            LIROperation::IntNeq => "Neq",
+            LIROperation::BoolNot => "Not",
+            LIROperation::BoolAnd => "And",
+            LIROperation::BoolOr => "Or",
+            LIROperation::StringConcat => "Strcat",
+            LIROperation::StringEq => "Streq",
+            LIROperation::StringNeq => "Strneq",
+            LIROperation::StringLength => "Strlen",
+            LIROperation::Call => "Call",
+            LIROperation::VCall => "VCall",
+            LIROperation::NewArray => "NewArray",
+            LIROperation::ArrayGet => "ArrGet",
+            LIROperation::ArraySet => "ArrSet",
+            LIROperation::ArrayLength => "ArrLen",
+            LIROperation::NewObject => "NewObj",
+            LIROperation::FieldGet => "getField",
+            LIROperation::FieldSet => "SetField",
+            LIROperation::IsNull => "IsNull",
+            LIROperation::Assign => "Assign",
         };
         write!(f, "{:<12}", name)
     }
@@ -69,7 +70,6 @@ impl fmt::Display for LIRInstruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "  {} = {} ", self.destination, self.operation)?;
 
-        // Special formatting for phi nodes
         if self.operation == LIROperation::Phi {
             write!(f, "[")?;
             for (i, chunk) in self.operands.chunks(2).enumerate() {
@@ -130,10 +130,10 @@ impl fmt::Display for RegisterInfo {
 
 impl fmt::Display for LIRBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:", self.id)?;
+        write!(f, "{}: {{", self.id)?;
 
         if !self.predecessors.is_empty() {
-            write!(f, "  ; preds = ")?;
+            write!(f, " ; Predecessors = ")?;
             for (i, pred) in self.predecessors.iter().enumerate() {
                 if i > 0 {
                     write!(f, ", ")?;
@@ -144,12 +144,13 @@ impl fmt::Display for LIRBlock {
         writeln!(f)?;
 
         for instr in &self.instructions {
-            writeln!(f, "{}", instr)?;
+            writeln!(f, "  {}", instr)?;
         }
 
         if let Some(term) = &self.terminator {
-            writeln!(f, "{}", term)?;
+            writeln!(f, "  {}", term)?;
         }
+        writeln!(f, "}}")?;
 
         Ok(())
     }

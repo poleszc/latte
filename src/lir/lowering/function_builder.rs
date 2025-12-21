@@ -19,7 +19,8 @@ pub struct LIRFunctionBuilder {
     registers_info: Vec<RegisterInfo>,
 
     phi_placeholders: HashMap<crate::lir::BlockID, HashMap<LocalID, RegisterID>>,
-    phi_finalized: HashMap<crate::lir::BlockID, Vec<LIRInstruction>>,
+    phi_incoming:
+        HashMap<crate::lir::BlockID, HashMap<RegisterID, Vec<(crate::lir::BlockID, LIRValue)>>>,
 }
 
 impl LIRFunctionBuilder {
@@ -30,7 +31,7 @@ impl LIRFunctionBuilder {
             temps: HashMap::new(),
             registers_info: Vec::new(),
             phi_placeholders: HashMap::new(),
-            phi_finalized: HashMap::new(),
+            phi_incoming: HashMap::new(),
         }
     }
 
@@ -77,6 +78,26 @@ impl LIRFunctionBuilder {
             &preds,
             &mut lir_blocks,
         );
+
+        for (lir_id, block) in &mut lir_blocks {
+            let final_preds = &block.predecessors;
+            for instr in &mut block.instructions {
+                if instr.operation == LIROperation::Phi {
+                    if let Some(incoming_map) = self.phi_incoming.get(lir_id) {
+                        if let Some(args) = incoming_map.get(&instr.destination) {
+                            for pred_id in final_preds {
+                                let val = args
+                                    .iter()
+                                    .find(|(p, _)| p == pred_id)
+                                    .map(|(_, v)| v.clone())
+                                    .unwrap_or(LIRValue::IntConst(0));
+                                instr.operands.push(val);
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         LIRFunction {
             name: mir_function.name,
@@ -156,32 +177,30 @@ impl LIRFunctionBuilder {
         dom_tree: &HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>>,
         succs: &HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>>,
         preds: &HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>>,
-        lir_blocs: &mut HashMap<crate::lir::BlockID, LIRBlock>,
+        lir_blocks: &mut HashMap<crate::lir::BlockID, LIRBlock>,
     ) {
-        let mir_block = &mir_func.blocks[&block_id];
+        println!("Running iteration for block: {}", block_id.0);
         let lir_id = crate::lir::BlockID(block_id.0);
         let mut pushed_locals = Vec::new();
         let mut instructions = Vec::new();
 
-        // Insert all placeholder phis which we inserted in the first pass. For now without any arguments.
-        if let Some(phis) = self.phi_placeholders.get(&lir_id) {
-            for (&local_id, &dest_reg) in phis {
-                self.locals_stack
-                    .entry(local_id)
-                    .or_default()
-                    .push(dest_reg);
-                pushed_locals.push(local_id);
+        if let Some(phis_here) = self.phi_placeholders.get(&lir_id) {
+            println!("Phis here: {:?}", phis_here);
+            for (&loc_id, &phi_reg) in phis_here {
+                self.locals_stack.entry(loc_id).or_default().push(phi_reg);
+                pushed_locals.push(loc_id);
 
                 instructions.push(LIRInstruction {
                     operation: LIROperation::Phi,
-                    destination: dest_reg,
+                    destination: phi_reg,
                     operands: Vec::new(),
                     source_position: mir_func.source_position,
                 });
             }
         }
-
+        let mir_block = &mir_func.blocks[&block_id];
         for instruction in &mir_block.instructions {
+            println!("Handling instruction: {}", instruction);
             let operands = instruction
                 .operands
                 .iter()
@@ -192,14 +211,9 @@ impl LIRFunctionBuilder {
             if let Some(dest) = &instruction.destination {
                 match dest {
                     MIRPlace::Local(local_id) => {
-                        let typ = mir_func
-                            .locals
-                            .iter()
-                            .find(|l| l.id == *local_id)
-                            .unwrap()
-                            .typ
-                            .clone();
-                        let new_reg = self.new_register(typ, None);
+                        let info = mir_func.locals.iter().find(|l| l.id == *local_id).unwrap();
+                        let new_reg = self.new_register(info.typ.clone(), info.name);
+
                         self.locals_stack
                             .entry(*local_id)
                             .or_default()
@@ -214,79 +228,92 @@ impl LIRFunctionBuilder {
                         });
                     }
                     MIRPlace::Temp(temp_id) => {
-                        let reg = self.temps[temp_id];
                         instructions.push(LIRInstruction {
                             operation: op,
-                            destination: reg,
+                            destination: self.temps[temp_id],
                             operands,
                             source_position: instruction.source_position,
                         });
                     }
-                    _ => {} // TODO: What with FieldGet and ArrayGet?
+                    _ => panic!("Field access and array access unhandled"),
                 }
+            } else {
+                instructions.push(LIRInstruction {
+                    operation: op,
+                    destination: RegisterID(0),
+                    operands,
+                    source_position: instruction.source_position,
+                });
             }
         }
 
-        self.phi_finalized.insert(lir_id, instructions);
-
         if let Some(block_successors) = succs.get(&block_id) {
             for &successor in block_successors {
-                let successor_lir_id = crate::lir::BlockID(successor.0);
-                if let Some(phis_to_fill) = self.phi_placeholders.get(&successor_lir_id) {
-                    if let Some(target_block_instr) = self.phi_finalized.get_mut(&successor_lir_id)
-                    {
-                        for instr in target_block_instr
-                            .iter_mut()
-                            .filter(|i| i.operation == LIROperation::Phi)
-                        {
-                            for (&loc_id, &phi_reg) in phis_to_fill {
-                                if instr.destination == phi_reg {
-                                    let val =
-                                        match self.locals_stack.get(&loc_id).and_then(|s| s.last())
-                                        {
-                                            Some(&r) => LIRValue::Register(r),
-                                            None => LIRValue::Null, // Undefined
-                                        };
-                                    instr.operands.push(val);
-                                }
-                            }
-                        }
+                let succ_lir_id = crate::lir::BlockID(successor.0);
+                if let Some(phis_in_succ) = self.phi_placeholders.get(&succ_lir_id) {
+                    for (&loc_id, &phi_reg) in phis_in_succ {
+                        let current_val =
+                            match self.locals_stack.get(&loc_id).and_then(|s| s.last()) {
+                                Some(&reg) => LIRValue::Register(reg),
+                                None => LIRValue::IntConst(0), // TODO: This is bugged
+                            };
+
+                        self.phi_incoming
+                            .entry(succ_lir_id)
+                            .or_default()
+                            .entry(phi_reg)
+                            .or_default()
+                            .push((lir_id, current_val));
                     }
                 }
             }
         }
 
-        // Run the recursion for the children in the dominator tree.
         if let Some(children) = dom_tree.get(&block_id) {
             for &child in children {
-                self.rename_recursive(child, mir_func, dom_tree, succs, preds, lir_blocs);
+                println!("Running recursion for: {}", child.0);
+                self.rename_recursive(child, mir_func, dom_tree, succs, preds, lir_blocks);
             }
         }
 
-        // Pop all the variables we defined in this DFS node from the stack.
         for loc_id in pushed_locals {
             self.locals_stack.get_mut(&loc_id).unwrap().pop();
         }
 
-        let final_instructions = self.phi_finalized.remove(&lir_id).unwrap();
-        let lir_preds = preds
-            .get(&block_id)
-            .cloned()
-            .unwrap_or_default()
-            .iter()
-            .map(|b| crate::lir::BlockID(b.0))
-            .collect();
+        let mut final_preds = Vec::new();
+        if let Some(p_list) = preds.get(&block_id) {
+            for p in p_list {
+                final_preds.push(crate::lir::BlockID(p.0));
+            }
+        }
 
-        lir_blocs.insert(
+        // for instr in &mut instructions {
+        //     if instr.operation == LIROperation::Phi {
+        //         if let Some(incoming_map) = self.phi_incoming.get(&lir_id) {
+        //             if let Some(args) = incoming_map.get(&instr.destination) {
+        //                 for pred_id in &final_preds {
+        //                     let val = args
+        //                         .iter()
+        //                         .find(|(p, _)| p == pred_id)
+        //                         .map(|(_, v)| v.clone())
+        //                         .expect("Fail"); // TODO: rename
+        //                     instr.operands.push(val);
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+
+        lir_blocks.insert(
             lir_id,
             LIRBlock {
                 id: lir_id,
-                instructions: final_instructions,
+                instructions,
                 terminator: mir_block
                     .terminator
                     .as_ref()
                     .map(|t| self.lower_terminator(t)),
-                predecessors: lir_preds,
+                predecessors: final_preds,
             },
         );
     }
@@ -298,7 +325,7 @@ impl LIRFunctionBuilder {
 impl LIRFunctionBuilder {
     fn lower_operation(&self, op: &MIROperation) -> LIROperation {
         match op {
-            MIROperation::Assign => LIROperation::Phi,
+            MIROperation::Assign => LIROperation::Assign,
             MIROperation::Call => LIROperation::Call,
             MIROperation::VCall => LIROperation::VCall,
             MIROperation::IntAdd => LIROperation::IntAdd,
