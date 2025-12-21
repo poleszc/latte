@@ -31,6 +31,7 @@ pub enum LIRValue {
     Null,
     Function(StrID),
     Class(StrID),
+    Block(BlockID),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

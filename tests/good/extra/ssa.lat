@@ -1,6 +1,6 @@
 int main() {
     int i = 9;
-    int a;
+    int a = 0;
     while (i != 0) {
         if (i % 2 == 0) {
             a = 1;

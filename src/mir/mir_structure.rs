@@ -5,7 +5,7 @@ use crate::{SourcePosition, parser::ast::Type, utils::StrID};
 use serde::Serialize;
 
 /// Unique identifier of a single block.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord)]
 pub struct BlockID(pub usize);
 impl BlockID {
     pub fn new(id: usize) -> Self {

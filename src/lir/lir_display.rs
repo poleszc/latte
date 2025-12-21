@@ -23,6 +23,7 @@ impl fmt::Display for LIRValue {
             LIRValue::Null => write!(f, "null"),
             LIRValue::Function(name) => write!(f, "@{}", name),
             LIRValue::Class(name) => write!(f, "class.{}", name),
+            LIRValue::Block(block_id) => write!(f, "label B{}", block_id)
         }
     }
 }
