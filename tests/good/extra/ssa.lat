@@ -1,0 +1,14 @@
+int main() {
+    int i = 9;
+    int a;
+    while (i != 0) {
+        if (i % 2 == 0) {
+            a = 1;
+        } else {
+            a = 2;
+        }
+    
+        i--;
+    }
+    return 0;
+}

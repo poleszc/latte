@@ -1,9 +1,12 @@
+use clap::builder::Str;
+
 use super::MIRLoweringContext;
 use crate::{
     SourcePosition,
     mir::*,
     parser::ast::{Ident, Type, TypeKind},
     semantics::tast::{TBlock, TExpr, TItem, TItemKind, TStmt, TStmtKind},
+    utils::StrID,
 };
 
 // ======================
@@ -239,12 +242,20 @@ impl MIRLoweringContext {
         let collection_val = self.lower_expr(collection);
 
         // i = 0;
-        let i_temp = self.builder().create_temp(Type {
-            kind: TypeKind::Int,
-            position: stmt_position,
-        });
-        self.builder()
-            .emit_assign(MIRPlace::Temp(i_temp), MIRValue::IntConst(0), stmt_position);
+        let i_local = self.builder().create_local(
+            Some(StrID::from("for_each_i_temp")),
+            Type {
+                kind: TypeKind::Int,
+                position: stmt_position,
+            },
+            false,
+            None,
+        );
+        self.builder().emit_assign(
+            MIRPlace::Local(i_local),
+            MIRValue::IntConst(0),
+            stmt_position,
+        );
 
         // T item;
         let item_local =
@@ -282,7 +293,7 @@ impl MIRLoweringContext {
         });
         self.builder().emit_less_then(
             MIRPlace::Temp(cond_temp),
-            MIRValue::Temp(i_temp),
+            MIRValue::Local(i_local),
             MIRValue::Temp(length_temp),
             stmt_position,
         );
@@ -299,7 +310,7 @@ impl MIRLoweringContext {
         self.builder().emit_array_get(
             MIRPlace::Local(item_local),
             collection_val.clone(),
-            MIRValue::Temp(i_temp),
+            MIRValue::Local(i_local),
             stmt_position,
         );
 
@@ -315,12 +326,15 @@ impl MIRLoweringContext {
             self.builder().emit_binary(
                 MIROperation::IntAdd,
                 MIRPlace::Temp(temp),
-                MIRValue::Temp(i_temp),
+                MIRValue::Local(i_local),
                 MIRValue::IntConst(1),
                 stmt_position,
             );
-            self.builder()
-                .emit_assign(MIRPlace::Temp(i_temp), MIRValue::Temp(temp), stmt_position);
+            self.builder().emit_assign(
+                MIRPlace::Local(i_local),
+                MIRValue::Temp(temp),
+                stmt_position,
+            );
 
             // Jump to loop start.
             self.builder().emit_jump(loop_start, stmt_position);

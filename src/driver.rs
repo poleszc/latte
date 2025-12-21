@@ -92,14 +92,13 @@ pub fn run_compiler<
 
     // ============= LIR LOWERING ===============
     eprintln!("[LIR] Lowering to LIR...");
-    let lir_program = lir::lower_to_lir(&mir_program);
+    let lir_program = lir::lower_to_lir(mir_program);
     eprintln!("[LIR] Lowering to LIR completed successfully...");
     dump_lir(&output_dir, file_stem, &lir_program)?;
     eprintln!("[LIR] Dumped LIR to JSON...");
 
     // TODO:
-    // - MIR Opts
-    // - LIR lowering (SSA)
+    // - LIR optss
     // - LLVM lowering (SSA)
     // - Detect unused functions and variables.
     // - Skip empty functions?

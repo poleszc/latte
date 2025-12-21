@@ -76,6 +76,7 @@ pub enum LIROperation {
     NewObject, // new Obj
     FieldGet,  // obj.field
     FieldSet,  // obj.field = ...
+    IsNull,  // obj.field = ...
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -34,8 +34,6 @@ impl TempID {
 /// All MIR operations.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum MIROperation {
-    Nop, // TODO: Why, it's there in duckling?
-
     Assign,
     Call,
     VCall,
@@ -77,12 +75,6 @@ pub enum MIROperation {
     FieldGet,  // obj.field
     FieldSet,  // obj.field = ...
     IsNull,
-
-    // Control flow
-    Jump, // Remove those
-    Branch, // branch(condition, true_block, false_block)
-    Return,
-    ReturnVoid,
 }
 
 /// Representation of a MIR value.

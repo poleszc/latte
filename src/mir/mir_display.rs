@@ -37,7 +37,6 @@ impl fmt::Display for MIRPlace {
 impl fmt::Display for MIROperation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
-            MIROperation::Nop => "Nop",
             MIROperation::Assign => "Assign",
             MIROperation::IntAdd => "IntAdd",
             MIROperation::IntSub => "IntSub",
@@ -68,10 +67,6 @@ impl fmt::Display for MIROperation {
             MIROperation::FieldGet => "FieldGet",
             MIROperation::FieldSet => "FieldSet",
             MIROperation::IsNull => "IsNull",
-            MIROperation::Jump => "Jump",
-            MIROperation::Branch => "Branch",
-            MIROperation::Return => "Return",
-            MIROperation::ReturnVoid => "ReturnVoid",
         };
         write!(f, "{:<18}", name)
     }
