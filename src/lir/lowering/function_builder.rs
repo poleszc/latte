@@ -1,5 +1,9 @@
 use core::panic;
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    hash::Hash,
+    thread::sleep,
+};
 
 use clap::builder::Str;
 
@@ -53,7 +57,11 @@ impl LIRFunctionBuilder {
 
         let (preds, succs) = self.analyze_cfg(&mir_function);
         let idom = self.compute_immediate_dominators(&mir_function, &preds);
+        let dominance_frontier = self.compute_dominance_frontier(&mir_function, &idom, &succs);
 
+        self.insert_phi_functions(&mir_function, &dominance_frontier);
+
+        dbg!(&self.phi_placeholders);
 
         LIRFunction {
             name: mir_function.name,
@@ -65,6 +73,60 @@ impl LIRFunctionBuilder {
             block_order: vec![],
             entry_block: crate::lir::BlockID(mir_function.entry_block.0),
             source_position: mir_function.source_position,
+        }
+    }
+
+    /// Insert needed phi functions based on the dominance frontier.
+    /// https://pfalcon.github.io/ssabook/latest/book-full.pdf
+    fn insert_phi_functions(
+        &mut self,
+        func: &MIRFunction,
+        df: &HashMap<crate::mir::BlockID, HashSet<crate::mir::BlockID>>,
+    ) {
+        // Look for all variables name in the program and create a mapping to all blocks containing them.
+        let mut local_defs: HashMap<LocalID, HashSet<crate::mir::BlockID>> = HashMap::new();
+        for block in func.blocks.values() {
+            for instr in &block.instructions {
+                if let Some(MIRPlace::Local(id)) = &instr.destination {
+                    local_defs.entry(*id).or_default().insert(block.id);
+                }
+            }
+        }
+
+        // For each variable in the program insert PHI for it.
+        for (local_id, def_blocks) in local_defs {
+            let mut worklist: VecDeque<crate::mir::BlockID> = def_blocks.iter().cloned().collect(); // Set of basic blocks that contain definitions of this local. (W)
+            let mut visited = HashSet::new(); // Set of blocks where phi is added. (F)
+
+            while let Some(n) = worklist.pop_front() {
+                if let Some(frontier) = df.get(&n) {
+                    for &f in frontier {
+                        if !visited.contains(&f) {
+                            // Add a placeholder phi to the block.
+                            let lir_block = crate::lir::BlockID(f.0);
+                            let typ = func
+                                .locals
+                                .iter()
+                                .find(|l| l.id == local_id)
+                                .unwrap()
+                                .typ
+                                .clone();
+                            let reg = self.new_register(typ, None);
+                            // If entry for this block didn't exist we create it, if not we insert into the existing.
+                            self.phi_placeholders
+                                .entry(lir_block)
+                                .or_default()
+                                .insert(local_id, reg);
+
+                            // Mark the block as visited.
+                            visited.insert(f);
+                            if !def_blocks.contains(&f) {
+                                worklist.push_back(f);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -195,6 +257,37 @@ impl LIRFunctionBuilder {
         (preds, succ)
     }
 
+    /// Returns a HashMap, where the variables defined in them die.
+    /// https://www.cs.tufts.edu/~nr/cs257/archive/keith-cooper/dom14.pdf
+    fn compute_dominance_frontier(
+        &self,
+        mir_func: &MIRFunction,
+        idom: &HashMap<crate::mir::BlockID, crate::mir::BlockID>,
+        succs: &HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>>,
+    ) -> HashMap<crate::mir::BlockID, HashSet<crate::mir::BlockID>> {
+        let mut df = HashMap::new();
+        for &b in &mir_func.block_order {
+            df.insert(b, HashSet::new());
+        }
+
+        for &b in &mir_func.block_order {
+            if let Some(b_successors) = succs.get(&b) {
+                for &s in b_successors {
+                    let mut runner = b;
+                    while runner != idom[&s] {
+                        df.get_mut(&runner).unwrap().insert(s);
+                        let next_runner = idom[&runner];
+                        if runner == next_runner {
+                            break;
+                        }
+                        runner = next_runner;
+                    }
+                }
+            }
+        }
+        df
+    }
+
     // https://pages.cs.wisc.edu/~fischer/cs701.f08/lectures/Lecture19.4up.pdf
     fn compute_immediate_dominators(
         &self,
@@ -236,8 +329,9 @@ impl LIRFunctionBuilder {
         }
         idom
     }
-    
+
     /// Find the closest common predecessor for two blocks.
+    /// https://www.cs.tufts.edu/~nr/cs257/archive/keith-cooper/dom14.pdf
     fn intersect(
         &self,
         mut b1: crate::mir::BlockID,
@@ -249,6 +343,7 @@ impl LIRFunctionBuilder {
         // TODO: Optimise so we have a map BlockId -> index in block order
         let pos = |id| order.iter().position(|&x| x == id).unwrap();
 
+        // TODO: Does that work?
         while b1 != b2 {
             // If b2 is "later" in the graph then b1, we take a step upwards with b1.
             while pos(b1) > pos(b2) {
