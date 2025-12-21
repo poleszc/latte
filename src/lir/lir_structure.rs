@@ -14,7 +14,7 @@ impl RegisterID {
     }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Hash)]
 pub struct BlockID(pub usize);
 impl BlockID {
     pub fn new(id: usize) -> Self {
@@ -115,7 +115,7 @@ pub struct RegisterInfo {
 #[derive(Debug, Clone, Serialize)]
 pub struct LIRBlock {
     pub id: BlockID,
-    pub instructions: Vec<LIROperation>,
+    pub instructions: Vec<LIRInstruction>,
     pub terminator: Option<LIRTerminator>,
     pub predecessors: Vec<BlockID>, // Direct predecessors
 }

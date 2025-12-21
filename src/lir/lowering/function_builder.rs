@@ -1,17 +1,10 @@
-use core::panic;
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    hash::Hash,
-    thread::sleep,
-};
-
-use clap::builder::Str;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::{
     SourcePosition,
     lir::{lowering::function_builder, *},
     mir::{self, *},
-    parser::{Block, Type},
+    parser::Type,
     utils::StrID,
 };
 
@@ -63,14 +56,40 @@ impl LIRFunctionBuilder {
 
         dbg!(&self.phi_placeholders);
 
+        let dom_tree = self.build_dom_tree(&idom);
+        dbg!(&dom_tree);
+
+        let mut lir_blocks = HashMap::new();
+
+        // First insert all function parameters on the variable stacks.
+        let mut param_registers = Vec::new();
+        for param in mir_function.locals.iter().filter(|l| l.is_parameter) {
+            let reg = self.new_register(param.typ.clone(), param.name);
+            param_registers.push(reg);
+            self.locals_stack.entry(param.id).or_default().push(reg);
+        }
+
+        self.rename_recursive(
+            mir_function.entry_block,
+            &mir_function,
+            &dom_tree,
+            &succs,
+            &preds,
+            &mut lir_blocks,
+        );
+
         LIRFunction {
             name: mir_function.name,
             return_type: mir_function.return_type.clone(),
             parameter_types: mir_function.parameter_types.clone(),
-            parameter_registers: vec![],
+            parameter_registers: param_registers,
             registers: self.registers_info.clone(),
-            blocks: HashMap::new(),
-            block_order: vec![],
+            blocks: lir_blocks,
+            block_order: mir_function
+                .block_order
+                .iter()
+                .map(|b| crate::lir::BlockID(b.0))
+                .collect(),
             entry_block: crate::lir::BlockID(mir_function.entry_block.0),
             source_position: mir_function.source_position,
         }
@@ -128,6 +147,148 @@ impl LIRFunctionBuilder {
                 }
             }
         }
+    }
+
+    fn rename_recursive(
+        &mut self,
+        block_id: crate::mir::BlockID,
+        mir_func: &MIRFunction,
+        dom_tree: &HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>>,
+        succs: &HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>>,
+        preds: &HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>>,
+        lir_blocs: &mut HashMap<crate::lir::BlockID, LIRBlock>,
+    ) {
+        let mir_block = &mir_func.blocks[&block_id];
+        let lir_id = crate::lir::BlockID(block_id.0);
+        let mut pushed_locals = Vec::new();
+        let mut instructions = Vec::new();
+
+        // Insert all placeholder phis which we inserted in the first pass. For now without any arguments.
+        if let Some(phis) = self.phi_placeholders.get(&lir_id) {
+            for (&local_id, &dest_reg) in phis {
+                self.locals_stack
+                    .entry(local_id)
+                    .or_default()
+                    .push(dest_reg);
+                pushed_locals.push(local_id);
+
+                instructions.push(LIRInstruction {
+                    operation: LIROperation::Phi,
+                    destination: dest_reg,
+                    operands: Vec::new(),
+                    source_position: mir_func.source_position,
+                });
+            }
+        }
+
+        for instruction in &mir_block.instructions {
+            let operands = instruction
+                .operands
+                .iter()
+                .map(|v| self.lower_value(v))
+                .collect();
+            let op = self.lower_operation(&instruction.operation);
+
+            if let Some(dest) = &instruction.destination {
+                match dest {
+                    MIRPlace::Local(local_id) => {
+                        let typ = mir_func
+                            .locals
+                            .iter()
+                            .find(|l| l.id == *local_id)
+                            .unwrap()
+                            .typ
+                            .clone();
+                        let new_reg = self.new_register(typ, None);
+                        self.locals_stack
+                            .entry(*local_id)
+                            .or_default()
+                            .push(new_reg);
+                        pushed_locals.push(*local_id);
+
+                        instructions.push(LIRInstruction {
+                            operation: op,
+                            destination: new_reg,
+                            operands,
+                            source_position: instruction.source_position,
+                        });
+                    }
+                    MIRPlace::Temp(temp_id) => {
+                        let reg = self.temps[temp_id];
+                        instructions.push(LIRInstruction {
+                            operation: op,
+                            destination: reg,
+                            operands,
+                            source_position: instruction.source_position,
+                        });
+                    }
+                    _ => {} // TODO: What with FieldGet and ArrayGet?
+                }
+            }
+        }
+
+        self.phi_finalized.insert(lir_id, instructions);
+
+        if let Some(block_successors) = succs.get(&block_id) {
+            for &successor in block_successors {
+                let successor_lir_id = crate::lir::BlockID(successor.0);
+                if let Some(phis_to_fill) = self.phi_placeholders.get(&successor_lir_id) {
+                    if let Some(target_block_instr) = self.phi_finalized.get_mut(&successor_lir_id)
+                    {
+                        for instr in target_block_instr
+                            .iter_mut()
+                            .filter(|i| i.operation == LIROperation::Phi)
+                        {
+                            for (&loc_id, &phi_reg) in phis_to_fill {
+                                if instr.destination == phi_reg {
+                                    let val =
+                                        match self.locals_stack.get(&loc_id).and_then(|s| s.last())
+                                        {
+                                            Some(&r) => LIRValue::Register(r),
+                                            None => LIRValue::Null, // Undefined
+                                        };
+                                    instr.operands.push(val);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Run the recursion for the children in the dominator tree.
+        if let Some(children) = dom_tree.get(&block_id) {
+            for &child in children {
+                self.rename_recursive(child, mir_func, dom_tree, succs, preds, lir_blocs);
+            }
+        }
+
+        // Pop all the variables we defined in this DFS node from the stack.
+        for loc_id in pushed_locals {
+            self.locals_stack.get_mut(&loc_id).unwrap().pop();
+        }
+
+        let final_instructions = self.phi_finalized.remove(&lir_id).unwrap();
+        let lir_preds = preds
+            .get(&block_id)
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .map(|b| crate::lir::BlockID(b.0))
+            .collect();
+
+        lir_blocs.insert(
+            lir_id,
+            LIRBlock {
+                id: lir_id,
+                instructions: final_instructions,
+                terminator: mir_block
+                    .terminator
+                    .as_ref()
+                    .map(|t| self.lower_terminator(t)),
+                predecessors: lir_preds,
+            },
+        );
     }
 }
 
@@ -340,7 +501,7 @@ impl LIRFunctionBuilder {
         order: &[crate::mir::BlockID],
     ) -> crate::mir::BlockID {
         // The `order` block list is in reverse post order. If a block is later on the list, then it's `later` in the DFS graph of the CFG.
-        // TODO: Optimise so we have a map BlockId -> index in block order
+        // TODO: Optimize so we have a map BlockId -> index in block order
         let pos = |id| order.iter().position(|&x| x == id).unwrap();
 
         // TODO: Does that work?
@@ -355,5 +516,19 @@ impl LIRFunctionBuilder {
             }
         }
         b1
+    }
+
+    /// Essentially reverse the idom mapping of (child -> parent) to (parent -> list of children)
+    fn build_dom_tree(
+        &self,
+        idom: &HashMap<crate::mir::BlockID, crate::mir::BlockID>,
+    ) -> HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>> {
+        let mut tree: HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>> = HashMap::new();
+        for (&b, &p) in idom {
+            if b != p {
+                tree.entry(p).or_default().push(b);
+            }
+        }
+        tree
     }
 }
