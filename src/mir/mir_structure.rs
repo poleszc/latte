@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+// TODO: remove json serialization?
 use crate::{SourcePosition, parser::ast::Type, utils::StrID};
 use serde::Serialize;
 
@@ -78,7 +79,7 @@ pub enum MIROperation {
     IsNull,
 
     // Control flow
-    Jump,
+    Jump, // Remove those
     Branch, // branch(condition, true_block, false_block)
     Return,
     ReturnVoid,

@@ -8,6 +8,7 @@ use crate::errors::CompilerError;
 use crate::latte::ProgramParser;
 use crate::parser::lexer::LatteLexer;
 use crate::parser::tokens::Token;
+pub use ast::*;
 
 /// Main function performing the parsing:
 /// - Initializes the lexer and lexes the code.
