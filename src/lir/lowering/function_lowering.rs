@@ -70,7 +70,6 @@ impl LIRFunctionBuilder {
         // Handle temporaries first, since they are already in the SSA form and don't leak through blocks.
         for temp in &mir_function.temps {
             let reg = self.new_register(temp.typ.clone(), None);
-            // let reg = RegisterID(0);
             self.temps.insert(temp.id, reg);
         }
 
