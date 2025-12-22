@@ -1,22 +1,15 @@
 use std::{
-    fs,
-    path::{Path, PathBuf},
+    fmt::format, fs, path::{Path, PathBuf}
 };
 
 use clap::Parser;
 
 // TODO: Fix these imports.
 use crate::{
-    LatteArgs,
-    errors::CompilerError,
-    lir::{self, *},
-    mir::{self, *},
-    parser::{
+    LatteArgs, errors::CompilerError, lir::{self, *}, llvm::{self, LLVMGenerator}, mir::{self, *}, parser::{
         self,
         ast::{self, Program},
-    },
-    report_compiler_error,
-    semantics::SemanticChecker,
+    }, report_compiler_error, semantics::SemanticChecker
 };
 
 /// Main driver for the compiler. Performs all the generic operations for both backends.
@@ -96,6 +89,15 @@ pub fn run_compiler<
     eprintln!("[LIR] Lowering to LIR completed successfully...");
     dump_lir(&output_dir, file_stem, &lir_program)?;
     eprintln!("[LIR] Dumped LIR to JSON...");
+    
+    // ============= LLVM LOWERING ===============
+    eprintln!("[LLVM] Lowering to LLVM...");
+    let llvm_generator = LLVMGenerator::new(); 
+    let llvm_ir = llvm_generator.generate_program(&lir_program);
+    eprintln!("[LLVM] Lowering to LLVM completed successfully...");
+    dump_llvm_ir(&output_dir, file_stem, &llvm_ir)?;
+    eprintln!("[LLVM] Dumped LLVM to file...");
+    
 
     // TODO:
     // - LIR optss
@@ -198,6 +200,31 @@ fn dump_lir(
     println!(
         "[LIR]: Successfully saved LIR to {}",
         PathBuf::from(&output_dir).display()
+    );
+    Ok(())
+}
+
+/// Dumps LLVM IR to a file
+fn dump_llvm_ir(
+    output_dir: &PathBuf,
+    file_stem: &str,
+    llvm_ir: &str,
+) -> Result<(), CompilerError> {
+    println!("[LLVM]: Saving LLVM IR to file");
+    let mut llvm_path = PathBuf::from(&output_dir);
+    llvm_path.push(format!("{}.ll", file_stem));
+
+    fs::write(&llvm_path, llvm_ir).map_err(|e| {
+        CompilerError::Other(format!(
+            "Failed to write LLVM IR to file '{}': {}",
+            llvm_path.display(),
+            e
+        ))
+    })?;
+
+    println!(
+        "[LLVM]: Successfully saved LLVM IR to {}",
+        llvm_path.display()
     );
     Ok(())
 }

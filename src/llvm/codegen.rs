@@ -1,8 +1,6 @@
 use core::panic;
 use std::{collections::HashMap, fmt::Write};
 
-use serde::de::value;
-
 use crate::{
     lir::{
         LIRFunction, LIRInstruction, LIROperation, LIRProgram, LIRTerminator, LIRValue, RegisterID,
@@ -149,9 +147,9 @@ impl<'a> LLVMGenerator<'a> {
                     )
                     .as_str(),
                 );
-                self.emit_line_indented(format!("err_{}", instr.destination.unwrap().0).as_str());
+                self.emit_line_indented(format!("err_{}:", instr.destination.unwrap().0).as_str());
                 self.emit_line_very_indented(format!("call void @error()").as_str());
-                self.emit_line_indented(format!("ok_{}", instr.destination.unwrap().0).as_str());
+                self.emit_line_indented(format!("ok_{}:", instr.destination.unwrap().0).as_str());
 
                 let op = if instr.operation == LIROperation::IntDiv {
                     "sdiv"
@@ -210,7 +208,7 @@ impl<'a> LLVMGenerator<'a> {
                 let v1 = self.format_value(&instr.operands[0]);
                 let v2 = self.format_value(&instr.operands[1]);
                 self.emit_line_very_indented(
-                    format!("  %{} = icmp {} i32 {}, {}", dest.0, cond, v1, v2).as_str(),
+                    format!("%{} = icmp {} i32 {}, {}", dest.0, cond, v1, v2).as_str(),
                 );
             }
             LIROperation::BoolAnd => {
