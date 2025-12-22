@@ -382,6 +382,7 @@ impl<'a> LLVMGenerator<'a> {
                         name
                     })
                     .clone();
+                // TODO: Why is inbounds here
                 format!(
                     "getelementptr inbounds ([{} x i8], [{} x i8]* @{}, i32 0, i32 0)",
                     s.len() + 1,

@@ -17,9 +17,9 @@ use crate::{
 /// - Performs the parsing
 /// - Runs the compilation function(`backend_compile`).
 pub fn run_compiler<
-    F: FnOnce(&mut ast::Program, &Path, &str, &LatteArgs) -> Result<(), CompilerError>,
+    F: FnOnce(&LIRProgram, &Path, &str, &LatteArgs) -> Result<(), CompilerError>,
 >(
-    _backend_compile: F,
+    backend_compile: F,
 ) -> Result<(), CompilerError> {
     // TODO: Create a CONFIG structure instead of this multiple arg parsing.
     let args = LatteArgs::parse();
@@ -90,14 +90,8 @@ pub fn run_compiler<
     dump_lir(&output_dir, file_stem, &lir_program)?;
     eprintln!("[LIR] Dumped LIR to JSON...");
     
-    // ============= LLVM LOWERING ===============
-    eprintln!("[LLVM] Lowering to LLVM...");
-    let llvm_generator = LLVMGenerator::new(); 
-    let llvm_ir = llvm_generator.generate_program(&lir_program);
-    eprintln!("[LLVM] Lowering to LLVM completed successfully...");
-    dump_llvm_ir(&output_dir, file_stem, &llvm_ir)?;
-    eprintln!("[LLVM] Dumped LLVM to file...");
-    
+    // ============= LLVM BACKEND ===============
+    backend_compile(&lir_program, &output_dir, file_stem, &args)?;
 
     // TODO:
     // - LIR optss
@@ -200,31 +194,6 @@ fn dump_lir(
     println!(
         "[LIR]: Successfully saved LIR to {}",
         PathBuf::from(&output_dir).display()
-    );
-    Ok(())
-}
-
-/// Dumps LLVM IR to a file
-fn dump_llvm_ir(
-    output_dir: &PathBuf,
-    file_stem: &str,
-    llvm_ir: &str,
-) -> Result<(), CompilerError> {
-    println!("[LLVM]: Saving LLVM IR to file");
-    let mut llvm_path = PathBuf::from(&output_dir);
-    llvm_path.push(format!("{}.ll", file_stem));
-
-    fs::write(&llvm_path, llvm_ir).map_err(|e| {
-        CompilerError::Other(format!(
-            "Failed to write LLVM IR to file '{}': {}",
-            llvm_path.display(),
-            e
-        ))
-    })?;
-
-    println!(
-        "[LLVM]: Successfully saved LLVM IR to {}",
-        llvm_path.display()
     );
     Ok(())
 }
