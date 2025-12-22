@@ -30,7 +30,7 @@ pub fn compile_llvm(
         return Err(CompilerError::Other("runtime.ll not found.".to_string()));
     }
     let runtime_path_bc = runtime_path_ll.with_extension("bc");
-    llvm_assemble(&runtime_path_ll, &runtime_path_bc)?;
+    llvm_assemble(runtime_path_ll, &runtime_path_bc)?;
 
     let linked_bc_path = dir.join(format!("{}_linked.bc", stem));
     llvm_link(&linked_bc_path, vec![bc_path, runtime_path_bc])?;
@@ -45,9 +45,9 @@ pub fn compile_llvm(
 fn llvm_assemble(ll_path: &PathBuf, bc_path: &PathBuf) -> Result<(), CompilerError> {
     eprintln!("[LLVM] Assembling bitcode for: {}", ll_path.display());
     let as_output = Command::new("llvm-as")
-        .arg(&ll_path)
+        .arg(ll_path)
         .arg("-o")
-        .arg(&bc_path)
+        .arg(bc_path)
         .output()?;
 
     if !as_output.status.success() {
@@ -66,9 +66,9 @@ fn lower_lir_to_llvm_and_save(
 ) -> Result<(), CompilerError> {
     eprintln!("[LLVM] Lowering to LLVM...");
     let llvm_generator = LLVMGenerator::new();
-    let llvm_ir = llvm_generator.generate_program(&lir_program);
+    let llvm_ir = llvm_generator.generate_program(lir_program);
     eprintln!("[LLVM] Lowering to LLVM completed successfully...");
-    fs::write(&ll_path, llvm_ir)?;
+    fs::write(ll_path, llvm_ir)?;
     eprintln!("[LLVM] Dumped LLVM IR to file: {}", ll_path.display());
     Ok(())
 }
@@ -78,7 +78,7 @@ fn llvm_link(linked_path: &PathBuf, paths_to_link: Vec<PathBuf>) -> Result<(), C
     for path in paths_to_link {
         command.arg(path);
     }
-    let link_output = command.arg("-o").arg(&linked_path).output()?;
+    let link_output = command.arg("-o").arg(linked_path).output()?;
 
     if !link_output.status.success() {
         return Err(CompilerError::Other(format!(
@@ -92,7 +92,7 @@ fn llvm_link(linked_path: &PathBuf, paths_to_link: Vec<PathBuf>) -> Result<(), C
 
 fn llvm_run(bc_path: &PathBuf) -> Result<(), CompilerError> {
     eprintln!("[LLVM] Running program");
-    let run_output = Command::new("lli").arg(&bc_path).output()?;
+    let run_output = Command::new("lli").arg(bc_path).output()?;
     if !run_output.stdout.is_empty() {
         print!("{}", String::from_utf8_lossy(&run_output.stdout))
     }

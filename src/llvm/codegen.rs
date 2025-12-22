@@ -12,8 +12,13 @@ pub struct LLVMGenerator<'a> {
     output: String,
     string_constants: HashMap<String, String>,
     next_string_id: usize,
-    next_label_id: usize,                      // TODO: Remove?
-    current_function: Option<&'a LIRFunction>, // TODO: Remove?
+    current_function: Option<&'a LIRFunction>,
+}
+
+impl<'a> Default for LLVMGenerator<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<'a> LLVMGenerator<'a> {
@@ -22,7 +27,6 @@ impl<'a> LLVMGenerator<'a> {
             output: String::new(),
             string_constants: HashMap::new(),
             next_string_id: 0,
-            next_label_id: 0,
             current_function: None,
         }
     }
@@ -32,7 +36,7 @@ impl<'a> LLVMGenerator<'a> {
         self.emit_preambule();
 
         for func_name in &program.function_order {
-            if let Some(func) = program.functions.get(&func_name) {
+            if let Some(func) = program.functions.get(func_name) {
                 self.current_function = Some(func);
                 self.emit_function(func);
                 self.current_function = None;
@@ -149,8 +153,8 @@ impl<'a> LLVMGenerator<'a> {
                     .as_str(),
                 );
                 self.emit_line_indented(format!("err_{}:", instr.destination.unwrap().0).as_str());
-                self.emit_line_very_indented(format!("call void @error()").as_str());
-                self.emit_line_very_indented(format!("unreachable").as_str());
+                self.emit_line_very_indented("call void @error()");
+                self.emit_line_very_indented("unreachable");
                 self.emit_line_indented(format!("ok_{}:", instr.destination.unwrap().0).as_str());
 
                 let op = if instr.operation == LIROperation::IntDiv {
