@@ -78,7 +78,7 @@ pub enum LIROperation {
     NewObject, // new Obj
     FieldGet,  // obj.field
     FieldSet,  // obj.field = ...
-    IsNull,  // obj.field = ...
+    IsNull,    // obj.field = ...
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -169,7 +169,7 @@ impl LIRProgram {
             function_order: Vec::new(),
         }
     }
-    
+
     pub fn add_function(&mut self, function: LIRFunction) {
         self.function_order.push(function.name);
         self.functions.insert(function.name, function);

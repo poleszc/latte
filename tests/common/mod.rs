@@ -1,5 +1,8 @@
 use latte::{
-    CompilerError, lir, mir::{self}, parser, semantics::SemanticChecker
+    CompilerError, lir,
+    mir::{self},
+    parser,
+    semantics::SemanticChecker,
 };
 
 pub fn assert_parsing_succeeds(input_path: &str) {

@@ -1,25 +1,51 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    hash::Hash,
+};
 
 use crate::{
-    lir::*,
-    mir::{self, *},
+    lir::{
+        BlockID as LirBID, LIRBlock, LIRFunction, LIRInstruction, LIROperation, LIRTerminator,
+        LIRValue, RegisterID, RegisterInfo,
+    },
+    mir::{
+        BlockID as MirBID, LocalID, MIRFunction, MIROperation, MIRPlace, MIRTerminator, MIRValue,
+        TempID,
+    },
     parser::Type,
     utils::StrID,
 };
 
+/// BlockID -> list of predecessors.
+type PredecessorMap = HashMap<MirBID, Vec<MirBID>>;
+/// BlockID -> list of successors.
+type SuccessorMap = HashMap<MirBID, Vec<MirBID>>;
+type DominatorTree = HashMap<MirBID, Vec<MirBID>>;
+type DominanceFrontier = HashMap<MirBID, HashSet<MirBID>>;
+
+/// LocalID to a stack fo registers where it's last used.
+type LocalsRegisterStack = HashMap<LocalID, Vec<RegisterID>>;
+
+type PhiPlaceholders = HashMap<LirBID, HashMap<LocalID, RegisterID>>;
+type PhiIncoming = HashMap<LirBID, HashMap<RegisterID, Vec<(LirBID, LIRValue)>>>;
+type ReversePostOrder = Vec<MirBID>;
+type ImmediateDominators = HashMap<MirBID, MirBID>;
+
 pub struct LIRFunctionBuilder {
     /// Index of the next free register.
     register_index: usize,
-    /// Mapping from MIR Local ids to a stack of registers.
-    locals_stack: HashMap<LocalID, Vec<RegisterID>>,
+    /// Mapping from MIR Local ids to a stack of registers. Used when renaming the instructions with DFS.
+    locals_stack: LocalsRegisterStack,
     /// Temporaries are already in the SSA form and do not leak through blocks, so we treat them separately)
     temps: HashMap<TempID, RegisterID>,
-    /// RegisterID is the index in this vector. Stores the information about the type of register.
+    /// Stores the information about the type of register. RegisterID is the index in this vector.
     registers_info: Vec<RegisterInfo>,
+    /// For each LIR block, stores a mapping of it's locals to the corresponding registers where it's first use if defined.
+    phi_placeholders: PhiPlaceholders,
+    /// For each LIR block, stores a mapping of it's locals to the corresponding registers where it's first use if defined.
+    phi_incoming: PhiIncoming,
 
-    phi_placeholders: HashMap<crate::lir::BlockID, HashMap<LocalID, RegisterID>>,
-    phi_incoming:
-        HashMap<crate::lir::BlockID, HashMap<RegisterID, Vec<(crate::lir::BlockID, LIRValue)>>>,
+    locals_cache: HashMap<LocalID, (Type, Option<StrID>)>,
 }
 
 impl LIRFunctionBuilder {
@@ -31,6 +57,7 @@ impl LIRFunctionBuilder {
             registers_info: Vec::new(),
             phi_placeholders: HashMap::new(),
             phi_incoming: HashMap::new(),
+            locals_cache: HashMap::new(),
         }
     }
 
@@ -44,6 +71,13 @@ impl LIRFunctionBuilder {
     /// Lowers a MIR function to LIR function. Transforms the code to a minimal SSA form.
     /// https://pfalcon.github.io/ssabook/latest/book-full.pdf
     pub fn lower(&mut self, mir_function: &MIRFunction) -> LIRFunction {
+        // Create a locals cache for faster lookup.
+        self.locals_cache = mir_function
+            .locals
+            .iter()
+            .map(|l| (l.id, (l.typ.clone(), None)))
+            .collect();
+
         // Handle temporaries first, since they are already in the SSA form and don't leak through blocks.
         for temp in &mir_function.temps {
             let reg = self.new_register(temp.typ.clone(), None);
@@ -59,7 +93,6 @@ impl LIRFunctionBuilder {
         self.insert_phi_functions(&mir_function, &dominance_frontier);
 
         let dom_tree = build_dom_tree(&idom);
-        let mut lir_blocks = HashMap::new();
 
         // Insert all function parameters to the variable stacks.
         let mut param_registers = Vec::new();
@@ -70,6 +103,7 @@ impl LIRFunctionBuilder {
         }
 
         // Perform renaming of all instructions.
+        let mut lir_blocks = HashMap::new();
         self.rename_recursive(
             mir_function.entry_block,
             &mir_function,
@@ -78,6 +112,8 @@ impl LIRFunctionBuilder {
             &preds,
             &mut lir_blocks,
         );
+
+        self.finalize_phis(&mut lir_blocks);
 
         // Now fill all phi function arguments with the actual values.
         for (lir_id, block) in &mut lir_blocks {
@@ -110,22 +146,43 @@ impl LIRFunctionBuilder {
             block_order: mir_function
                 .block_order
                 .iter()
-                .map(|b| crate::lir::BlockID(b.0))
+                .map(|b| LirBID(b.0))
                 .collect(),
-            entry_block: crate::lir::BlockID(mir_function.entry_block.0),
+            entry_block: LirBID(mir_function.entry_block.0),
             source_position: mir_function.source_position,
+        }
+    }
+
+    fn finalize_phis(&self, blocks: &mut HashMap<LirBID, LIRBlock>) {
+        for (lir_id, block) in blocks {
+            for instr in &mut block.instructions {
+                if instr.operation != LIROperation::Phi {
+                    continue;
+                }
+
+                if let Some(incoming) = self
+                    .phi_incoming
+                    .get(lir_id)
+                    .and_then(|m| m.get(&instr.destination))
+                {
+                    for pred_id in &block.predecessors {
+                        let val = incoming
+                            .iter()
+                            .find(|(p, _)| p == pred_id)
+                            .map(|(_, v)| v.clone())
+                            .unwrap();
+                        instr.operands.push(val);
+                    }
+                }
+            }
         }
     }
 
     /// Insert needed phi functions based on the dominance frontier.
     /// https://pfalcon.github.io/ssabook/latest/book-full.pdf (Algorithm 3.1)
-    fn insert_phi_functions(
-        &mut self,
-        func: &MIRFunction,
-        df: &HashMap<crate::mir::BlockID, HashSet<crate::mir::BlockID>>,
-    ) {
+    fn insert_phi_functions(&mut self, func: &MIRFunction, df: &DominanceFrontier) {
         // Look for all variables name in the program and create a mapping to all blocks containing them.
-        let mut local_defs: HashMap<LocalID, HashSet<crate::mir::BlockID>> = HashMap::new();
+        let mut local_defs: HashMap<LocalID, HashSet<MirBID>> = HashMap::new();
         for block_ix in &func.block_order {
             let block = &func.blocks[block_ix];
             for instr in &block.instructions {
@@ -137,7 +194,7 @@ impl LIRFunctionBuilder {
 
         // For each variable in the program insert PHI for it.
         for (local_id, def_blocks) in local_defs {
-            let mut worklist: VecDeque<crate::mir::BlockID> = def_blocks.iter().cloned().collect(); // Set of basic blocks that contain definitions of this local. (W)
+            let mut worklist: VecDeque<MirBID> = def_blocks.iter().cloned().collect(); // Set of basic blocks that contain definitions of this local. (W)
             let mut visited = HashSet::new(); // Set of blocks where phi is added. (F)
 
             while let Some(n) = worklist.pop_front() {
@@ -145,7 +202,7 @@ impl LIRFunctionBuilder {
                     for &f in frontier {
                         if !visited.contains(&f) {
                             // Add a placeholder phi to the block.
-                            let lir_block = crate::lir::BlockID(f.0);
+                            let lir_block = LirBID(f.0);
                             let typ = func
                                 .locals
                                 .iter()
@@ -176,14 +233,14 @@ impl LIRFunctionBuilder {
     /// https://pfalcon.github.io/ssabook/latest/book-full.pdf
     fn rename_recursive(
         &mut self,
-        block_id: crate::mir::BlockID,
+        block_id: MirBID,
         mir_func: &MIRFunction,
-        dom_tree: &HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>>,
-        succs: &HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>>,
-        preds: &HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>>,
-        lir_blocks: &mut HashMap<crate::lir::BlockID, LIRBlock>,
+        dom_tree: &DominatorTree,
+        succs: &SuccessorMap,
+        preds: &PredecessorMap,
+        lir_blocks: &mut HashMap<LirBID, LIRBlock>,
     ) {
-        let lir_id = crate::lir::BlockID(block_id.0);
+        let lir_id = LirBID(block_id.0);
         let mut pushed_locals = Vec::new();
         let mut instructions = Vec::new();
 
@@ -255,13 +312,13 @@ impl LIRFunctionBuilder {
 
         if let Some(block_successors) = succs.get(&block_id) {
             for &successor in block_successors {
-                let succ_lir_id = crate::lir::BlockID(successor.0);
+                let succ_lir_id = LirBID(successor.0);
                 if let Some(phis_in_succ) = self.phi_placeholders.get(&succ_lir_id) {
                     for (&loc_id, &phi_reg) in phis_in_succ {
                         let current_val =
                             match self.locals_stack.get(&loc_id).and_then(|s| s.last()) {
                                 Some(&reg) => LIRValue::Register(reg),
-                                None => LIRValue::IntConst(0), // TODO: This is bugged
+                                None => LIRValue::Null, // TODO: This is bugged
                             };
 
                         self.phi_incoming
@@ -281,14 +338,17 @@ impl LIRFunctionBuilder {
             }
         }
 
+        // Remove locals pushed in this DFS run.
         for loc_id in pushed_locals {
             self.locals_stack.get_mut(&loc_id).unwrap().pop();
         }
 
+        // Populate a LIR block with a list of it's predecessors.
+        // TODO: Maybe not needed?
         let mut final_preds = Vec::new();
         if let Some(p_list) = preds.get(&block_id) {
             for p in p_list {
-                final_preds.push(crate::lir::BlockID(p.0));
+                final_preds.push(LirBID(p.0));
             }
         }
 
@@ -346,7 +406,7 @@ impl LIRFunctionBuilder {
     fn lower_terminator(&self, term: &MIRTerminator) -> LIRTerminator {
         match term {
             MIRTerminator::Jump { target, position } => LIRTerminator::Jump {
-                target: crate::lir::BlockID(target.0),
+                target: LirBID(target.0),
                 position: *position,
             },
             MIRTerminator::Branch {
@@ -356,8 +416,8 @@ impl LIRFunctionBuilder {
                 position,
             } => LIRTerminator::Branch {
                 condition: self.lower_value(condition),
-                if_true: crate::lir::BlockID(if_true.0),
-                if_false: crate::lir::BlockID(if_false.0),
+                if_true: LirBID(if_true.0),
+                if_false: LirBID(if_false.0),
                 position: *position,
             },
             MIRTerminator::Return { value, position } => LIRTerminator::Return {
@@ -378,7 +438,7 @@ impl LIRFunctionBuilder {
             MIRValue::StringConst(s) => LIRValue::StringConst(s.clone()),
             MIRValue::Null => LIRValue::Null,
             // TODO: Remove those?
-            MIRValue::Block(block_id) => LIRValue::Block(crate::lir::BlockID(block_id.0)),
+            MIRValue::Block(block_id) => LIRValue::Block(LirBID(block_id.0)),
             MIRValue::Function(func_name) => LIRValue::Function(*func_name),
             MIRValue::Class(class_name) => LIRValue::Class(*class_name),
             MIRValue::Unit => todo!("Unit"),
@@ -390,14 +450,9 @@ impl LIRFunctionBuilder {
 // Graph utils
 // ======================
 /// Calculates a predecessors and successors for each block in the MIR function.
-fn compute_predecessors_and_successors(
-    func: &MIRFunction,
-) -> (
-    HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>>,
-    HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>>,
-) {
-    let mut preds = HashMap::new();
-    let mut succ = HashMap::new();
+fn compute_predecessors_and_successors(func: &MIRFunction) -> (PredecessorMap, SuccessorMap) {
+    let mut preds = PredecessorMap::new();
+    let mut succ = SuccessorMap::new();
 
     for &block_id in &func.block_order {
         preds.insert(block_id, Vec::new());
@@ -435,10 +490,8 @@ fn compute_predecessors_and_successors(
 
 /// Reverse the idom mapping of (child -> parent) to (parent -> list of children)
 /// https://pfalcon.github.io/ssabook/latest/book-full.pdf
-fn build_dom_tree(
-    idom: &HashMap<mir::BlockID, mir::BlockID>,
-) -> HashMap<mir::BlockID, Vec<mir::BlockID>> {
-    let mut tree: HashMap<mir::BlockID, Vec<mir::BlockID>> = HashMap::new();
+fn build_dom_tree(idom: &ImmediateDominators) -> DominatorTree {
+    let mut tree = DominatorTree::new();
     for (&b, &p) in idom {
         if b != p {
             tree.entry(p).or_default().push(b);
@@ -452,11 +505,11 @@ fn build_dom_tree(
 /// Reverse post order is needed for fast convergence.
 /// https://www.cs.tufts.edu/~nr/cs257/archive/keith-cooper/dom14.pdf
 fn compute_dominance_frontier(
-    rpo_order: &Vec<mir::BlockID>,
-    idom: &HashMap<crate::mir::BlockID, crate::mir::BlockID>,
-    preds: &HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>>,
-) -> HashMap<crate::mir::BlockID, HashSet<crate::mir::BlockID>> {
-    let mut df = HashMap::new();
+    rpo_order: &ReversePostOrder,
+    idom: &ImmediateDominators,
+    preds: &PredecessorMap,
+) -> DominanceFrontier {
+    let mut df = DominanceFrontier::new();
     for &b in rpo_order {
         df.insert(b, HashSet::new());
     }
@@ -486,15 +539,15 @@ fn compute_dominance_frontier(
 /// Reverse post order is needed for fast convergence.
 /// https://www.cs.tufts.edu/~nr/cs257/archive/keith-cooper/dom14.pdf
 fn compute_immediate_dominators(
-    rpo_order: &Vec<mir::BlockID>,
-    preds: &HashMap<mir::BlockID, Vec<mir::BlockID>>,
-) -> HashMap<mir::BlockID, mir::BlockID> {
-    let mut idom = HashMap::new();
+    rpo_order: &ReversePostOrder,
+    preds: &PredecessorMap,
+) -> ImmediateDominators {
+    let mut idom = ImmediateDominators::new();
     let entry = rpo_order[0];
     idom.insert(entry, entry); // Entry dominates itself.
 
     // Helper mapping from block id to it's index in the rpo order.
-    let rpo_map: HashMap<mir::BlockID, usize> =
+    let rpo_map: HashMap<MirBID, usize> =
         rpo_order.iter().enumerate().map(|(i, &b)| (b, i)).collect();
 
     let mut changed = true;
@@ -530,11 +583,11 @@ fn compute_immediate_dominators(
 /// Find the closest common predecessor for two blocks.
 /// https://www.cs.tufts.edu/~nr/cs257/archive/keith-cooper/dom14.pdf
 fn intersect(
-    mut b1: crate::mir::BlockID,
-    mut b2: crate::mir::BlockID,
-    idom: &HashMap<crate::mir::BlockID, crate::mir::BlockID>,
-    rpo_map: &HashMap<mir::BlockID, usize>, // Mapping from block ID to it's index in the reverse post order.
-) -> crate::mir::BlockID {
+    mut b1: MirBID,
+    mut b2: MirBID,
+    idom: &ImmediateDominators,
+    rpo_map: &HashMap<MirBID, usize>, // Mapping from block ID to it's index in the reverse post order.
+) -> MirBID {
     while b1 != b2 {
         // If b1 is "later" in the graph then b2, we take a step upwards with b1.
         while rpo_map[&b1] > rpo_map[&b2] {
@@ -550,18 +603,15 @@ fn intersect(
 
 /// Computes the reverse post order of the blocks needed for computing the
 /// immediate dominators and dominance frontiers with fast convergence.
-fn compute_reverse_post_order(
-    entry: mir::BlockID,
-    succs: &HashMap<crate::mir::BlockID, Vec<crate::mir::BlockID>>,
-) -> Vec<mir::BlockID> {
-    let mut post_order = Vec::new();
+fn compute_reverse_post_order(entry: MirBID, succs: &SuccessorMap) -> ReversePostOrder {
+    let mut post_order = ReversePostOrder::new();
     let mut visited = HashSet::new();
 
     fn walk(
-        curr: mir::BlockID,
-        succs: &HashMap<mir::BlockID, Vec<mir::BlockID>>,
-        visited: &mut HashSet<mir::BlockID>,
-        post_order: &mut Vec<mir::BlockID>,
+        curr: MirBID,
+        succs: &SuccessorMap,
+        visited: &mut HashSet<MirBID>,
+        post_order: &mut ReversePostOrder,
     ) {
         visited.insert(curr);
         if let Some(children) = succs.get(&curr) {

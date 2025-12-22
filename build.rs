@@ -95,7 +95,7 @@ fn main() {
         "mir_pass",
     )
     .expect("Generate extensions MIR tests failed");
-    
+
     // ===================== LIR ======================
     generate_test_suite(
         "basic_lir_lowering_tests.rs",
@@ -122,7 +122,7 @@ fn main() {
     // .expect("Generate extensions LIR tests failed");
 }
 
-/// Recursively collects all files starting from a giver directory. 
+/// Recursively collects all files starting from a giver directory.
 fn find_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
     if dir.is_dir() {
         for entry in fs::read_dir(dir)? {
