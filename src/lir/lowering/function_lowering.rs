@@ -98,28 +98,6 @@ impl LIRFunctionBuilder {
         // Now that all instructions are changed, we fill the phi instructions.
         self.finalize_phis(&mut lir_blocks);
 
-        // Now fill all phi function arguments with the actual values.
-        for (lir_id, block) in &mut lir_blocks {
-            let final_preds = &block.predecessors;
-            for instr in &mut block.instructions {
-                if instr.operation == LIROperation::Phi
-                    && let Some(args) = self
-                        .phi_incoming
-                        .get(lir_id)
-                        .and_then(|incoming_map| incoming_map.get(&instr.destination))
-                {
-                    for pred_id in final_preds {
-                        let val = args
-                            .iter()
-                            .find(|(p, _)| p == pred_id)
-                            .map(|(_, v)| v.clone())
-                            .unwrap_or(LIRValue::IntConst(0));
-                        instr.operands.push(val);
-                    }
-                }
-            }
-        }
-
         LIRFunction {
             name: mir_function.name,
             return_type: mir_function.return_type.clone(),
@@ -145,10 +123,9 @@ impl LIRFunctionBuilder {
                     continue;
                 }
 
-                if let Some(incoming) = self
-                    .phi_incoming
-                    .get(lir_id)
-                    .and_then(|m| m.get(&instr.destination))
+                if let Some(dest_reg) = instr.destination
+                    && let Some(incoming) =
+                        self.phi_incoming.get(lir_id).and_then(|m| m.get(&dest_reg))
                 {
                     for pred_id in &block.predecessors {
                         let val = incoming
@@ -157,6 +134,7 @@ impl LIRFunctionBuilder {
                             .map(|(_, v)| v.clone())
                             .unwrap();
                         instr.operands.push(val);
+                        instr.operands.push(LIRValue::Block(*pred_id));
                     }
                 }
             }
@@ -234,7 +212,7 @@ impl LIRFunctionBuilder {
 
                 instructions.push(LIRInstruction {
                     operation: LIROperation::Phi,
-                    destination: phi_reg,
+                    destination: Some(phi_reg),
                     operands: Vec::new(),
                     source_position: mir_func.source_position,
                 });
@@ -263,7 +241,7 @@ impl LIRFunctionBuilder {
 
                         instructions.push(LIRInstruction {
                             operation: op,
-                            destination: new_reg,
+                            destination: Some(new_reg),
                             operands,
                             source_position: instruction.source_position,
                         });
@@ -271,7 +249,7 @@ impl LIRFunctionBuilder {
                     MIRPlace::Temp(temp_id) => {
                         instructions.push(LIRInstruction {
                             operation: op,
-                            destination: self.temps[temp_id],
+                            destination: Some(self.temps[temp_id]),
                             operands,
                             source_position: instruction.source_position,
                         });
@@ -281,7 +259,7 @@ impl LIRFunctionBuilder {
             } else {
                 instructions.push(LIRInstruction {
                     operation: op,
-                    destination: RegisterID(0),
+                    destination: None,
                     operands,
                     source_position: instruction.source_position,
                 });

@@ -100,7 +100,7 @@ pub enum LIRTerminator {
 #[derive(Debug, Clone, Serialize)]
 pub struct LIRInstruction {
     pub operation: LIROperation,
-    pub destination: RegisterID,
+    pub destination: Option<RegisterID>,
     pub operands: Vec<LIRValue>,
     pub source_position: SourcePosition,
 }

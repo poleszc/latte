@@ -23,7 +23,7 @@ impl fmt::Display for LIRValue {
             LIRValue::Null => write!(f, "null"),
             LIRValue::Function(name) => write!(f, "@{}", name),
             LIRValue::Class(name) => write!(f, "class.{}", name),
-            LIRValue::Block(block_id) => write!(f, "label B{}", block_id),
+            LIRValue::Block(block_id) => write!(f, "{}", block_id),
         }
     }
 }
@@ -69,7 +69,11 @@ impl fmt::Display for LIROperation {
 
 impl fmt::Display for LIRInstruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "  {} = {} ", self.destination, self.operation)?;
+        if self.destination.is_some() {
+            write!(f, "  {} = {} ", self.destination.unwrap(), self.operation)?;
+        } else {
+            write!(f, "  {} ", self.operation)?;
+        }
 
         if self.operation == LIROperation::Phi {
             write!(f, "[")?;
