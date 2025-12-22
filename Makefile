@@ -29,6 +29,13 @@ clean:
 	rm -rf tests/good/extensions/struct/*.mir.txt
 	rm -rf tests/good/extensions/virtual/*.mir.txt
 
+	rm -rf tests/good/extra/*.lir.txt
+	rm -rf tests/good/official/*.lir.txt
+	rm -rf tests/good/extensions/arrays/*.lir.txt
+	rm -rf tests/good/extensions/objects/*.lir.txt
+	rm -rf tests/good/extensions/struct/*.lir.txt
+	rm -rf tests/good/extensions/virtual/*.lir.txt
+
 	rm -rf tests/bad/*.json
 	rm -rf tests/bad/lexical/*.json
 	rm -rf tests/bad/official/*.json

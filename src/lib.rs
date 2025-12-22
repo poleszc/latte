@@ -6,6 +6,7 @@ lalrpop_mod!(pub latte);
 pub mod config;
 pub mod driver;
 pub mod errors;
+pub mod lir;
 pub mod llvm;
 pub mod mir;
 pub mod parser;

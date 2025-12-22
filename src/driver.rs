@@ -5,10 +5,12 @@ use std::{
 
 use clap::Parser;
 
+// TODO: Fix these imports.
 use crate::{
     LatteArgs,
     errors::CompilerError,
-    mir::{self, MIRProgram},
+    lir::{self, *},
+    mir::{self, *},
     parser::{
         self,
         ast::{self, Program},
@@ -88,9 +90,15 @@ pub fn run_compiler<
     dump_mir(&output_dir, file_stem, &mir_program)?;
     eprintln!("[MIR] Dumped MIR to JSON...");
 
+    // ============= LIR LOWERING ===============
+    eprintln!("[LIR] Lowering to LIR...");
+    let lir_program = lir::lower_to_lir(mir_program);
+    eprintln!("[LIR] Lowering to LIR completed successfully...");
+    dump_lir(&output_dir, file_stem, &lir_program)?;
+    eprintln!("[LIR] Dumped LIR to JSON...");
+
     // TODO:
-    // - MIR Opts
-    // - LIR lowering (SSA)
+    // - LIR optss
     // - LLVM lowering (SSA)
     // - Detect unused functions and variables.
     // - Skip empty functions?
@@ -161,20 +169,6 @@ fn dump_mir(
     mir_program: &MIRProgram,
 ) -> Result<(), CompilerError> {
     println!("[MIR]: Dumping MIR to file");
-    let mut json_output_path = PathBuf::from(&output_dir);
-    json_output_path.push(format!("{}.mir.json", file_stem));
-
-    let json_string = serde_json::to_string_pretty(&mir_program)
-        .map_err(|e| CompilerError::Other(format!("Failed to serialize MIR to JSON: {}", e)))?;
-
-    fs::write(&json_output_path, json_string).map_err(|e| {
-        CompilerError::Other(format!(
-            "Failed to write MIR to file '{}': {}",
-            json_output_path.display(),
-            e
-        ))
-    })?;
-
     mir_program.dump_to_file(
         PathBuf::from(&output_dir)
             .join(format!("{}.mir.txt", file_stem))
@@ -182,8 +176,28 @@ fn dump_mir(
     )?;
 
     println!(
-        "[LATTE]: Successfully saved MIR to {}",
-        json_output_path.display()
+        "[MIR]: Successfully saved MIR to {}",
+        PathBuf::from(&output_dir).display()
+    );
+    Ok(())
+}
+
+/// Dumps the LIR to a JSON file and a txt file in a specified output_dir and a given file name.
+fn dump_lir(
+    output_dir: &PathBuf,
+    file_stem: &str,
+    lir_program: &LIRProgram,
+) -> Result<(), CompilerError> {
+    println!("[LIR]: Dumping LIR to file");
+    lir_program.dump_to_file(
+        PathBuf::from(&output_dir)
+            .join(format!("{}.lir.txt", file_stem))
+            .as_path(),
+    )?;
+
+    println!(
+        "[LIR]: Successfully saved LIR to {}",
+        PathBuf::from(&output_dir).display()
     );
     Ok(())
 }
