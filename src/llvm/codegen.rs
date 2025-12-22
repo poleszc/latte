@@ -82,7 +82,7 @@ impl<'a> LLVMGenerator<'a> {
             .parameter_registers
             .iter()
             .zip(&func.parameter_types)
-            .map(|(reg, typ)| format!("{} %{}", self.llvm_type(typ), reg.0))
+            .map(|(reg, typ)| format!("{} %r{}", self.llvm_type(typ), reg.0))
             .collect::<Vec<String>>()
             .join(", ");
 
@@ -101,7 +101,7 @@ impl<'a> LLVMGenerator<'a> {
                 panic!("NO TERMINATOR NOOOOOO")
             }
         }
-        self.emit_line("}}\n");
+        self.emit_line("}\n");
     }
 
     fn emit_instruction(&mut self, instr: &LIRInstruction) {
@@ -112,7 +112,7 @@ impl<'a> LLVMGenerator<'a> {
                 let val = self.format_value(&instr.operands[0]);
                 let typ = self.get_llvm_type_from_register(dest);
                 self.emit_line_very_indented(
-                    format!("%{} = add {} 0, {}", dest.0, typ, val).as_str(),
+                    format!("%r{} = add {} 0, {}", dest.0, typ, val).as_str(),
                 );
             }
             LIROperation::IntAdd | LIROperation::IntSub | LIROperation::IntMul => {
@@ -125,7 +125,7 @@ impl<'a> LLVMGenerator<'a> {
                 let lhs = self.format_value(&instr.operands[0]);
                 let rhs = self.format_value(&instr.operands[1]);
                 self.emit_line_very_indented(
-                    format!("%{} = {} i32 {}, {}", dest.0, op, lhs, rhs).as_str(),
+                    format!("%r{} = {} i32 {}, {}", dest.0, op, lhs, rhs).as_str(),
                 );
             }
             LIROperation::IntDiv | LIROperation::IntMod => {
@@ -149,6 +149,7 @@ impl<'a> LLVMGenerator<'a> {
                 );
                 self.emit_line_indented(format!("err_{}:", instr.destination.unwrap().0).as_str());
                 self.emit_line_very_indented(format!("call void @error()").as_str());
+                self.emit_line_very_indented(format!("unreachable").as_str());
                 self.emit_line_indented(format!("ok_{}:", instr.destination.unwrap().0).as_str());
 
                 let op = if instr.operation == LIROperation::IntDiv {
@@ -159,7 +160,7 @@ impl<'a> LLVMGenerator<'a> {
                 let lhs = self.format_value(&instr.operands[0]);
                 self.emit_line_very_indented(
                     format!(
-                        "%{} = {} i32 {}, {}",
+                        "%r{} = {} i32 {}, {}",
                         instr.destination.unwrap().0,
                         op,
                         lhs,
@@ -171,13 +172,13 @@ impl<'a> LLVMGenerator<'a> {
             LIROperation::IntNeg => {
                 let dest = instr.destination.unwrap();
                 let val = self.format_value(&instr.operands[0]);
-                self.emit_line_very_indented(format!("%{} = sub i32 0, {}", dest.0, val).as_str());
+                self.emit_line_very_indented(format!("%r{} = sub i32 0, {}", dest.0, val).as_str());
             }
             LIROperation::Phi => {
                 let dest = instr.destination.unwrap();
                 let llvm_type = self.get_llvm_type_from_register(dest);
 
-                let mut phi = format!("%{} = phi {} ", dest.0, llvm_type);
+                let mut phi = format!("%r{} = phi {} ", dest.0, llvm_type);
                 let mut args = Vec::new();
                 for i in (0..instr.operands.len()).step_by(2) {
                     let val = self.format_value(&instr.operands[i]);
@@ -208,7 +209,7 @@ impl<'a> LLVMGenerator<'a> {
                 let v1 = self.format_value(&instr.operands[0]);
                 let v2 = self.format_value(&instr.operands[1]);
                 self.emit_line_very_indented(
-                    format!("%{} = icmp {} i32 {}, {}", dest.0, cond, v1, v2).as_str(),
+                    format!("%r{} = icmp {} i32 {}, {}", dest.0, cond, v1, v2).as_str(),
                 );
             }
             LIROperation::BoolAnd => {
@@ -216,7 +217,7 @@ impl<'a> LLVMGenerator<'a> {
                 let lhs = self.format_value(&instr.operands[0]);
                 let rhs = self.format_value(&instr.operands[1]);
                 self.emit_line_very_indented(
-                    format!("%{} = and i1 {}, {}", dest.0, lhs, rhs).as_str(),
+                    format!("%r{} = and i1 {}, {}", dest.0, lhs, rhs).as_str(),
                 );
             }
             LIROperation::BoolOr => {
@@ -224,13 +225,13 @@ impl<'a> LLVMGenerator<'a> {
                 let lhs = self.format_value(&instr.operands[0]);
                 let rhs = self.format_value(&instr.operands[1]);
                 self.emit_line_very_indented(
-                    format!("%{} = or i1 {}, {}", dest.0, lhs, rhs).as_str(),
+                    format!("%r{} = or i1 {}, {}", dest.0, lhs, rhs).as_str(),
                 );
             }
             LIROperation::BoolNot => {
                 let dest = instr.destination.unwrap();
                 let val = self.format_value(&instr.operands[0]);
-                self.emit_line_very_indented(format!("%{} = xor i1 {}, 1", dest.0, val).as_str());
+                self.emit_line_very_indented(format!("%r{} = xor i1 {}, 1", dest.0, val).as_str());
             }
             LIROperation::StringConcat => {
                 let dest = instr.destination.unwrap();
@@ -238,7 +239,7 @@ impl<'a> LLVMGenerator<'a> {
                 let rhs = self.format_value(&instr.operands[1]);
                 self.emit_line_very_indented(
                     format!(
-                        "%{} = call i8* @stringConcat(i8* {}, i8* {})",
+                        "%r{} = call i8* @stringConcat(i8* {}, i8* {})",
                         dest.0, lhs, rhs
                     )
                     .as_str(),
@@ -250,7 +251,7 @@ impl<'a> LLVMGenerator<'a> {
                 let rhs = self.format_value(&instr.operands[1]);
                 self.emit_line_very_indented(
                     format!(
-                        "%{} = call i1 @stringEqual(i8* {}, i8* {})",
+                        "%r{} = call i1 @stringEqual(i8* {}, i8* {})",
                         dest.0, lhs, rhs
                     )
                     .as_str(),
@@ -262,7 +263,7 @@ impl<'a> LLVMGenerator<'a> {
                 let rhs = self.format_value(&instr.operands[1]);
                 self.emit_line_very_indented(
                     format!(
-                        "%{} = call i1 @stringNotEqual(i8* {}, i8* {})",
+                        "%r{} = call i1 @stringNotEqual(i8* {}, i8* {})",
                         dest.0, lhs, rhs
                     )
                     .as_str(),
@@ -272,7 +273,7 @@ impl<'a> LLVMGenerator<'a> {
                 let dest = instr.destination.unwrap();
                 let val = self.format_value(&instr.operands[0]);
                 self.emit_line_very_indented(
-                    format!("%{} = call i32 @stringLength(i8* {})", dest.0, val).as_str(),
+                    format!("%r{} = call i32 @stringLength(i8* {})", dest.0, val).as_str(),
                 );
             }
             LIROperation::Call => {
@@ -289,7 +290,7 @@ impl<'a> LLVMGenerator<'a> {
 
                 if let Some(dest) = instr.destination {
                     self.emit_line_very_indented(
-                        format!("%{} = call i32 @{}({})", dest.0, func_name, args).as_str(),
+                        format!("%r{} = call i32 @{}({})", dest.0, func_name, args).as_str(),
                     );
                 } else {
                     self.emit_line_very_indented(
@@ -310,7 +311,7 @@ impl<'a> LLVMGenerator<'a> {
                 let val = self.format_value(&instr.operands[0]);
                 let typ = "i8*"; // TODO: Temporary
                 self.emit_line_very_indented(
-                    format!("%{} = icmp eq {} {}, null", dest.0, typ, val).as_str(),
+                    format!("%r{} = icmp eq {} {}, null", dest.0, typ, val).as_str(),
                 );
             }
         }
@@ -363,7 +364,7 @@ impl<'a> LLVMGenerator<'a> {
 
     fn format_value(&mut self, val: &LIRValue) -> String {
         match val {
-            LIRValue::Register(id) => format!("%{}", id.0),
+            LIRValue::Register(id) => format!("%r{}", id.0),
             LIRValue::IntConst(n) => n.to_string(),
             LIRValue::BoolConst(b) => {
                 if *b {

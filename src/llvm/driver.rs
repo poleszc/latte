@@ -29,20 +29,20 @@ pub fn compile_llvm(
     fs::write(&ll_path, llvm_ir)?;
     eprintln!("[LLVM] Generated file: {}", ll_path.display());
 
-    // eprintln!("[LLVM] Assembling bitcode...");
-    // let as_output = Command::new("llvm-as")
-    //     .arg(&ll_path)
-    //     .arg("-o")
-    //     .arg(&bc_path)
-    //     .output()?;
+    eprintln!("[LLVM] Assembling bitcode...");
+    let as_output = Command::new("llvm-as")
+        .arg(&ll_path)
+        .arg("-o")
+        .arg(&bc_path)
+        .output()?;
 
-    // if !as_output.status.success() {
-    //     return Err(CompilerError::Other(format!(
-    //         "LLVM assembler failed.\n[STDERR]:\n{}",
-    //         String::from_utf8_lossy(&as_output.stderr)
-    //     )));
-    // }
-    // eprintln!("[LLVM] Generated file: {}", bc_path.display());
+    if !as_output.status.success() {
+        return Err(CompilerError::Other(format!(
+            "LLVM assembler failed.\n[STDERR]:\n{}",
+            String::from_utf8_lossy(&as_output.stderr)
+        )));
+    }
+    eprintln!("[LLVM] Generated file: {}", bc_path.display());
 
     // eprintln!("[LLVM] Linking with runtime lib...");
 
