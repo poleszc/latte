@@ -109,7 +109,7 @@ pub fn assert_lir_lowering_pass(input_path: &str) {
         SemanticChecker::check(&ast).expect("Expected semantic analysis to succeed, but it failed");
 
     let mir_program = mir::lower_to_mir(&semantic_result.tast, semantic_result.symbol_table);
-    let lir_program = lir::lower_to_lir(mir_program);
+    let _ = lir::lower_to_lir(mir_program);
     // If we got here, it means the semantic analysis passed. Think of a better way to test for that.
 }
 
