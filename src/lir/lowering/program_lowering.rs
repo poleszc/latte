@@ -1,6 +1,6 @@
 use crate::{
-    lir::{LIRClass, LIRField, LIRProgram, lowering::function_builder::LIRFunctionBuilder},
-    mir::{self, MIRClass, MIRProgram},
+    lir::{LIRClass, LIRField, LIRProgram, lowering::function_lowering::LIRFunctionBuilder},
+    mir::{MIRClass, MIRProgram},
 };
 
 pub struct LIRLowering;
@@ -10,7 +10,7 @@ impl LIRLowering {
         let mut lir_program = LIRProgram::new();
 
         for class in mir_program.classes.values() {
-            lir_program.add_class(Self::lowerClassToLIR(class));
+            lir_program.add_class(Self::lower_class_to_lir(class));
         }
 
         // Transform all functions to SSA.
@@ -25,7 +25,7 @@ impl LIRLowering {
         lir_program
     }
 
-    pub fn lowerClassToLIR(mir_class: &MIRClass) -> LIRClass {
+    pub fn lower_class_to_lir(mir_class: &MIRClass) -> LIRClass {
         LIRClass {
             name: mir_class.name,
             parent: mir_class.parent,

@@ -1,5 +1,5 @@
 mod cfg;
-mod function_builder;
-mod lowering;
+mod function_lowering;
+mod program_lowering;
 
-pub use lowering::LIRLowering;
+pub use program_lowering::LIRLowering;

@@ -73,10 +73,10 @@ impl LIRFunctionBuilder {
             self.temps.insert(temp.id, reg);
         }
 
-        let analysis = GraphAnalysis::analyze(&mir_function);
+        let analysis = GraphAnalysis::analyze(mir_function);
 
         // Insert placeholder phi functions which will be filled later.
-        self.insert_phi_functions(&mir_function, &analysis.dominance_frontier);
+        self.insert_phi_functions(mir_function, &analysis.dominance_frontier);
 
         // Insert all function parameters to the variable stacks.
         let mut param_registers = Vec::new();
@@ -90,7 +90,7 @@ impl LIRFunctionBuilder {
         let mut lir_blocks = HashMap::new();
         self.rename_recursive(
             mir_function.entry_block,
-            &mir_function,
+            mir_function,
             &analysis,
             &mut lir_blocks,
         );
@@ -102,18 +102,19 @@ impl LIRFunctionBuilder {
         for (lir_id, block) in &mut lir_blocks {
             let final_preds = &block.predecessors;
             for instr in &mut block.instructions {
-                if instr.operation == LIROperation::Phi {
-                    if let Some(incoming_map) = self.phi_incoming.get(lir_id) {
-                        if let Some(args) = incoming_map.get(&instr.destination) {
-                            for pred_id in final_preds {
-                                let val = args
-                                    .iter()
-                                    .find(|(p, _)| p == pred_id)
-                                    .map(|(_, v)| v.clone())
-                                    .unwrap_or(LIRValue::IntConst(0));
-                                instr.operands.push(val);
-                            }
-                        }
+                if instr.operation == LIROperation::Phi
+                    && let Some(args) = self
+                        .phi_incoming
+                        .get(lir_id)
+                        .and_then(|incoming_map| incoming_map.get(&instr.destination))
+                {
+                    for pred_id in final_preds {
+                        let val = args
+                            .iter()
+                            .find(|(p, _)| p == pred_id)
+                            .map(|(_, v)| v.clone())
+                            .unwrap_or(LIRValue::IntConst(0));
+                        instr.operands.push(val);
                     }
                 }
             }

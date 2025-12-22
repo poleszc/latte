@@ -1,7 +1,5 @@
-use std::{collections::HashMap, fmt::Display};
+use std::collections::HashMap;
 // TODO: remove json serialization?
-
-use clap::builder::Str;
 use serde::Serialize;
 
 use crate::{SourcePosition, parser::ast::Type, utils::StrID};
@@ -177,5 +175,11 @@ impl LIRProgram {
 
     pub fn add_class(&mut self, class: LIRClass) {
         self.classes.insert(class.name, class);
+    }
+}
+
+impl Default for LIRProgram {
+    fn default() -> Self {
+        Self::new()
     }
 }

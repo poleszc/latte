@@ -1,5 +1,3 @@
-use clap::builder::Str;
-
 use super::MIRLoweringContext;
 use crate::{
     SourcePosition,

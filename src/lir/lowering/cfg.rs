@@ -136,7 +136,7 @@ fn compute_immediate_dominators(
                 }
             }
 
-            if let None = idom.get(&block) {
+            if !idom.contains_key(&block) {
                 idom.insert(block, new_idom);
                 changed = true;
             }
