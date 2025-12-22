@@ -97,7 +97,7 @@ pub fn assert_mir_lowering_pass(input_path: &str) {
         SemanticChecker::check(&ast).expect("Expected semantic analysis to succeed, but it failed");
 
     let _ = mir::lower_to_mir(&semantic_result.tast, semantic_result.symbol_table);
-    // If we got here, it means the semantic analysis passed. Think of a better way to test for that.
+    // If we got here, it means mir lowering passed. Think of a better way to test for that.
 }
 
 pub fn assert_lir_lowering_pass(input_path: &str) {
@@ -110,7 +110,7 @@ pub fn assert_lir_lowering_pass(input_path: &str) {
 
     let mir_program = mir::lower_to_mir(&semantic_result.tast, semantic_result.symbol_table);
     let _ = lir::lower_to_lir(mir_program);
-    // If we got here, it means the semantic analysis passed. Think of a better way to test for that.
+    // If we got here, it means the lir lowering passed. Think of a better way to test for that.
 }
 
 // pub fn assert_compilation_fails(input_path: &str) {

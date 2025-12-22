@@ -1,6 +1,5 @@
 use crate::{lir::lowering::LIRLowering, mir::MIRProgram};
 
-// mod builders;
 mod lir_display;
 pub mod lir_structure;
 mod lowering;
