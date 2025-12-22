@@ -55,6 +55,13 @@ impl MIRLoweringContext {
                         self.builder()
                             .create_local(Some(ident.name), typ.clone(), false, None);
                     self.variable_map.insert(ident.name, local_id);
+
+                    let default_value = self.get_default_initialization_value(typ);
+                    self.builder().emit_assign(
+                        MIRPlace::Local(local_id),
+                        default_value,
+                        stmt_position,
+                    );
                 }
                 TItemKind::Init(ident, expr) => {
                     let local_id =
@@ -68,6 +75,17 @@ impl MIRLoweringContext {
                         .emit_assign(MIRPlace::Local(local_id), value, stmt_position);
                 }
             }
+        }
+    }
+
+    // Return the default initialization value for a type.
+    fn get_default_initialization_value(&self, typ: &Type) -> MIRValue {
+        match &typ.kind {
+            TypeKind::Int => MIRValue::IntConst(0),
+            TypeKind::Bool => MIRValue::BoolConst(false),
+            TypeKind::String => MIRValue::StringConst("".to_string()),
+            TypeKind::Array(_) | TypeKind::Class(_) => MIRValue::Null,
+            _ => panic!("Unhandled default initialization value"),
         }
     }
 
