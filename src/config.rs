@@ -18,4 +18,7 @@ pub struct LatteArgs {
     /// If not specified, produces the output files in the same directory as the source code.
     #[arg(long, value_name = "DIR")]
     pub output_dir: Option<PathBuf>,
+    // Path to the LLVM runtime library.
+    #[arg(long, value_name = "PATH", default_value = "lib/runtime.ll")]
+    pub runtime_path: PathBuf,
 }

@@ -88,17 +88,18 @@ impl<'a> LLVMGenerator<'a> {
 
         self.emit_line(format!("define {} @{}({}) {{", ret_type, func.name, args).as_str());
         for block_id in &func.block_order {
-            let block = &func.blocks[block_id];
-            self.emit_line_indented(format!("B{}:", block.id.0).as_str());
+            if let Some(block) = func.blocks.get(block_id) {
+                self.emit_line_indented(format!("B{}:", block_id.0).as_str());
 
-            for instr in &block.instructions {
-                self.emit_instruction(instr);
-            }
+                for instr in &block.instructions {
+                    self.emit_instruction(instr);
+                }
 
-            if let Some(term) = &block.terminator {
-                self.emit_terminator(term);
-            } else {
-                panic!("NO TERMINATOR NOOOOOO")
+                if let Some(term) = &block.terminator {
+                    self.emit_terminator(term);
+                } else {
+                    panic!("NO TERMINATOR NOOOOOO")
+                }
             }
         }
         self.emit_line("}\n");

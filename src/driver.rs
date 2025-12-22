@@ -1,15 +1,19 @@
 use std::{
-    fmt::format, fs, path::{Path, PathBuf}
+    fs,
+    path::{Path, PathBuf},
 };
 
 use clap::Parser;
 
 // TODO: Fix these imports.
 use crate::{
-    LatteArgs, errors::CompilerError, lir::{self, *}, llvm::{self, LLVMGenerator}, mir::{self, *}, parser::{
-        self,
-        ast::{self, Program},
-    }, report_compiler_error, semantics::SemanticChecker
+    LatteArgs,
+    errors::CompilerError,
+    lir::{self, *},
+    mir::{self, *},
+    parser::{self, ast::Program},
+    report_compiler_error,
+    semantics::SemanticChecker,
 };
 
 /// Main driver for the compiler. Performs all the generic operations for both backends.
@@ -89,13 +93,12 @@ pub fn run_compiler<
     eprintln!("[LIR] Lowering to LIR completed successfully...");
     dump_lir(&output_dir, file_stem, &lir_program)?;
     eprintln!("[LIR] Dumped LIR to JSON...");
-    
+
     // ============= LLVM BACKEND ===============
     backend_compile(&lir_program, &output_dir, file_stem, &args)?;
 
     // TODO:
     // - LIR optss
-    // - LLVM lowering (SSA)
     // - Detect unused functions and variables.
     // - Skip empty functions?
 
