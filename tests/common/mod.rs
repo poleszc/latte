@@ -186,13 +186,14 @@ pub fn run_integration_test(input_path: &str) {
     );
 
     let bc_path = temp_dir.path().join(format!("{}.bc", stem));
-    if !bc_path.exists() {
-        panic!("kurwa");
-    }
 
     // Run the program.
     let mut run_command = Command::new("lli");
+    // This is stupid, but when JIT is enabled the linked symbols
+    // from runtime.ll are "sometimes" not found.
+    run_command.arg("--force-interpreter");
     run_command.arg(&bc_path);
+
 
     let output = if input_data_path.exists() {
         let input_data = fs::read_to_string(input_data_path).unwrap();

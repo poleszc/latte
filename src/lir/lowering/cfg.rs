@@ -46,7 +46,8 @@ fn compute_predecessors_and_successors(func: &MIRFunction) -> (PredecessorMap, S
         succ.insert(block_id, Vec::new());
     }
 
-    for block in func.blocks.values() {
+    for &block_id in &func.block_order {
+        let block = &func.blocks[&block_id];
         // Insert all successors for the block.
         let mut successors_list = Vec::new();
         if let Some(term) = &block.terminator {
@@ -136,7 +137,7 @@ fn compute_immediate_dominators(
                 }
             }
 
-            if !idom.contains_key(&block) {
+            if idom.get(&block) != Some(&new_idom) {
                 idom.insert(block, new_idom);
                 changed = true;
             }
@@ -210,5 +211,10 @@ fn build_dom_tree(idom: &ImmediateDominators) -> DominatorTree {
             tree.entry(p).or_default().push(b);
         }
     }
+
+    for children in tree.values_mut() {
+        children.sort_by_key(|bid| bid.0);
+    }
+
     tree
 }

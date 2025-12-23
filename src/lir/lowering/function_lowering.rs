@@ -21,7 +21,6 @@ enum SSAId {
 }
 
 /// LocalID to a stack fo registers where it's last used.
-type LocalsRegisterStack = HashMap<LocalID, Vec<RegisterID>>;
 type RegisterStack = HashMap<SSAId, Vec<RegisterID>>;
 
 type PhiPlaceholders = HashMap<LirBID, HashMap<SSAId, RegisterID>>;
@@ -165,8 +164,15 @@ impl LIRFunctionBuilder {
             }
         }
 
+        let mut sorted_ids: Vec<_> = local_defs.keys().cloned().collect();
+        sorted_ids.sort_by_key(|id| match id {
+            SSAId::Local(l) => (0, l.0),
+            SSAId::Temp(l) => (1, l.0),
+        });
+
         // For each variable in the program insert PHI for it.
-        for (ssa_id, def_blocks) in local_defs {
+        for ssa_id in sorted_ids {
+            let def_blocks = &local_defs[&ssa_id];
             let mut worklist: VecDeque<MirBID> = def_blocks.iter().cloned().collect(); // Set of basic blocks that contain definitions of this local. (W)
             let mut visited = HashSet::new(); // Set of blocks where phi is added. (F)
 
@@ -207,13 +213,20 @@ impl LIRFunctionBuilder {
         lir_blocks: &mut HashMap<LirBID, LIRBlock>,
     ) {
         let lir_id = LirBID(block_id.0);
-        let mut pushed_ssa_registers = Vec::new();
+        let mut pushed_ssa_registers: Vec<SSAId> = Vec::new();
         let mut instructions = Vec::new();
 
         if let Some(phis_here) = self.phi_placeholders.get(&lir_id) {
-            for (&ssa_id, &phi_reg) in phis_here {
-                self.ssa_stack.entry(ssa_id).or_default().push(phi_reg);
-                pushed_ssa_registers.push(ssa_id);
+            let mut sorted_phi_ids: Vec<_> = phis_here.keys().collect();
+            sorted_phi_ids.sort_by_key(|id| match id {
+                SSAId::Local(l) => (0, l.0),
+                SSAId::Temp(t) => (1, t.0),
+            });
+
+            for ssa_id in sorted_phi_ids {
+                let phi_reg = phis_here[ssa_id];
+                self.ssa_stack.entry(*ssa_id).or_default().push(phi_reg);
+                pushed_ssa_registers.push(*ssa_id);
 
                 instructions.push(LIRInstruction {
                     operation: LIROperation::Phi,
@@ -242,6 +255,8 @@ impl LIRFunctionBuilder {
                 let info = self.locals_cache[&ssa_id].clone();
                 let new_reg = self.new_register(info.0.clone(), info.1);
                 self.ssa_stack.entry(ssa_id).or_default().push(new_reg);
+                pushed_ssa_registers.push(ssa_id);
+
                 instructions.push(LIRInstruction {
                     operation: op,
                     destination: Some(new_reg),
@@ -264,7 +279,10 @@ impl LIRFunctionBuilder {
             .map(|t| self.lower_terminator(t));
 
         if let Some(block_successors) = cfg_analysis.successors.get(&block_id) {
-            for &successor in block_successors {
+            let mut sorted_successors = block_successors.clone();
+            sorted_successors.sort_by_key(|bid| bid.0);
+
+            for successor in sorted_successors {
                 let succ_lir_id = LirBID(successor.0);
                 if let Some(phis_in_succ) = self.phi_placeholders.get(&succ_lir_id) {
                     for (&ssa_id, &phi_reg) in phis_in_succ {
@@ -292,7 +310,9 @@ impl LIRFunctionBuilder {
         }
 
         if let Some(children) = cfg_analysis.dominator_tree.get(&block_id) {
-            for &child in children {
+            let mut sorted_children = children.clone();
+            sorted_children.sort_by_key(|bid| bid.0);
+            for child in sorted_children {
                 self.rename_recursive(child, mir_func, cfg_analysis, lir_blocks);
             }
         }

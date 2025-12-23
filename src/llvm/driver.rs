@@ -29,7 +29,7 @@ pub fn compile_llvm(
     if !runtime_path_ll.exists() {
         return Err(CompilerError::Other("runtime.ll not found.".to_string()));
     }
-    let runtime_path_bc = runtime_path_ll.with_extension("bc");
+    let runtime_path_bc = dir.join("runtime.bc");
     llvm_assemble(runtime_path_ll, &runtime_path_bc)?;
 
     let linked_bc_path = dir.join(format!("{}.bc", stem));

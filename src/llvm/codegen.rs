@@ -220,10 +220,18 @@ impl<'a> LLVMGenerator<'a> {
                     _ => "ne",
                 };
                 let dest = instr.destination.unwrap();
-                let v1 = self.format_value(&instr.operands[0]);
-                let v2 = self.format_value(&instr.operands[1]);
+                let lhs = self.format_value(&instr.operands[0]);
+                let rhs = self.format_value(&instr.operands[1]);
+                let typ = match &instr.operands[0] {
+                    LIRValue::Register(id) => self.get_llvm_type_from_register(*id),
+                    LIRValue::IntConst(_) => "i32".to_string(),
+                    LIRValue::BoolConst(_) => "i1".to_string(),
+                    LIRValue::StringConst(_) => "i8*".to_string(),
+                    LIRValue::Null => "i8*".to_string(),
+                    _ => unreachable!(),
+                };
                 self.emit_line_very_indented(
-                    format!("%r{} = icmp {} i32 {}, {}", dest.0, cond, v1, v2).as_str(),
+                    format!("%r{} = icmp {} {} {}, {}", dest.0, cond, typ, lhs, rhs).as_str(),
                 );
             }
             LIROperation::BoolAnd => {
