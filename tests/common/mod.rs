@@ -260,7 +260,7 @@ pub fn assert_runtime_error(input_path: &str) {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     let all_output = format!("{}{}", stdout, stderr).to_lowercase();
     assert!(
         all_output.contains("runtime error"),
