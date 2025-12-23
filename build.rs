@@ -114,13 +114,13 @@ fn main() {
     )
     .expect("Generate extra LIR tests failed");
 
-    // generate_test_suite(
-    //     "extensions_lir_lowering_tests.rs",
-    //     &["tests/good/extensions"],
-    //     "assert_lir_lowering_pass",
-    //     "lir_pass",
-    // )
-    // .expect("Generate extensions LIR tests failed");
+    generate_test_suite(
+        "extensions_lir_lowering_tests.rs",
+        &["tests/good/extensions"],
+        "assert_lir_lowering_pass",
+        "lir_pass",
+    )
+    .expect("Generate extensions LIR tests failed");
 
     // ===================== LLVM ======================
     generate_test_suite(

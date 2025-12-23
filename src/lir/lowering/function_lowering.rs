@@ -244,7 +244,7 @@ impl LIRFunctionBuilder {
                 .map(|v| self.lower_value(v))
                 .collect();
             let op = self.lower_operation(&instruction.operation);
-
+            
             if let Some(dest) = &instruction.destination {
                 let ssa_id = match dest {
                     MIRPlace::Local(local_id) => SSAId::Local(*local_id),
