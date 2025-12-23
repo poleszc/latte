@@ -65,6 +65,7 @@ impl MIRLoweringContext {
                 }
                 TItemKind::Init(ident, expr) => {
                     // Calculate the expression and assign to the var.
+                    // Lower the expression in the previous context, so things like int i = i + 1 are handled well.
                     let value = self.lower_expr(expr);
                     let local_id =
                         self.builder()

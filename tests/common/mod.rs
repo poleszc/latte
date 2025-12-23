@@ -189,9 +189,6 @@ pub fn run_integration_test(input_path: &str) {
 
     // Run the program.
     let mut run_command = Command::new("lli");
-    // This is stupid, but when JIT is enabled the linked symbols
-    // from runtime.ll are "sometimes" not found.
-    run_command.arg("--force-interpreter");
     run_command.arg(&bc_path);
 
     let output = if input_data_path.exists() {
@@ -230,27 +227,46 @@ pub fn run_integration_test(input_path: &str) {
 }
 
 pub fn assert_runtime_error(input_path: &str) {
+    let input_path_buf = PathBuf::from(input_path);
+    let stem = input_path_buf.file_stem().unwrap().to_str().unwrap();
     let temp_dir = tempdir().expect("Failed to create a temp directory for tests");
 
-    let output = Command::new(LLVM_COMPILER_BIN)
+    let compile_output = Command::new(LLVM_COMPILER_BIN)
         .arg(input_path)
-        .arg("--run")
         .arg("--output-dir")
         .arg(temp_dir.path())
         .output()
         .expect("Failed to execute the compiler binary");
 
     assert!(
+        compile_output.status.success(),
+        "Compilation failed for runtime error test '{}'.\n[STDERR]:\n{}",
+        input_path,
+        String::from_utf8_lossy(&compile_output.stderr)
+    );
+
+    let bc_path = temp_dir.path().join(format!("{}.bc", stem));
+
+    let output = Command::new("lli")
+        .arg(&bc_path)
+        .output()
+        .expect("Failed to execute lli");
+
+    assert!(
         !output.status.success(),
-        "Expected program execution to fail for '{}', but it succeeded",
+        "Expected program execution to fail for '{}', but it succeeded (exit code 0)",
         input_path
     );
 
     let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    
+    let all_output = format!("{}{}", stdout, stderr).to_lowercase();
     assert!(
-        stderr.to_lowercase().contains("runtime error"),
-        "Expected 'runtime error' message on stderr for '{}', but got: {}",
+        all_output.contains("runtime error"),
+        "Expected 'runtime error' message for '{}', but got:\n[STDOUT]: {}\n[STDERR]: {}",
         input_path,
+        stdout,
         stderr
     );
 }
