@@ -7,8 +7,8 @@ use crate::{
         lowering::cfg::{DominanceFrontier, GraphAnalysis},
     },
     mir::{
-        BlockID as MirBID, LocalID, MIRFunction, MIROperation, MIRPlace, MIRTerminator,
-        MIRValue, TempID,
+        BlockID as MirBID, LocalID, MIRFunction, MIROperation, MIRPlace, MIRTerminator, MIRValue,
+        TempID,
     },
     parser::{Type, TypeKind},
     utils::StrID,

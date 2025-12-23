@@ -110,6 +110,20 @@ pub enum MIRPlace {
     },
 }
 
+impl MIRPlace {
+    pub fn is_simple(&self) -> bool {
+        matches!(self, MIRPlace::Local(_) | MIRPlace::Temp(_))
+    }
+
+    pub fn base_place(&self) -> &MIRPlace {
+        match self {
+            MIRPlace::Field { base, .. } => base.base_place(),
+            MIRPlace::Index { base, index } => base.base_place(),
+            simple => simple,
+        }
+    }
+}
+
 // Single MIR instruction.
 #[derive(Debug, Clone, Serialize)]
 pub struct MIRInstruction {
