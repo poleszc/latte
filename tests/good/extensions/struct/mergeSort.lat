@@ -1,12 +1,4 @@
 // autor: Pawel Magryta pm262455
-
-
-
-
-
-
-
-
 int main(){
 	int dlugoscListy = 30;
 	testMergeSort(dlugoscListy);
@@ -124,6 +116,3 @@ class Lista{
 	Lista poprzedni, nastepny;
 	int wartosc;
 }
-
-
-

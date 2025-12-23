@@ -99,15 +99,7 @@ impl<'a> LLVMGenerator<'a> {
 
         self.emit_line(format!("define {} @{}({}) {{", ret_type, func.name, args).as_str());
 
-        // Make sure the entry block is first.
-        // let entry_id = func.entry_block;
-        // self.emit_block(entry_id, &func.blocks[&entry_id]);
-
         for block_id in &func.block_order {
-            // if *block_id == entry_id {
-            //     continue;
-            // }
-
             if let Some(block) = func.blocks.get(block_id) {
                 self.emit_block(*block_id, block);
             }
@@ -136,9 +128,6 @@ impl<'a> LLVMGenerator<'a> {
                 let dest = instr.destination.unwrap();
                 let val = self.format_value(&instr.operands[0]);
                 let typ = self.get_llvm_type_from_register(dest);
-                // self.emit_line_very_indented(
-                //     format!("%r{} = add {} 0, {}", dest.0, typ, val).as_str(),
-                // );
                 self.emit_line_very_indented(
                     format!("%r{} = bitcast {} {} to {}", dest.0, typ, val, typ).as_str(),
                 );
