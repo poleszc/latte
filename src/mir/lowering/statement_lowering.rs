@@ -1,3 +1,5 @@
+use std::thread::sleep;
+
 use super::MIRLoweringContext;
 use crate::{
     SourcePosition,
@@ -93,7 +95,7 @@ impl MIRLoweringContext {
     fn lower_assign(&mut self, target: &TExpr, value: &TExpr, stmt_position: SourcePosition) {
         let place = self.lower_expr_as_place(target);
         let val = self.lower_expr(value);
-        self.builder().emit_assign(place, val, stmt_position);
+        self.lower_write_to_place(place, val, stmt_position);
     }
 
     fn lower_return(&mut self, expr: &Option<TExpr>, stmt_position: SourcePosition) {
@@ -101,6 +103,41 @@ impl MIRLoweringContext {
         self.builder().emit_return(value, stmt_position);
     }
 
+    fn lower_write_to_place(&mut self, place: MIRPlace, value: MIRValue, pos: SourcePosition) {
+        match place {
+            MIRPlace::Local(_) | MIRPlace::Temp(_) => {
+                self.builder().emit_assign(place, value, pos);
+            }
+            MIRPlace::Field {
+                base,
+                field_index,
+                class_name,
+                ..
+            } => {
+                let base_typ = Type {
+                    kind: TypeKind::Class(Ident {
+                        name: class_name,
+                        position: pos,
+                    }),
+                    position: pos,
+                };
+                let base_val = self.lower_place_as_value(&base, &base_typ);
+
+                self.builder()
+                    .emit_field_set(base_val, field_index, value, pos);
+            }
+            MIRPlace::Index { base, index } => {
+                let base_val = self.lower_place_as_value(
+                    &base,
+                    &Type {
+                        kind: TypeKind::Int, // TODO: Bugged?
+                        position: pos,
+                    },
+                );
+                self.builder().emit_array_set(base_val, *index, value, pos);
+            }
+        }
+    }
     fn lower_increment(&mut self, expr: &TExpr, stmt_position: SourcePosition) {
         // i++ => {
         //    temp = i + 1;
@@ -124,8 +161,7 @@ impl MIRLoweringContext {
         );
 
         // i = temp;
-        self.builder()
-            .emit_assign(place, MIRValue::Temp(temp), stmt_position);
+        self.lower_write_to_place(place, MIRValue::Temp(temp), stmt_position);
     }
 
     fn lower_decrement(&mut self, expr: &TExpr, stmt_position: SourcePosition) {
@@ -151,8 +187,7 @@ impl MIRLoweringContext {
         );
 
         // i = temp;
-        self.builder()
-            .emit_assign(place, MIRValue::Temp(temp), stmt_position);
+        self.lower_write_to_place(place, MIRValue::Temp(temp), stmt_position);
     }
 
     fn lower_if(
