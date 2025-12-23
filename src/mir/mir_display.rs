@@ -117,6 +117,9 @@ impl fmt::Display for MIRTerminator {
             MIRTerminator::Return { value: None, .. } => {
                 write!(f, "{:>8}    ReturnVoid", "")
             }
+            MIRTerminator::Unreachable { .. } => {
+                write!(f, "{:>8}    Unreachable", "")
+            }
         }
     }
 }

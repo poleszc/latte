@@ -43,11 +43,17 @@ impl<'a> LLVMGenerator<'a> {
             }
         }
 
-        // TODO: Emit string constants.
-        // let mut final_output = String::new();
-        // for (string, id) in &self.string_constants {}
+        let mut string_constants = String::new();
+        for (string_val, id) in &self.string_constants {
+            let escaped = string_val.replace("\\", "\\\\").replace("\"", "\\22");
+            let len = string_val.len() + 1;
+            string_constants.push_str(&format!(
+                "@{} = private unnamed_addr constant [{} x i8] c\"{}\\00\", align 1\n",
+                id, len, escaped
+            ));
+        }
 
-        self.output
+        format!("{}\n{}", string_constants, self.output)
     }
 }
 
@@ -116,8 +122,11 @@ impl<'a> LLVMGenerator<'a> {
                 let dest = instr.destination.unwrap();
                 let val = self.format_value(&instr.operands[0]);
                 let typ = self.get_llvm_type_from_register(dest);
+                // self.emit_line_very_indented(
+                //     format!("%r{} = add {} 0, {}", dest.0, typ, val).as_str(),
+                // );
                 self.emit_line_very_indented(
-                    format!("%r{} = add {} 0, {}", dest.0, typ, val).as_str(),
+                    format!("%r{} = bitcast {} {} to {}", dest.0, typ, val, typ).as_str(),
                 );
             }
             LIROperation::IntAdd | LIROperation::IntSub | LIROperation::IntMul => {
@@ -289,7 +298,21 @@ impl<'a> LLVMGenerator<'a> {
 
                 let args = instr.operands[1..]
                     .iter()
-                    .map(|v| format!("i32 {}", self.format_value(v)))
+                    .map(|v| {
+                        let val_str = self.format_value(v);
+                        // TODO: Unify, since its duplicated in Return as well
+                        let typ_str = match v {
+                            LIRValue::Register(register_id) => {
+                                self.get_llvm_type_from_register(*register_id)
+                            }
+                            LIRValue::IntConst(_) => "i32".to_string(),
+                            LIRValue::BoolConst(_) => "i1".to_string(),
+                            LIRValue::StringConst(_) => "i8*".to_string(),
+                            LIRValue::Class(_) => "i8*".to_string(),
+                            _ => unreachable!(),
+                        };
+                        format!("{} {}", typ_str, val_str)
+                    })
                     .collect::<Vec<String>>()
                     .join(", ");
 
@@ -345,10 +368,25 @@ impl<'a> LLVMGenerator<'a> {
             LIRTerminator::Return { value, .. } => {
                 if let Some(val) = value {
                     let formatted_val = self.format_value(val);
-                    self.emit_line_very_indented(format!("ret i32 {}", formatted_val).as_str());
+                    let typ_str = match val {
+                        LIRValue::Register(register_id) => {
+                            self.get_llvm_type_from_register(*register_id)
+                        }
+                        LIRValue::IntConst(_) => "i32".to_string(),
+                        LIRValue::BoolConst(_) => "i1".to_string(),
+                        LIRValue::StringConst(_) => "i8*".to_string(),
+                        LIRValue::Class(_) => "i8*".to_string(),
+                        _ => unreachable!(),
+                    };
+                    self.emit_line_very_indented(
+                        format!("ret {} {}", typ_str, formatted_val).as_str(),
+                    );
                 } else {
                     self.emit_line_very_indented("ret void");
                 }
+            }
+            LIRTerminator::Unreachable { .. } => {
+                self.emit_line_very_indented("unreachable");
             }
         }
     }

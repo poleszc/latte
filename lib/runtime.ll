@@ -92,3 +92,9 @@ define i1 @stringNotEqual(i8* %s1, i8* %s2) {
     %res = icmp ne i32 %cmp, 0
     ret i1 %res
 }
+
+define i32 @stringLength(i8* %s) {
+    %len = call i64 @strlen(i8* %s)
+    %res = trunc i64 %len to i32
+    ret i32 %res
+}

@@ -22,7 +22,7 @@ pub fn compile_llvm(
     let ll_path = dir.join(format!("{}.ll", stem));
     lower_lir_to_llvm_and_save(lir_program, &ll_path)?;
 
-    let bc_path = dir.join(format!("{}.bc", stem));
+    let bc_path = dir.join(format!("{}_raw.bc", stem));
     llvm_assemble(&ll_path, &bc_path)?;
 
     let runtime_path_ll = &args.runtime_path;
@@ -32,7 +32,7 @@ pub fn compile_llvm(
     let runtime_path_bc = runtime_path_ll.with_extension("bc");
     llvm_assemble(runtime_path_ll, &runtime_path_bc)?;
 
-    let linked_bc_path = dir.join(format!("{}_linked.bc", stem));
+    let linked_bc_path = dir.join(format!("{}.bc", stem));
     llvm_link(&linked_bc_path, vec![bc_path, runtime_path_bc])?;
 
     if args.run {
@@ -98,11 +98,6 @@ fn llvm_run(bc_path: &PathBuf) -> Result<(), CompilerError> {
     }
     if !run_output.stderr.is_empty() {
         eprintln!("{}", String::from_utf8_lossy(&run_output.stderr))
-    }
-    if !run_output.status.success() {
-        return Err(CompilerError::Other(
-            "Program execution exited with a non-zero status.".to_string(),
-        ));
     }
     Ok(())
 }

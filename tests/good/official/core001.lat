@@ -15,8 +15,8 @@ int main() {
 	}
 	printString (repStr("=",60));
 	printString ("hello */");
-        printString ("/* world") ;
-        return 0 ;
+	printString ("/* world") ;
+	return 0 ;
 }
 
 int fac(int a) {

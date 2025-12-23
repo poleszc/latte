@@ -1,5 +1,6 @@
 int foo(int n) {
-    int n = 123;
+    int n = 1234;
+    printInt(n);
     return 1;
 }
 

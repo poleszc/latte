@@ -153,6 +153,7 @@ pub fn assert_compilation_fails(input_path: &str) {
 
 pub fn run_integration_test(input_path: &str) {
     let input_path_buf = PathBuf::from(input_path);
+    let stem = input_path_buf.file_stem().unwrap().to_str().unwrap();
     let expected_output_path = input_path_buf.with_extension("output");
     let input_data_path = input_path_buf.with_extension("input");
 
@@ -169,61 +170,63 @@ pub fn run_integration_test(input_path: &str) {
         )
     });
 
-    let mut command = Command::new(LLVM_COMPILER_BIN);
-    command
+    // Compile the program.
+    let compile_output = Command::new(LLVM_COMPILER_BIN)
         .arg(input_path)
-        .arg("--run")
         .arg("--output-dir")
-        .arg(temp_dir.path());
+        .arg(temp_dir.path())
+        .output()
+        .expect("Failed to execute the compiler binary");
 
-    if input_data_path.exists() {
+    assert!(
+        compile_output.status.success(),
+        "Compilation failed for '{}'.\n[STDERR]:\n{}",
+        input_path,
+        String::from_utf8_lossy(&compile_output.stderr)
+    );
+
+    let bc_path = temp_dir.path().join(format!("{}.bc", stem));
+    if !bc_path.exists() {
+        panic!("kurwa");
+    }
+
+    // Run the program.
+    let mut run_command = Command::new("lli");
+    run_command.arg(&bc_path);
+
+    let output = if input_data_path.exists() {
         let input_data = fs::read_to_string(input_data_path).unwrap();
-        command.stdin(Stdio::piped());
-        let mut child = command.spawn().expect("Failed to spawn compiler process");
+        run_command.stdin(Stdio::piped());
+        run_command.stdout(Stdio::piped());
+        run_command.stderr(Stdio::piped());
+
+        let mut child = run_command.spawn().expect("Failed to spawn lli");
         let mut stdin = child.stdin.take().expect("Failed to open stdin");
 
         std::thread::spawn(move || {
-            stdin
-                .write_all(input_data.as_bytes())
-                .expect("Failed to write to stdin");
+            stdin.write_all(input_data.as_bytes()).ok();
         });
 
-        let output = child.wait_with_output().expect("Failed to read stdout");
-        assert!(
-            output.status.success(),
-            "Expected compilation to succeed for '{}', but it failed.\n[STDOUT]:\n{}\n[STDERR]:\n{}",
-            input_path,
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-
-        let actual_output = String::from_utf8_lossy(&output.stdout);
-
-        assert_eq!(
-            actual_output.trim(),
-            expected_output.trim(),
-            "Actual output differs from the expected one for test '{}'",
-            input_path
-        );
+        child.wait_with_output().expect("Failed to wait for lli")
     } else {
-        let output = command.output().expect("Failed to execute compiler binary");
-        assert!(
-            output.status.success(),
-            "Expected compilation to succeed for '{}', but it failed.\n[STDOUT]:\n{}\n[STDERR]:\n{}",
-            input_path,
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
+        run_command.output().expect("Failed to run lli")
+    };
 
-        let actual_output = String::from_utf8_lossy(&output.stdout);
+    let actual_stdout = String::from_utf8_lossy(&output.stdout);
+    let actual_stderr = String::from_utf8_lossy(&output.stderr);
 
-        assert_eq!(
-            actual_output.trim(),
-            expected_output.trim(),
-            "Actual output differs from the expected one for test '{}'",
-            input_path
-        );
-    }
+    assert!(
+        output.status.success(),
+        "Program execution failed for '{}'.\n[STDERR]:\n{}",
+        input_path,
+        actual_stderr
+    );
+
+    assert_eq!(
+        actual_stdout, expected_output,
+        "Actual program output differs from the expected one for '{}'",
+        input_path
+    );
 }
 
 pub fn assert_runtime_error(input_path: &str) {

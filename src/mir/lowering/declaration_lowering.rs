@@ -129,11 +129,17 @@ impl MIRLoweringContext {
 
         self.lower_block(&func_def.body);
 
-        // If a void function
-        if matches!(func_def.return_type.kind, TypeKind::Void) {
-            let builder = self.builder();
-            if !builder.is_current_block_terminated() {
-                builder.emit_return(None, func_def.position);
+        // If the last block in the function is unterminated, we either have a void function with an implicit
+        // return or a unreachable block, which was created when optimizing if statements.
+        // We either add the void return or mark the block as unreachable.
+        if !self.builder().is_current_block_terminated() {
+            if matches!(func_def.return_type.kind, TypeKind::Void) {
+                let builder = self.builder();
+                if !builder.is_current_block_terminated() {
+                    builder.emit_return(None, func_def.position);
+                }
+            } else {
+                self.builder().emit_unreachable(func_def.position);
             }
         }
 

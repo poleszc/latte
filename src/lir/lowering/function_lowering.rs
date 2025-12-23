@@ -10,7 +10,7 @@ use crate::{
         BlockID as MirBID, LocalID, MIRFunction, MIROperation, MIRPlace, MIRTerminator, MIRValue,
         TempID,
     },
-    parser::Type,
+    parser::{Type, TypeKind},
     utils::StrID,
 };
 
@@ -64,7 +64,7 @@ impl LIRFunctionBuilder {
         self.locals_cache = mir_function
             .locals
             .iter()
-            .map(|l| (l.id, (l.typ.clone(), None)))
+            .map(|l| (l.id, (l.typ.clone(), l.name)))
             .collect();
 
         // Handle temporaries first, since they are already in the SSA form and don't leak through blocks.
@@ -279,7 +279,14 @@ impl LIRFunctionBuilder {
                         let current_val =
                             match self.locals_stack.get(&loc_id).and_then(|s| s.last()) {
                                 Some(&reg) => LIRValue::Register(reg),
-                                None => LIRValue::Null, // TODO: This is bugged
+                                None => {
+                                    let (typ, _) = &self.locals_cache[&loc_id];
+                                    match typ.kind {
+                                        TypeKind::Int => LIRValue::IntConst(0),
+                                        TypeKind::Bool => LIRValue::BoolConst(false),
+                                        _ => LIRValue::Null,
+                                    }
+                                }
                             };
 
                         self.phi_incoming
@@ -383,6 +390,9 @@ impl LIRFunctionBuilder {
             },
             MIRTerminator::Return { value, position } => LIRTerminator::Return {
                 value: value.as_ref().map(|v| self.lower_value(v)),
+                position: *position,
+            },
+            MIRTerminator::Unreachable { position } => LIRTerminator::Unreachable {
                 position: *position,
             },
         }

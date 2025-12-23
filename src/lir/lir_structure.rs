@@ -95,6 +95,9 @@ pub enum LIRTerminator {
         value: Option<LIRValue>,
         position: SourcePosition,
     },
+    Unreachable {
+        position: SourcePosition,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
