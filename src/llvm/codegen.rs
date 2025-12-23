@@ -317,8 +317,10 @@ impl<'a> LLVMGenerator<'a> {
                     .join(", ");
 
                 if let Some(dest) = instr.destination {
+                    let ret_type = self.get_llvm_type_from_register(dest);
                     self.emit_line_very_indented(
-                        format!("%r{} = call i32 @{}({})", dest.0, func_name, args).as_str(),
+                        format!("%r{} = call {} @{}({})", dest.0, ret_type, func_name, args)
+                            .as_str(),
                     );
                 } else {
                     self.emit_line_very_indented(

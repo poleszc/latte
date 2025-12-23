@@ -92,12 +92,12 @@ fn llvm_link(linked_path: &PathBuf, paths_to_link: Vec<PathBuf>) -> Result<(), C
 
 fn llvm_run(bc_path: &PathBuf) -> Result<(), CompilerError> {
     eprintln!("[LLVM] Running program");
-    let run_output = Command::new("lli").arg(bc_path).output()?;
-    if !run_output.stdout.is_empty() {
-        print!("{}", String::from_utf8_lossy(&run_output.stdout))
-    }
-    if !run_output.stderr.is_empty() {
-        eprintln!("{}", String::from_utf8_lossy(&run_output.stderr))
-    }
+
+    Command::new("lli")
+        .arg(bc_path)
+        .stdin(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .status()?;
     Ok(())
 }

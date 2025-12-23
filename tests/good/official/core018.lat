@@ -7,5 +7,5 @@ int main() {
 
   printInt(x-5);
   printString(y+z);  
-  return 0 ;
+  return 0;
 }

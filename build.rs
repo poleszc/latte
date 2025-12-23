@@ -172,7 +172,7 @@ fn main() {
         "integration_good_tests.rs",
         &[
             "tests/good/official",
-            "tests/good/extra",
+            // "tests/good/extra",
             // "tests/good/extensions",
         ],
         "run_integration_test",

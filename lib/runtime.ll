@@ -5,15 +5,16 @@
 
 declare i32 @printf(i8*, ...) 
 declare i32 @scanf(i8*, ...)
+declare i32 @getchar();
 declare i32 @puts(i8*)
 declare i32 @fgets(i8*, i32, i8*)
-declare i8* @calloc(i64)
+declare i8* @calloc(i64, i64)
 declare i8* @malloc(i64)
 declare void @exit(i32)
 declare i64 @strlen(i8*)
 declare i8* @strcpy(i8*, i8*)
 declare i8* @strcat(i8*, i8*)
-declare i32* @strcmp(i8*, i8*)
+declare i32 @strcmp(i8*, i8*)
 
 @stdin = external global i8*
 
@@ -39,12 +40,19 @@ define i32 @readInt() {
 	%res = alloca i32
     %t1 = getelementptr [3 x i8], [3 x i8]* @d, i32 0, i32 0
 	call i32 (i8*, ...) @scanf(i8* %t1, i32* %res)
+    call i32 @getchar() 
 	%t2 = load i32, i32* %res
 	ret i32 %t2
 }
 
 define i8* @readString() {
     %buffer = call i8* @malloc(i64 2048)
+    %is_null = icmp eq i8* %buffer, null
+    br i1 %is_null, label %err, label %ok
+err:
+    call void @error()
+    unreachable
+ok:
     %in = load i8*, i8** @stdin
     %res = call i8* @fgets(i8* %buffer, i32 2048, i8* %in)
     
@@ -73,11 +81,15 @@ define i8* @stringConcat(i8* %s1, i8* %s2) {
     %total_len = add i64 %len1, %len2
     %total_len_with_null = add i64 %total_len, 1
     
-    %new_str = call i8* @calloc(i64 %total_len_with_null)
-    
+    %new_str = call i8* @malloc(i64 %total_len_with_null)
+    %is_null = icmp eq i8* %new_str, null
+    br i1 %is_null, label %err, label %ok
+err:
+    call void @error()
+    unreachable
+ok:
     call i8* @strcpy(i8* %new_str, i8* %s1)
     call i8* @strcat(i8* %new_str, i8* %s2)
-    
     ret i8* %new_str
 }
 
