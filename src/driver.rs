@@ -170,7 +170,7 @@ fn dump_mir(
     println!("[MIR]: Dumping MIR to file");
     mir_program.dump_to_file(
         PathBuf::from(&output_dir)
-            .join(format!("{}.mir.txt", file_stem))
+            .join(format!("{}.mir", file_stem))
             .as_path(),
     )?;
 
@@ -190,7 +190,7 @@ fn dump_lir(
     println!("[LIR]: Dumping LIR to file");
     lir_program.dump_to_file(
         PathBuf::from(&output_dir)
-            .join(format!("{}.lir.txt", file_stem))
+            .join(format!("{}.lir", file_stem))
             .as_path(),
     )?;
 
