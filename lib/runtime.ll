@@ -1,5 +1,6 @@
 @dnl = internal constant [4 x i8] c"%d\0A\00"
 @d   = internal constant [3 x i8] c"%d\00"	
+@s_fmt = internal constant [4 x i8] c"%s\0A\00"
 @lf  = internal constant [4 x i8] c"%lf\00"	
 @errorString = internal constant [15 x i8] c"runtime error\0A\00"
 
@@ -15,6 +16,7 @@ declare i64 @strlen(i8*)
 declare i8* @strcpy(i8*, i8*)
 declare i8* @strcat(i8*, i8*)
 declare i32 @strcmp(i8*, i8*)
+declare i32 @fflush(i8*)
 
 @stdin = external global i8*
 
@@ -25,8 +27,9 @@ define void @printInt(i32 %x) {
 }
 
 define void @printString(i8* %s) {
-	call i32 @puts(i8* %s)
-	ret void
+    %fmt = getelementptr [4 x i8], [4 x i8]* @s_fmt, i32 0, i32 0
+    call i32 (i8*, ...) @printf(i8* %fmt, i8* %s)
+    ret void
 }
 
 define void @error() {

@@ -3,7 +3,8 @@ use std::{collections::HashMap, fmt::Write};
 
 use crate::{
     lir::{
-        LIRFunction, LIRInstruction, LIROperation, LIRProgram, LIRTerminator, LIRValue, RegisterID,
+        BlockID, LIRBlock, LIRFunction, LIRInstruction, LIROperation, LIRProgram, LIRTerminator,
+        LIRValue, RegisterID,
     },
     parser::{Type, TypeKind},
 };
@@ -97,22 +98,35 @@ impl<'a> LLVMGenerator<'a> {
             .join(", ");
 
         self.emit_line(format!("define {} @{}({}) {{", ret_type, func.name, args).as_str());
+
+        // Make sure the entry block is first.
+        // let entry_id = func.entry_block;
+        // self.emit_block(entry_id, &func.blocks[&entry_id]);
+
         for block_id in &func.block_order {
+            // if *block_id == entry_id {
+            //     continue;
+            // }
+
             if let Some(block) = func.blocks.get(block_id) {
-                self.emit_line_indented(format!("B{}:", block_id.0).as_str());
-
-                for instr in &block.instructions {
-                    self.emit_instruction(instr);
-                }
-
-                if let Some(term) = &block.terminator {
-                    self.emit_terminator(term);
-                } else {
-                    panic!("NO TERMINATOR NOOOOOO")
-                }
+                self.emit_block(*block_id, block);
             }
         }
         self.emit_line("}\n");
+    }
+
+    fn emit_block(&mut self, block_id: BlockID, block: &LIRBlock) {
+        self.emit_line_indented(format!("B{}:", block_id.0).as_str());
+
+        for instr in &block.instructions {
+            self.emit_instruction(instr);
+        }
+
+        if let Some(term) = &block.terminator {
+            self.emit_terminator(term);
+        } else {
+            panic!("NO TERMINATOR NOOOOOO")
+        }
     }
 
     fn emit_instruction(&mut self, instr: &LIRInstruction) {
