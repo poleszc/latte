@@ -194,7 +194,6 @@ pub fn run_integration_test(input_path: &str) {
     run_command.arg("--force-interpreter");
     run_command.arg(&bc_path);
 
-
     let output = if input_data_path.exists() {
         let input_data = fs::read_to_string(input_data_path).unwrap();
         run_command.stdin(Stdio::piped());

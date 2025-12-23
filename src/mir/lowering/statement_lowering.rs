@@ -12,9 +12,11 @@ use crate::{
 // ======================
 impl MIRLoweringContext {
     pub(super) fn lower_block(&mut self, block: &TBlock) {
+        let old_variable_map = self.variable_map.clone();
         for stmt in &block.stmts {
             self.lower_stmt(stmt);
         }
+        self.variable_map = old_variable_map;
     }
 
     fn lower_stmt(&mut self, stmt: &TStmt) {
@@ -52,23 +54,23 @@ impl MIRLoweringContext {
                     let local_id =
                         self.builder()
                             .create_local(Some(ident.name), typ.clone(), false, None);
-                    self.variable_map.insert(ident.name, local_id);
-
                     let default_value = self.get_default_initialization_value(typ);
+
                     self.builder().emit_assign(
                         MIRPlace::Local(local_id),
                         default_value,
                         stmt_position,
                     );
+                    self.variable_map.insert(ident.name, local_id);
                 }
                 TItemKind::Init(ident, expr) => {
+                    // Calculate the expression and assign to the var.
+                    let value = self.lower_expr(expr);
                     let local_id =
                         self.builder()
                             .create_local(Some(ident.name), typ.clone(), false, None);
-                    self.variable_map.insert(ident.name, local_id);
 
-                    // Calculate the expression and assign to the var.
-                    let value = self.lower_expr(expr);
+                    self.variable_map.insert(ident.name, local_id);
                     self.builder()
                         .emit_assign(MIRPlace::Local(local_id), value, stmt_position);
                 }
@@ -246,6 +248,8 @@ impl MIRLoweringContext {
         body: &TStmt,
         stmt_position: SourcePosition,
     ) {
+        let old_variable_map = self.variable_map.clone();
+
         // for(T a: collection) => {
         //      i = 0;
         //      T item;
@@ -358,5 +362,6 @@ impl MIRLoweringContext {
 
         // Leave the loop.
         self.builder().set_current_block(loop_exit);
+        self.variable_map = old_variable_map;
     }
 }
