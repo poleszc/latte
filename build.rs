@@ -139,13 +139,13 @@ fn main() {
     )
     .expect("Generate extra LLVM tests failed");
 
-    // generate_test_suite(
-    //     "extensions_llvm_lowering_tests.rs",
-    //     &["tests/good/extensions"],
-    //     "assert_llvm_lowering_pass",
-    //     "llvm_pass",
-    // )
-    // .expect("Generate extensions LLVM tests failed");
+    generate_test_suite(
+        "extensions_llvm_lowering_tests.rs",
+        &["tests/good/extensions"],
+        "assert_llvm_lowering_pass",
+        "llvm_pass",
+    )
+    .expect("Generate extensions LLVM tests failed");
 
     // =============== INTEGRATION TESTS ================
     generate_test_suite(

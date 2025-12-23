@@ -3,8 +3,8 @@ use std::{collections::HashMap, fmt::Write};
 
 use crate::{
     lir::{
-        BlockID, LIRBlock, LIRFunction, LIRInstruction, LIROperation, LIRProgram, LIRTerminator,
-        LIRValue, RegisterID,
+        BlockID, LIRBlock, LIRClass, LIRFunction, LIRInstruction, LIROperation, LIRProgram,
+        LIRTerminator, LIRValue, RegisterID,
     },
     parser::{Type, TypeKind},
 };
@@ -35,6 +35,18 @@ impl<'a> LLVMGenerator<'a> {
     pub fn generate_program(mut self, program: &'a LIRProgram) -> String {
         // Emit builtins.
         self.emit_preambule();
+
+        let mut sorted_classes: Vec<_> = program.classes.keys().cloned().collect();
+        sorted_classes.sort_by_key(|id| id.to_string());
+        for class_id in &sorted_classes {
+            let class = &program.classes[&class_id];
+            self.emit_class_definition(class);
+        }
+
+        for class_id in &sorted_classes {
+            let class = &program.classes[&class_id];
+            self.emit_vtable_definition(class);
+        }
 
         for func_name in &program.function_order {
             if let Some(func) = program.functions.get(func_name) {
@@ -84,6 +96,7 @@ impl<'a> LLVMGenerator<'a> {
         self.emit_line("declare i1 @stringEqual(i8*, i8*)"); // TODO: opaque?
         self.emit_line("declare i1 @stringNotEqual(i8*, i8*)"); // TODO: opaque?
         self.emit_line("declare i32 @stringLength(i8*)"); // TODO: opaque?
+        self.emit_line("declare i8* @calloc(i64, i64)"); // TODO: opaque?
         self.emit_line("");
     }
 
@@ -319,7 +332,7 @@ impl<'a> LLVMGenerator<'a> {
                             LIRValue::IntConst(_) => "i32".to_string(),
                             LIRValue::BoolConst(_) => "i1".to_string(),
                             LIRValue::StringConst(_) => "i8*".to_string(),
-                            LIRValue::Class(_) => "i8*".to_string(),
+                            LIRValue::Class(class_name) => format!("%class.{}*", class_name),
                             _ => unreachable!(),
                         };
                         format!("{} {}", typ_str, val_str)
@@ -340,13 +353,206 @@ impl<'a> LLVMGenerator<'a> {
                 }
             }
             LIROperation::VCall => todo!(),
-            LIROperation::NewArray => todo!(),
-            LIROperation::ArrayGet => todo!(),
-            LIROperation::ArraySet => todo!(),
-            LIROperation::ArrayLength => todo!(),
-            LIROperation::NewObject => todo!(),
-            LIROperation::FieldGet => todo!(),
-            LIROperation::FieldSet => todo!(),
+            LIROperation::ArrayGet => {
+                let dest = instr.destination.unwrap();
+                let arr_val = self.format_value(&instr.operands[0]);
+                let idx = self.format_value(&instr.operands[1]);
+                let elem_type = self.get_llvm_type_from_register(dest);
+
+                // First 4 bytes are for the length. Skip them.
+                let data_ptr_raw = format!("%data_ptr_raw_{}", dest.0);
+                self.emit_line_very_indented(&format!(
+                    "{} = getelementptr i8, i8* {}, i32 4",
+                    data_ptr_raw, arr_val
+                ));
+                let data_ptr = format!("%data_ptr_{}", dest.0);
+                self.emit_line_very_indented(&format!(
+                    "{} = bitcast i8* {} to {}*",
+                    data_ptr, data_ptr_raw, elem_type
+                ));
+
+                let elem_ptr = format!("%elem_ptr_{}", dest.0);
+                self.emit_line_very_indented(&format!(
+                    "{} = getelementptr {}, {}* {}, i32 {}",
+                    elem_ptr, elem_type, elem_type, data_ptr, idx
+                ));
+                self.emit_line_very_indented(&format!(
+                    "%r{} = load {}, {}* {}",
+                    dest.0, elem_type, elem_type, elem_ptr
+                ));
+            }
+            LIROperation::ArraySet => {
+                let arr_val = self.format_value(&instr.operands[0]);
+                let idx_val = self.format_value(&instr.operands[1]);
+                let val_to_store = self.format_value(&instr.operands[2]);
+                let elem_type = self.get_value_type(&instr.operands[2]);
+
+                let id = self.next_string_id;
+                self.next_string_id += 1;
+
+                let data_ptr_raw = format!("%set_data_ptr_raw_{}", id);
+                self.emit_line_very_indented(&format!(
+                    "{} = getelementptr i8, i8* {}, i32 8",
+                    data_ptr_raw, arr_val
+                ));
+
+                let data_ptr = format!("%set_data_ptr_{}", id);
+                self.emit_line_very_indented(&format!(
+                    "{} = bitcast i8* {} to {}*",
+                    data_ptr, data_ptr_raw, elem_type
+                ));
+
+                let elem_ptr = format!("%set_elem_ptr_{}", id);
+                self.emit_line_very_indented(&format!(
+                    "{} = getelementptr {}, {}* {}, i32 {}",
+                    elem_ptr, elem_type, elem_type, data_ptr, idx_val
+                ));
+
+                self.emit_line_very_indented(&format!(
+                    "store {} {}, {}* {}",
+                    elem_type, val_to_store, elem_type, elem_ptr
+                ));
+            }
+            LIROperation::ArrayLength => {
+                let dest = instr.destination.unwrap();
+                let arr_ptr = self.format_value(&instr.operands[0]);
+
+                let len_ptr = format!("%len_ptr_{}", dest.0);
+                self.emit_line_very_indented(&format!(
+                    "{} = bitcast i8* {} to i32*",
+                    len_ptr, arr_ptr
+                ));
+                self.emit_line_very_indented(&format!("%r{} = load i32, i32* {}", dest.0, len_ptr));
+            }
+            LIROperation::NewArray => {
+                let dest = instr.destination.unwrap();
+                let count_val = self.format_value(&instr.operands[0]);
+
+                // TODO: Properly handle the alignement. For now I assume all array fields are 8 bits.
+                let count_i64 = format!("%count_i64_{}", dest.0);
+                self.emit_line_very_indented(&format!(
+                    "{} = sext i32 {} to i64",
+                    count_i64, count_val
+                ));
+
+                let data_size = format!("%data_size_{}", dest.0);
+                self.emit_line_very_indented(&format!("{} = mul i64 {}, 8", data_size, count_i64));
+
+                let total_size = format!("%total_size_{}", dest.0);
+                self.emit_line_very_indented(&format!("{} = add i64 {}, 8", total_size, data_size));
+
+                let raw_ptr = format!("%arr_raw_{}", dest.0);
+                self.emit_line_very_indented(&format!(
+                    "{} = call i8* @calloc(i64 1, i64 {})",
+                    raw_ptr, total_size
+                ));
+
+                let len_ptr = format!("%len_ptr_{}", dest.0);
+                self.emit_line_very_indented(&format!(
+                    "{} = bitcast i8* {} to i32*",
+                    len_ptr, raw_ptr
+                ));
+                self.emit_line_very_indented(&format!("store i32 {}, i32* {}", count_val, len_ptr));
+
+                self.emit_line_very_indented(&format!(
+                    "%r{} = bitcast i8* {} to i8*",
+                    dest.0, raw_ptr
+                ));
+            }
+            LIROperation::NewObject => {
+                let dest = instr.destination.unwrap();
+                let class_name = match &instr.operands[0] {
+                    LIRValue::Class(class_name) => class_name,
+                    _ => unreachable!(),
+                };
+
+                // Calculate the size of the object to allocate.
+                let size_tmp = format!("%size_{}", dest.0);
+                self.emit_line_very_indented(&format!(
+                    "{} = getelementptr %class.{}, %class.{}* null, i32 1",
+                    size_tmp, class_name, class_name
+                ));
+                let size_int = format!("%size_i_{}", dest.0);
+                self.emit_line_very_indented(&format!(
+                    "{} = ptrtoint %class.{}* {} to i64",
+                    size_int, class_name, size_tmp
+                ));
+
+                // Actually alloc the object
+                let raw_ptr = format!("%raw_{}", dest.0);
+                self.emit_line_very_indented(&format!(
+                    "{} = call i8* @calloc(i64 1, i64 {})",
+                    raw_ptr, size_int
+                ));
+
+                let obj_ptr = format!("%r{}", dest.0);
+                self.emit_line_very_indented(&format!(
+                    "{} = bitcast i8* {} to %class.{}",
+                    obj_ptr, raw_ptr, class_name
+                ));
+
+                let vptr_ptr = format!("%vptr_ptr_{}", dest.0);
+                self.emit_line_very_indented(&format!(
+                    "{} = getelementptr %class.{}, %class.{}* {}, i32 0, i32 0",
+                    vptr_ptr, class_name, class_name, obj_ptr
+                ));
+                self.emit_line_very_indented(&format!(
+                    "store i8** getelementptr ([{} x i8*], [{} x i8*]* @vtable.{}, i32 0, i32 0), i8*** {}", 
+                    class_name.len(), class_name.len(), class_name, vptr_ptr
+                ));
+            }
+            LIROperation::FieldGet => {
+                let dest = instr.destination.unwrap();
+                let obj_val = self.format_value(&instr.operands[0]);
+                let field_idx = match &instr.operands[1] {
+                    LIRValue::IntConst(i) => i + 1, // +1 because vtable pointer is on the first one.
+                    _ => unreachable!(),
+                };
+
+                let class_name = self.get_class_name_from_reg(match &instr.operands[0] {
+                    LIRValue::Register(r) => *r,
+                    _ => unreachable!(),
+                });
+
+                let field_ptr = format!("%field_ptr_{}", dest.0);
+                let field_type = self.get_llvm_type_from_register(dest);
+
+                self.emit_line_very_indented(&format!(
+                    "{} = getelementptr %struct.{}, %struct.{}* {}, i32 0, i32 {}",
+                    field_ptr, class_name, class_name, obj_val, field_idx
+                ));
+                self.emit_line_very_indented(&format!(
+                    "%r{} = load {}, {}* {}",
+                    dest.0, field_type, field_type, field_ptr
+                ));
+            }
+            LIROperation::FieldSet => {
+                let obj_val = self.format_value(&instr.operands[0]);
+                let field_idx = match &instr.operands[1] {
+                    LIRValue::IntConst(i) => i + 1,
+                    _ => unreachable!(),
+                };
+                let val_to_store = self.format_value(&instr.operands[2]);
+                let val_type = self.get_value_type(&instr.operands[2]);
+
+                let class_name = self.get_class_name_from_reg(match &instr.operands[0] {
+                    LIRValue::Register(r) => *r,
+                    _ => unreachable!(),
+                });
+
+                // TODO: Separate counter?
+                let field_ptr = format!("%field_set_ptr_{}", self.next_string_id);
+                self.next_string_id += 1;
+
+                self.emit_line_very_indented(&format!(
+                    "{} = getelementptr %struct.{}, %struct.{}* {}, i32 0, i32 {}",
+                    field_ptr, class_name, class_name, obj_val, field_idx
+                ));
+                self.emit_line_very_indented(&format!(
+                    "store {} {}, {}* {}",
+                    val_type, val_to_store, val_type, field_ptr
+                ));
+            }
             LIROperation::IsNull => {
                 let dest = instr.destination.unwrap();
                 let val = self.format_value(&instr.operands[0]);
@@ -388,7 +594,7 @@ impl<'a> LLVMGenerator<'a> {
                         LIRValue::IntConst(_) => "i32".to_string(),
                         LIRValue::BoolConst(_) => "i1".to_string(),
                         LIRValue::StringConst(_) => "i8*".to_string(),
-                        LIRValue::Class(_) => "i8*".to_string(),
+                        LIRValue::Class(class_name) => format!("%class.{}*", class_name),
                         _ => unreachable!(),
                     };
                     self.emit_line_very_indented(
@@ -410,6 +616,8 @@ impl<'a> LLVMGenerator<'a> {
             TypeKind::Int => "i32".to_string(),
             TypeKind::Bool => "i1".to_string(),
             TypeKind::Void => "void".to_string(),
+            TypeKind::Class(class_name) => format!("%class.{}", class_name.name),
+            TypeKind::Array(_) => "i8*".to_string(), // TODO: Reconsider this
             TypeKind::Error => {
                 panic!("Something went very wrong, Error type in LLVM backend!")
             }
@@ -459,5 +667,60 @@ impl<'a> LLVMGenerator<'a> {
             .expect("Current function not set");
         let reg_info = &func.registers[reg_id.0];
         self.llvm_type(&reg_info.typ)
+    }
+
+    fn emit_class_definition(&mut self, class: &LIRClass) {
+        let mut fields = vec!["i8**".to_string()];
+        for field in &class.fields {
+            fields.push(self.llvm_type(&field.typ));
+        }
+        self.emit_line(&format!(
+            "%class.{} = type {{ {} }}",
+            class.name,
+            fields.join(", ")
+        ));
+    }
+
+    fn emit_vtable_definition(&mut self, class: &LIRClass) {
+        let mut methods = Vec::new();
+        for method_name in &class.vtable {
+            methods.push(format!("i8* bitcast (i8* @{} to i8*)", method_name));
+        }
+        let len = class.vtable.len();
+        self.emit_line(&format!(
+            "@vtable.{} = constant [{} x i8*] [ {} ]",
+            class.name,
+            if len == 0 { 1 } else { len },
+            if len == 0 {
+                "i8* null".to_string()
+            } else {
+                methods.join(", ")
+            }
+        ));
+    }
+    fn get_class_name_from_reg(&self, reg_id: RegisterID) -> String {
+        let func = self.current_function.as_ref().expect("No current function");
+        let reg_info = &func.registers[reg_id.0];
+
+        if let TypeKind::Class(ident) = &reg_info.typ.kind {
+            ident.name.to_string()
+        } else {
+            panic!(
+                "Register %r{} is not a class type, it is {}",
+                reg_id.0, reg_info.typ
+            );
+        }
+    }
+
+    fn get_value_type(&self, val: &LIRValue) -> String {
+        match val {
+            LIRValue::IntConst(_) => "i32".to_string(),
+            LIRValue::BoolConst(_) => "i1".to_string(),
+            LIRValue::StringConst(_) => "i8*".to_string(),
+            LIRValue::Null => "i8*".to_string(),
+            LIRValue::Register(id) => self.get_llvm_type_from_register(*id),
+            LIRValue::Class(name) => format!("%class.{}*", name),
+            _ => "i8*".to_string(),
+        }
     }
 }
