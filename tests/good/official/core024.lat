@@ -11,5 +11,4 @@ void f(int x, int y) {
 boolean e() {
   printString("NOOO");
   return false;
-  }
-
+}

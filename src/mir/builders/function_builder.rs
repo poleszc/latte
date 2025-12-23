@@ -370,4 +370,8 @@ impl MIRFunctionBuilder {
     pub fn emit_return(&mut self, value: Option<MIRValue>, position: SourcePosition) {
         self.set_terminator(MIRTerminator::Return { value, position });
     }
+
+    pub fn emit_unreachable(&mut self, position: SourcePosition) {
+        self.set_terminator(MIRTerminator::Unreachable { position });
+    }
 }

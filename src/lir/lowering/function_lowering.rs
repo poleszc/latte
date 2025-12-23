@@ -7,26 +7,30 @@ use crate::{
         lowering::cfg::{DominanceFrontier, GraphAnalysis},
     },
     mir::{
-        BlockID as MirBID, LocalID, MIRFunction, MIROperation, MIRPlace, MIRTerminator, MIRValue,
-        TempID,
+        BlockID as MirBID, LocalID, MIRFunction, MIROperation, MIRPlace, MIRTerminator,
+        MIRValue, TempID,
     },
-    parser::Type,
+    parser::{Type, TypeKind},
     utils::StrID,
 };
 
-/// LocalID to a stack fo registers where it's last used.
-type LocalsRegisterStack = HashMap<LocalID, Vec<RegisterID>>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum SSAId {
+    Local(LocalID),
+    Temp(TempID),
+}
 
-type PhiPlaceholders = HashMap<LirBID, HashMap<LocalID, RegisterID>>;
+/// LocalID to a stack fo registers where it's last used.
+type RegisterStack = HashMap<SSAId, Vec<RegisterID>>;
+
+type PhiPlaceholders = HashMap<LirBID, HashMap<SSAId, RegisterID>>;
 type PhiIncoming = HashMap<LirBID, HashMap<RegisterID, Vec<(LirBID, LIRValue)>>>;
 
 pub struct LIRFunctionBuilder {
     /// Index of the next free register.
     register_index: usize,
-    /// Mapping from MIR Local ids to a stack of registers. Used when renaming the instructions with DFS.
-    locals_stack: LocalsRegisterStack,
-    /// Temporaries are already in the SSA form and do not leak through blocks, so we treat them separately)
-    temps: HashMap<TempID, RegisterID>,
+    /// Mapping from MIR locals and temporaries to a stack of registers. Used when renaming the instructions with DFS.
+    ssa_stack: RegisterStack,
     /// Stores the information about the type of register. RegisterID is the index in this vector.
     registers_info: Vec<RegisterInfo>,
     /// For each LIR block, stores a mapping of it's locals to the corresponding registers where it's first use if defined.
@@ -34,15 +38,14 @@ pub struct LIRFunctionBuilder {
     /// For each LIR block, stores a mapping of it's locals to the corresponding registers where it's first use if defined.
     phi_incoming: PhiIncoming,
 
-    locals_cache: HashMap<LocalID, (Type, Option<StrID>)>,
+    locals_cache: HashMap<SSAId, (Type, Option<StrID>)>,
 }
 
 impl LIRFunctionBuilder {
     pub fn new() -> Self {
         Self {
             register_index: 0,
-            locals_stack: HashMap::new(),
-            temps: HashMap::new(),
+            ssa_stack: HashMap::new(),
             registers_info: Vec::new(),
             phi_placeholders: HashMap::new(),
             phi_incoming: HashMap::new(),
@@ -61,16 +64,14 @@ impl LIRFunctionBuilder {
     /// https://pfalcon.github.io/ssabook/latest/book-full.pdf
     pub fn lower(&mut self, mir_function: &MIRFunction) -> LIRFunction {
         // Create a locals cache for faster lookup.
-        self.locals_cache = mir_function
-            .locals
-            .iter()
-            .map(|l| (l.id, (l.typ.clone(), None)))
-            .collect();
-
-        // Handle temporaries first, since they are already in the SSA form and don't leak through blocks.
-        for temp in &mir_function.temps {
-            let reg = self.new_register(temp.typ.clone(), None);
-            self.temps.insert(temp.id, reg);
+        //
+        for l in &mir_function.locals {
+            let id = SSAId::Local(l.id);
+            self.locals_cache.insert(id, (l.typ.clone(), l.name));
+        }
+        for t in &mir_function.temps {
+            let id = SSAId::Temp(t.id);
+            self.locals_cache.insert(id, (t.typ.clone(), None));
         }
 
         let analysis = GraphAnalysis::analyze(mir_function);
@@ -83,7 +84,10 @@ impl LIRFunctionBuilder {
         for param in mir_function.locals.iter().filter(|l| l.is_parameter) {
             let reg = self.new_register(param.typ.clone(), param.name);
             param_registers.push(reg);
-            self.locals_stack.entry(param.id).or_default().push(reg);
+            self.ssa_stack
+                .entry(SSAId::Local(param.id))
+                .or_default()
+                .push(reg);
         }
 
         // Perform renaming of all instructions.
@@ -145,18 +149,30 @@ impl LIRFunctionBuilder {
     /// https://pfalcon.github.io/ssabook/latest/book-full.pdf (Algorithm 3.1)
     fn insert_phi_functions(&mut self, func: &MIRFunction, df: &DominanceFrontier) {
         // Look for all variables name in the program and create a mapping to all blocks containing them.
-        let mut local_defs: HashMap<LocalID, HashSet<MirBID>> = HashMap::new();
+        let mut local_defs: HashMap<SSAId, HashSet<MirBID>> = HashMap::new();
         for block_ix in &func.block_order {
             let block = &func.blocks[block_ix];
             for instr in &block.instructions {
-                if let Some(MIRPlace::Local(id)) = &instr.destination {
-                    local_defs.entry(*id).or_default().insert(block.id);
+                if let Some(dest) = &instr.destination {
+                    let ssa_id = match dest {
+                        MIRPlace::Local(id) => SSAId::Local(*id),
+                        MIRPlace::Temp(id) => SSAId::Temp(*id),
+                        _ => unreachable!(),
+                    };
+                    local_defs.entry(ssa_id).or_default().insert(block.id);
                 }
             }
         }
 
+        let mut sorted_ids: Vec<_> = local_defs.keys().cloned().collect();
+        sorted_ids.sort_by_key(|id| match id {
+            SSAId::Local(l) => (0, l.0),
+            SSAId::Temp(l) => (1, l.0),
+        });
+
         // For each variable in the program insert PHI for it.
-        for (local_id, def_blocks) in local_defs {
+        for ssa_id in sorted_ids {
+            let def_blocks = &local_defs[&ssa_id];
             let mut worklist: VecDeque<MirBID> = def_blocks.iter().cloned().collect(); // Set of basic blocks that contain definitions of this local. (W)
             let mut visited = HashSet::new(); // Set of blocks where phi is added. (F)
 
@@ -166,19 +182,14 @@ impl LIRFunctionBuilder {
                         if !visited.contains(&f) {
                             // Add a placeholder phi to the block.
                             let lir_block = LirBID(f.0);
-                            let typ = func
-                                .locals
-                                .iter()
-                                .find(|l| l.id == local_id)
-                                .unwrap()
-                                .typ
-                                .clone();
+                            let typ = self.locals_cache[&ssa_id].0.clone();
                             let reg = self.new_register(typ, None);
+
                             // If entry for this block didn't exist we create it, if not we insert into the existing.
                             self.phi_placeholders
                                 .entry(lir_block)
                                 .or_default()
-                                .insert(local_id, reg);
+                                .insert(ssa_id, reg);
 
                             // Mark the block as visited.
                             visited.insert(f);
@@ -202,13 +213,20 @@ impl LIRFunctionBuilder {
         lir_blocks: &mut HashMap<LirBID, LIRBlock>,
     ) {
         let lir_id = LirBID(block_id.0);
-        let mut pushed_locals = Vec::new();
+        let mut pushed_ssa_registers: Vec<SSAId> = Vec::new();
         let mut instructions = Vec::new();
 
         if let Some(phis_here) = self.phi_placeholders.get(&lir_id) {
-            for (&loc_id, &phi_reg) in phis_here {
-                self.locals_stack.entry(loc_id).or_default().push(phi_reg);
-                pushed_locals.push(loc_id);
+            let mut sorted_phi_ids: Vec<_> = phis_here.keys().collect();
+            sorted_phi_ids.sort_by_key(|id| match id {
+                SSAId::Local(l) => (0, l.0),
+                SSAId::Temp(t) => (1, t.0),
+            });
+
+            for ssa_id in sorted_phi_ids {
+                let phi_reg = phis_here[ssa_id];
+                self.ssa_stack.entry(*ssa_id).or_default().push(phi_reg);
+                pushed_ssa_registers.push(*ssa_id);
 
                 instructions.push(LIRInstruction {
                     operation: LIROperation::Phi,
@@ -228,34 +246,23 @@ impl LIRFunctionBuilder {
             let op = self.lower_operation(&instruction.operation);
 
             if let Some(dest) = &instruction.destination {
-                match dest {
-                    MIRPlace::Local(local_id) => {
-                        let info = mir_func.locals.iter().find(|l| l.id == *local_id).unwrap();
-                        let new_reg = self.new_register(info.typ.clone(), info.name);
+                let ssa_id = match dest {
+                    MIRPlace::Local(local_id) => SSAId::Local(*local_id),
+                    MIRPlace::Temp(temp_id) => SSAId::Temp(*temp_id),
+                    _ => unreachable!(),
+                };
 
-                        self.locals_stack
-                            .entry(*local_id)
-                            .or_default()
-                            .push(new_reg);
-                        pushed_locals.push(*local_id);
+                let info = self.locals_cache[&ssa_id].clone();
+                let new_reg = self.new_register(info.0.clone(), info.1);
+                self.ssa_stack.entry(ssa_id).or_default().push(new_reg);
+                pushed_ssa_registers.push(ssa_id);
 
-                        instructions.push(LIRInstruction {
-                            operation: op,
-                            destination: Some(new_reg),
-                            operands,
-                            source_position: instruction.source_position,
-                        });
-                    }
-                    MIRPlace::Temp(temp_id) => {
-                        instructions.push(LIRInstruction {
-                            operation: op,
-                            destination: Some(self.temps[temp_id]),
-                            operands,
-                            source_position: instruction.source_position,
-                        });
-                    }
-                    _ => panic!("Field access and array access unhandled"),
-                }
+                instructions.push(LIRInstruction {
+                    operation: op,
+                    destination: Some(new_reg),
+                    operands,
+                    source_position: instruction.source_position,
+                });
             } else {
                 instructions.push(LIRInstruction {
                     operation: op,
@@ -272,15 +279,24 @@ impl LIRFunctionBuilder {
             .map(|t| self.lower_terminator(t));
 
         if let Some(block_successors) = cfg_analysis.successors.get(&block_id) {
-            for &successor in block_successors {
+            let mut sorted_successors = block_successors.clone();
+            sorted_successors.sort_by_key(|bid| bid.0);
+
+            for successor in sorted_successors {
                 let succ_lir_id = LirBID(successor.0);
                 if let Some(phis_in_succ) = self.phi_placeholders.get(&succ_lir_id) {
-                    for (&loc_id, &phi_reg) in phis_in_succ {
-                        let current_val =
-                            match self.locals_stack.get(&loc_id).and_then(|s| s.last()) {
-                                Some(&reg) => LIRValue::Register(reg),
-                                None => LIRValue::Null, // TODO: This is bugged
-                            };
+                    for (&ssa_id, &phi_reg) in phis_in_succ {
+                        let current_val = match self.ssa_stack.get(&ssa_id).and_then(|s| s.last()) {
+                            Some(&reg) => LIRValue::Register(reg),
+                            None => {
+                                let (typ, _) = &self.locals_cache[&ssa_id];
+                                match typ.kind {
+                                    TypeKind::Int => LIRValue::IntConst(0),
+                                    TypeKind::Bool => LIRValue::BoolConst(false),
+                                    _ => LIRValue::Null,
+                                }
+                            }
+                        };
 
                         self.phi_incoming
                             .entry(succ_lir_id)
@@ -294,14 +310,16 @@ impl LIRFunctionBuilder {
         }
 
         if let Some(children) = cfg_analysis.dominator_tree.get(&block_id) {
-            for &child in children {
+            let mut sorted_children = children.clone();
+            sorted_children.sort_by_key(|bid| bid.0);
+            for child in sorted_children {
                 self.rename_recursive(child, mir_func, cfg_analysis, lir_blocks);
             }
         }
 
         // Remove locals pushed in this DFS run.
-        for loc_id in pushed_locals {
-            self.locals_stack.get_mut(&loc_id).unwrap().pop();
+        for loc_id in pushed_ssa_registers {
+            self.ssa_stack.get_mut(&loc_id).unwrap().pop();
         }
 
         // Populate a LIR block with a list of it's predecessors.
@@ -385,6 +403,9 @@ impl LIRFunctionBuilder {
                 value: value.as_ref().map(|v| self.lower_value(v)),
                 position: *position,
             },
+            MIRTerminator::Unreachable { position } => LIRTerminator::Unreachable {
+                position: *position,
+            },
         }
     }
 
@@ -393,9 +414,13 @@ impl LIRFunctionBuilder {
             MIRValue::IntConst(n) => LIRValue::IntConst(*n),
             MIRValue::BoolConst(b) => LIRValue::BoolConst(*b),
             MIRValue::Local(local_id) => {
-                LIRValue::Register(*self.locals_stack[local_id].last().unwrap())
+                let ssa_id = SSAId::Local(*local_id);
+                LIRValue::Register(*self.ssa_stack[&ssa_id].last().unwrap())
             }
-            MIRValue::Temp(temp_id) => LIRValue::Register(self.temps[temp_id]),
+            MIRValue::Temp(temp_id) => {
+                let ssa_id = SSAId::Temp(*temp_id);
+                LIRValue::Register(*self.ssa_stack[&ssa_id].last().unwrap())
+            }
             MIRValue::StringConst(s) => LIRValue::StringConst(s.clone()),
             MIRValue::Null => LIRValue::Null,
             // TODO: Remove those?

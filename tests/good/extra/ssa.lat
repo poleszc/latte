@@ -1,14 +1,15 @@
 int main() {
-    int i = 9;
+    int i = 5;
     int a = 0;
     while (i != 0) {
         if (i % 2 == 0) {
-            a = 1;
+            a++;
         } else {
-            a = 2;
+            a = a + 2;
         }
-    
+        printInt(a);
         i--;
     }
+    printInt(a);
     return 0;
 }

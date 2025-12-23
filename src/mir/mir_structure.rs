@@ -136,6 +136,9 @@ pub enum MIRTerminator {
         value: Option<MIRValue>,
         position: SourcePosition,
     },
+    Unreachable {
+        position: SourcePosition,
+    },
 }
 
 /// Single MIR block in the CFG.

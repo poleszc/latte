@@ -9,4 +9,3 @@ int f(int p){
 int main() {
     return f(1) - 3;
 }
-

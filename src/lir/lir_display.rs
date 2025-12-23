@@ -119,6 +119,9 @@ impl fmt::Display for LIRTerminator {
             LIRTerminator::Return { value: None, .. } => {
                 write!(f, "  ret void")
             }
+            LIRTerminator::Unreachable { .. } => {
+                write!(f, "  unreachable")
+            }
         }
     }
 }

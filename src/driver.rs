@@ -11,10 +11,7 @@ use crate::{
     errors::CompilerError,
     lir::{self, *},
     mir::{self, *},
-    parser::{
-        self,
-        ast::{self, Program},
-    },
+    parser::{self, ast::Program},
     report_compiler_error,
     semantics::SemanticChecker,
 };
@@ -24,9 +21,9 @@ use crate::{
 /// - Performs the parsing
 /// - Runs the compilation function(`backend_compile`).
 pub fn run_compiler<
-    F: FnOnce(&mut ast::Program, &Path, &str, &LatteArgs) -> Result<(), CompilerError>,
+    F: FnOnce(&LIRProgram, &Path, &str, &LatteArgs) -> Result<(), CompilerError>,
 >(
-    _backend_compile: F,
+    backend_compile: F,
 ) -> Result<(), CompilerError> {
     // TODO: Create a CONFIG structure instead of this multiple arg parsing.
     let args = LatteArgs::parse();
@@ -97,9 +94,11 @@ pub fn run_compiler<
     dump_lir(&output_dir, file_stem, &lir_program)?;
     eprintln!("[LIR] Dumped LIR to JSON...");
 
+    // ============= LLVM BACKEND ===============
+    backend_compile(&lir_program, &output_dir, file_stem, &args)?;
+
     // TODO:
     // - LIR optss
-    // - LLVM lowering (SSA)
     // - Detect unused functions and variables.
     // - Skip empty functions?
 
@@ -171,7 +170,7 @@ fn dump_mir(
     println!("[MIR]: Dumping MIR to file");
     mir_program.dump_to_file(
         PathBuf::from(&output_dir)
-            .join(format!("{}.mir.txt", file_stem))
+            .join(format!("{}.mir", file_stem))
             .as_path(),
     )?;
 
@@ -191,7 +190,7 @@ fn dump_lir(
     println!("[LIR]: Dumping LIR to file");
     lir_program.dump_to_file(
         PathBuf::from(&output_dir)
-            .join(format!("{}.lir.txt", file_stem))
+            .join(format!("{}.lir", file_stem))
             .as_path(),
     )?;
 
