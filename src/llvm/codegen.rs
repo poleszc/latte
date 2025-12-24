@@ -42,7 +42,10 @@ impl<'a> LLVMGenerator<'a> {
 
             for instr in &block.instructions {
                 match instr.operation {
-                    LIROperation::ArrayGet | LIROperation::ArraySet => {
+                    LIROperation::ArrayGet
+                    | LIROperation::ArraySet
+                    | LIROperation::IntDiv
+                    | LIROperation::IntMod => {
                         current_label = format!("B{}_ok_{}", block_id.0, split_count);
                         split_count += 1;
                     }
@@ -186,28 +189,29 @@ impl<'a> LLVMGenerator<'a> {
                 );
             }
             LIROperation::IntDiv | LIROperation::IntMod => {
+                let dest = instr.destination.unwrap();
                 let rhs = self.format_value(&instr.operands[1]);
+
+                let split_id = self.current_block_split_count;
+                self.current_block_split_count += 1;
+
+                let err_label = format!("B{}_div_err_{}", block_id.0, split_id);
+                let ok_label = format!("B{}_ok_{}", block_id.0, split_id);
+
                 self.emit_line_very_indented(
-                    format!(
-                        "%cond_z_{} = icmp eq i32 {}, 0",
-                        instr.destination.unwrap().0,
-                        rhs
-                    )
-                    .as_str(),
+                    format!("%cond_z_{}_{} = icmp eq i32 {}, 0", block_id.0, split_id, rhs).as_str(),
                 );
                 self.emit_line_very_indented(
                     format!(
-                        "br i1 %cond_z_{}, label %err_{}, label %ok_{}",
-                        instr.destination.unwrap().0,
-                        instr.destination.unwrap().0,
-                        instr.destination.unwrap().0
+                        "br i1 %cond_z_{}_{}, label %{}, label %{}",
+                        block_id.0, split_id, err_label, ok_label
                     )
                     .as_str(),
                 );
-                self.emit_line_indented(format!("err_{}:", instr.destination.unwrap().0).as_str());
+                self.emit_line_indented(format!("{}:", err_label).as_str());
                 self.emit_line_very_indented("call void @error()");
                 self.emit_line_very_indented("unreachable");
-                self.emit_line_indented(format!("ok_{}:", instr.destination.unwrap().0).as_str());
+                self.emit_line_indented(format!("{}:", ok_label).as_str());
 
                 let op = if instr.operation == LIROperation::IntDiv {
                     "sdiv"
@@ -216,14 +220,7 @@ impl<'a> LLVMGenerator<'a> {
                 };
                 let lhs = self.format_value(&instr.operands[0]);
                 self.emit_line_very_indented(
-                    format!(
-                        "%r{} = {} i32 {}, {}",
-                        instr.destination.unwrap().0,
-                        op,
-                        lhs,
-                        rhs
-                    )
-                    .as_str(),
+                    format!("%r{} = {} i32 {}, {}", dest.0, op, lhs, rhs).as_str(),
                 );
             }
             LIROperation::IntNeg => {
