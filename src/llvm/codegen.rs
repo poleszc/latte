@@ -13,6 +13,9 @@ pub struct LLVMGenerator<'a> {
     string_constants: HashMap<String, String>,
     next_string_id: usize,
     current_function: Option<&'a LIRFunction>,
+    // TODO: A proper comment about that.
+    lir_block_to_last_llvm_label: HashMap<BlockID, String>,
+    current_block_split_count: usize,
 }
 
 impl<'a> Default for LLVMGenerator<'a> {
@@ -28,6 +31,26 @@ impl<'a> LLVMGenerator<'a> {
             string_constants: HashMap::new(),
             next_string_id: 0,
             current_function: None,
+            lir_block_to_last_llvm_label: HashMap::new(),
+            current_block_split_count: 0,
+        }
+    }
+    fn precalculate_exit_labels(&mut self, func: &LIRFunction) {
+        for (block_id, block) in &func.blocks {
+            let mut current_label = format!("B{}", block_id.0);
+            let mut split_count = 0;
+
+            for instr in &block.instructions {
+                match instr.operation {
+                    LIROperation::ArrayGet | LIROperation::ArraySet => {
+                        current_label = format!("B{}_ok_{}", block_id.0, split_count);
+                        split_count += 1;
+                    }
+                    _ => {}
+                }
+            }
+            self.lir_block_to_last_llvm_label
+                .insert(*block_id, current_label);
         }
     }
 
@@ -100,6 +123,9 @@ impl<'a> LLVMGenerator<'a> {
     }
 
     fn emit_function(&mut self, func: &LIRFunction) {
+        self.lir_block_to_last_llvm_label.clear();
+        self.precalculate_exit_labels(func);
+
         let ret_type = self.llvm_type(&func.return_type);
         let args = func
             .parameter_registers
@@ -120,10 +146,12 @@ impl<'a> LLVMGenerator<'a> {
     }
 
     fn emit_block(&mut self, block_id: BlockID, block: &LIRBlock) {
-        self.emit_line_indented(format!("B{}:", block_id.0).as_str());
+        self.current_block_split_count = 0;
+        let base_label = format!("B{}", block_id.0);
+        self.emit_line_indented(format!("{}:", base_label).as_str());
 
         for instr in &block.instructions {
-            self.emit_instruction(instr);
+            self.emit_instruction(instr, block_id);
         }
 
         if let Some(term) = &block.terminator {
@@ -133,7 +161,7 @@ impl<'a> LLVMGenerator<'a> {
         }
     }
 
-    fn emit_instruction(&mut self, instr: &LIRInstruction) {
+    fn emit_instruction(&mut self, instr: &LIRInstruction, block_id: BlockID) {
         match instr.operation {
             // TODO: this should be removed in the future.
             LIROperation::Assign => {
@@ -212,10 +240,16 @@ impl<'a> LLVMGenerator<'a> {
                 for i in (0..instr.operands.len()).step_by(2) {
                     let val = self.format_value(&instr.operands[i]);
                     let block_id = match &instr.operands[i + 1] {
-                        LIRValue::Block(id) => id.0,
+                        LIRValue::Block(id) => id,
                         _ => unreachable!(),
                     };
-                    args.push(format!("[ {}, %B{} ]", val, block_id));
+
+                    let last_label = self
+                        .lir_block_to_last_llvm_label
+                        .get(&block_id)
+                        .expect(&format!("Block order error: {}", block_id.0));
+
+                    args.push(format!("[ {}, %{} ]", val, last_label));
                 }
                 phi.push_str(&args.join(", "));
                 self.emit_line_very_indented(phi.as_str());
@@ -361,7 +395,7 @@ impl<'a> LLVMGenerator<'a> {
                 let id = self.next_string_id;
                 self.next_string_id += 1;
 
-                self.emit_array_bounds_check(&arr_val, &idx_val);
+                self.emit_array_bounds_check(&arr_val, &idx_val, &block_id);
 
                 // First 8 bytes are for the length. Skip them.
                 let data_ptr_raw = format!("%data_ptr_raw_{}", id);
@@ -393,7 +427,7 @@ impl<'a> LLVMGenerator<'a> {
                 let id = self.next_string_id;
                 self.next_string_id += 1;
 
-                self.emit_array_bounds_check(&arr_val, &idx_val);
+                self.emit_array_bounds_check(&arr_val, &idx_val, &block_id);
 
                 let data_ptr_raw = format!("%set_data_ptr_raw_{}", id);
                 self.emit_line_very_indented(&format!(
@@ -748,7 +782,9 @@ impl<'a> LLVMGenerator<'a> {
         }
     }
 
-    fn emit_array_bounds_check(&mut self, arr_ptr: &str, index_val: &str) {
+    fn emit_array_bounds_check(&mut self, arr_ptr: &str, index_val: &str, block_id: &BlockID) {
+        let split_id = self.current_block_split_count;
+        self.current_block_split_count += 1;
         let id = self.next_string_id;
         self.next_string_id += 1;
 
@@ -757,6 +793,8 @@ impl<'a> LLVMGenerator<'a> {
         let cond_neg = format!("%cond_neg_{}", id);
         let cond_ge = format!("%cond_ge_{}", id);
         let cond_out = format!("%cond_out_{}", id);
+        let err_label = format!("B{}_err_{}", block_id.0, split_id);
+        let ok_label = format!("B{}_ok_{}", block_id.0, split_id);
 
         // Retrieve the array size.
         self.emit_line_very_indented(&format!("{} = bitcast i8* {} to i32*", len_ptr, arr_ptr));
@@ -773,14 +811,15 @@ impl<'a> LLVMGenerator<'a> {
         self.emit_line_very_indented(&format!("{} = or i1 {}, {}", cond_out, cond_neg, cond_ge));
 
         self.emit_line_very_indented(&format!(
-            "br i1 {}, label %array_bounds_err_{}, label %array_bounds_ok_{}",
-            cond_out, id, id
+            "br i1 {}, label %{}, label %{}",
+            cond_out, err_label, ok_label
         ));
 
-        self.emit_line_indented(&format!("array_bounds_err_{}:", id));
+        self.emit_line_indented(&format!("{}:", err_label));
         self.emit_line_very_indented(&format!("call void @error()"));
         self.emit_line_very_indented("unreachable");
 
-        self.emit_line_indented(&format!("array_bounds_ok_{}:", id));
+        let ok_label = format!("{}", ok_label);
+        self.emit_line_indented(&format!("{}:", ok_label));
     }
 }
