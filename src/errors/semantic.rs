@@ -317,7 +317,7 @@ impl ToDiagnostic for SemanticError {
                 Diagnostic::error("Type mismatch in assignment")
                     .label(range(lhs_position), format!("Left side is of type `{}`", lhs_type))
                     .label(range(rhs_position), format!("Right side is of type `{}`", rhs_type))
-                    .note("Expected both sides of the assignment to have the same type")
+                    .note("Expected right side of the assignment to be a subtype of the left side")
             }
             SemanticError::BinaryOpTypeMismatch { lhs_type, lhs_position, rhs_type, rhs_position } => {
                 Diagnostic::error("Type mismatch in expression")
