@@ -15,5 +15,5 @@ int main() {
     
     printInt(a[1] + 2);
     printInt(a[1] + b[a[1] + 2]); // 5
-    return 1;
+    return 0;
 }
