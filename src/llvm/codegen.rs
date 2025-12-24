@@ -644,7 +644,8 @@ impl<'a> LLVMGenerator<'a> {
                         LIRValue::BoolConst(_) => "i1".to_string(),
                         LIRValue::StringConst(_) => "i8*".to_string(),
                         LIRValue::Class(class_name) => format!("%class.{}*", class_name),
-                        _ => unreachable!(),
+                        LIRValue::Null => "null".to_string(),
+                        _ => unreachable!()
                     };
                     self.emit_line_very_indented(
                         format!("ret {} {}", typ_str, formatted_val).as_str(),
