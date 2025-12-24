@@ -9,11 +9,13 @@ class B extends A {
 int main() {
     A a = new A;
     B b = new B;
+    a.a = 1; 
+    b.a = 3; 
+    b.b = 4; 
     
-    int x = a.a;
-    # x = a.b;
-    int y = b.a;
-    y = b.b;
+    printInt(a.a);
+    printInt(b.a);
+    printInt(b.b);
 
     return 0;
 }

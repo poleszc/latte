@@ -1,31 +1,61 @@
 class A {
     int a;
     boolean d;
-    int foo() {
-        //int x = a;
-        int y = this.a;
-        return 1;
+
+    void initA(int val, boolean flag) {
+        this.a = val;
+        this.d = flag;
     }
-    int bar() {
+
+    int getSum() {
         int x = a;
         int y = this.a;
-        return 1;
+        return x + y; 
     }
-        
+
+    void printState() {
+        printString("Object A state:");
+        printInt(this.a);
+        if (this.d) {
+            printInt(1);
+        } else {
+            printInt(0);
+        }
+    }
 }
 
 class B extends A {
     int b;
-    int goo() {
-        int x = a;
-        x = b;
-        x = this.a;
-        x = this.b;
-        return 1;
+
+    void initB(int valA, int valB) {
+        a = valA;
+        this.b = valB;
+        this.d = false;
+    }
+
+    void printB() {
+        printString("Object B state:");
+        printInt(a);
+        printInt(this.b);
+        if (d) { printInt(1); } else { printInt(0); }
     }
 }
 
 int main() {
-    A a = new A;
+    printInt(111111);
+    A objA = new A;
+    objA.initA(42, true);
+    objA.printState();
+    printInt(objA.getSum()); // 42 + 42 = 84
+
+    printInt(222222);
+    B objB = new B;
+    objB.initB(100, 200);
+    objB.printB();
+    
+    objB.a = 999;
+    printString("Modified B.a:");
+    printInt(objB.a);
+
     return 0;
 }

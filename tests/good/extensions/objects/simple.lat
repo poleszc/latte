@@ -10,7 +10,7 @@ int main() {
     Node n;
     n = null;
     n = new Node;
-    n.return_2();
+    printInt(n.return_2());
 
     return 0;
 }

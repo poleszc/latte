@@ -1,28 +1,48 @@
 class A {
     int a;
+
     int foo() {
         int x = this.goo();
-        # int x = goo(); // TODO: Think about that. Maybe this should be legal?
-        return 1;
+        return x + 100;
     }
 
     int goo() {
-        int y = this.a;
-        return 1;
+        return this.a;
     }
 }
 
 class B extends A {
+    int b;
+
+    int goo() {
+        return a + this.b;
+    }
+
     int bar() {
-        int c = this.foo();
-        c = this.goo();
-        c = this.bar();
-        return 0;
+        return this.foo() + 1000;
     }
 }
 
-
 int main() {
-    A a = new A;
+    printInt(111111);
+
+    A objA = new A;
+    objA.a = 10;
+    printInt(objA.foo()); // 110
+
+    printInt(222222);
+
+    B objB = new B;
+    objB.a = 20;
+    objB.b = 30;
+    
+    printInt(objB.foo()); // (20 + 30) + 100 = 150
+    printInt(objB.bar()); //objB.foo() + 1000 = 150 + 1000 = 1150
+
+    printInt(333333); // Test polimorfizmu
+
+    A poly = objB;
+    printInt(poly.foo()); // 150
+
     return 0;
 }
