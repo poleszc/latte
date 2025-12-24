@@ -199,7 +199,11 @@ impl<'a> LLVMGenerator<'a> {
                 let ok_label = format!("B{}_ok_{}", block_id.0, split_id);
 
                 self.emit_line_very_indented(
-                    format!("%cond_z_{}_{} = icmp eq i32 {}, 0", block_id.0, split_id, rhs).as_str(),
+                    format!(
+                        "%cond_z_{}_{} = icmp eq i32 {}, 0",
+                        block_id.0, split_id, rhs
+                    )
+                    .as_str(),
                 );
                 self.emit_line_very_indented(
                     format!(

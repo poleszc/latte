@@ -357,8 +357,6 @@ impl MIRFunctionBuilder {
             source_position: position,
         });
     }
-
-
 }
 
 // ======================

@@ -83,7 +83,7 @@ pub fn run_compiler<
         &semantic_analysis_result.tast,
         semantic_analysis_result.symbol_table,
     );
-    
+
     eprintln!("[MIR] Lowering to MIR completed successfully...");
     dump_mir(&output_dir, file_stem, &mir_program)?;
     eprintln!("[MIR] Dumped MIR to JSON...");
