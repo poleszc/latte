@@ -127,7 +127,6 @@ impl MIRLoweringContext {
                 }
             }
             TypeKind::Array(_) => {
-                println!("Lower field access: Array length");
                 if field_name.name == StrID::from("length") {
                     self.lower_array_length(base_expr)
                 } else {
@@ -135,7 +134,6 @@ impl MIRLoweringContext {
                 }
             }
             TypeKind::Class(_) => {
-                println!("Lower field access: Class");
                 let object_place = self.lower_expr_as_place(base_expr);
                 let class_name = if let TypeKind::Class(ident) = &base_expr.typ.kind {
                     ident.name

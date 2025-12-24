@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Write, hash::Hash};
+use std::{collections::HashMap, fmt::Write};
 
 use crate::{
     lir::{
@@ -70,7 +70,7 @@ impl<'a> LLVMGenerator<'a> {
 
         for class_id in &sorted_classes {
             let class = &program.classes[&class_id];
-            self.emit_vtable_definition(class);
+            self.emit_vtable_definition(class, program);
         }
 
         for func_name in &program.function_order {
@@ -387,7 +387,91 @@ impl<'a> LLVMGenerator<'a> {
                     );
                 }
             }
-            LIROperation::VCall => todo!(),
+            LIROperation::VCall => {
+                let dest = instr.destination;
+                let obj = &instr.operands[0];
+                let obj_val = self.format_value(obj);
+
+                let obj_reg_id = match obj {
+                    LIRValue::Register(r) => *r,
+                    _ => unreachable!(),
+                };
+
+                let method_idx = match &instr.operands[1] {
+                    LIRValue::IntConst(i) => *i,
+                    _ => unreachable!(),
+                };
+
+                let method_args = &instr.operands[2..];
+                let class_name = self.get_class_name_from_reg(obj_reg_id);
+                let id = self.next_string_id;
+                self.next_string_id += 1;
+
+                // TODO: Check for null ptr access.
+                // Get the VTable pointer from the zeroth field.
+                let vptr_ptr = format!("%vptr_ptr_vcall_{}", id);
+                self.emit_line_very_indented(&format!(
+                    "{} = getelementptr %class.{}, %class.{}* {}, i32 0, i32 0",
+                    vptr_ptr, class_name, class_name, obj_val
+                ));
+                let vptr = format!("%vptr_vcall_{}", id);
+                self.emit_line_very_indented(&format!("{} = load i8**, i8*** {}", vptr, vptr_ptr));
+
+                // Get the function pointer.
+                let method_ptr_ptr = format!("%method_ptr_ptr_vcall_{}", id);
+                self.emit_line_very_indented(&format!(
+                    "{} = getelementptr i8*, i8** {}, i64 {}",
+                    method_ptr_ptr, vptr, method_idx
+                ));
+
+                let method_ptr_raw = format!("%method_ptr_raw_vcall_{}", id);
+                self.emit_line_very_indented(&format!(
+                    "{} = load i8*, i8** {}",
+                    method_ptr_raw, method_ptr_ptr
+                ));
+
+                // Build the signature again. TODO: This is stupid
+                let ret_type =
+                    dest.map_or("void".to_string(), |r| self.get_llvm_type_from_register(r));
+
+                let mut arg_types = vec![self.get_llvm_type_from_register(obj_reg_id)];
+                arg_types.extend(method_args.iter().map(|arg| self.get_value_type(arg)));
+                let func_type = format!("{} ({})*", ret_type, arg_types.join(", "));
+
+                // Cast the pointer to the expected signature.
+                let method_ptr = format!("%method_ptr_vcall_{}", id);
+                self.emit_line_very_indented(&format!(
+                    "{} = bitcast i8* {} to {}",
+                    method_ptr, method_ptr_raw, func_type
+                ));
+
+                let mut call_args = vec![format!(
+                    "{} {}",
+                    self.get_llvm_type_from_register(obj_reg_id),
+                    obj_val
+                )];
+                call_args.extend(
+                    method_args.iter().map(|arg| {
+                        format!("{} {}", self.get_value_type(arg), self.format_value(arg))
+                    }),
+                );
+
+                if let Some(dest_reg) = dest {
+                    self.emit_line_very_indented(&format!(
+                        "%r{} = call {} {}({})",
+                        dest_reg.0,
+                        ret_type,
+                        method_ptr,
+                        call_args.join(", ")
+                    ));
+                } else {
+                    self.emit_line_very_indented(&format!(
+                        "call void {}({})",
+                        method_ptr,
+                        call_args.join(", ")
+                    ));
+                }
+            }
             LIROperation::ArrayGet => {
                 let dest = instr.destination.unwrap();
                 let arr_val = self.format_value(&instr.operands[0]);
@@ -731,10 +815,25 @@ impl<'a> LLVMGenerator<'a> {
         ));
     }
 
-    fn emit_vtable_definition(&mut self, class: &LIRClass) {
+    fn emit_vtable_definition(&mut self, class: &LIRClass, program: &LIRProgram) {
         let mut methods = Vec::new();
         for method_name in &class.vtable {
-            methods.push(format!("i8* bitcast (i8* @{} to i8*)", method_name));
+            let func = program
+                .functions
+                .get(method_name)
+                .expect("Virtual method not found in program functions!");
+            let ret_type = self.llvm_type(&func.return_type);
+            let arg_types: Vec<String> = func
+                .parameter_types
+                .iter()
+                .map(|typ| self.llvm_type(typ))
+                .collect();
+
+            let func_signature = format!("{} ({})*", ret_type, arg_types.join(", "));
+            methods.push(format!(
+                "i8* bitcast ({} @{} to i8*)",
+                func_signature, method_name
+            ));
         }
         let len = class.vtable.len();
         self.emit_line(&format!(

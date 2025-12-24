@@ -144,6 +144,7 @@ fn main() {
         &[
             "tests/good/extensions/arrays",
             "tests/good/extensions/struct",
+            "tests/good/extensions/objects",
             // "tests/good/extensions",
         ],
         "assert_llvm_lowering_pass",
@@ -179,6 +180,7 @@ fn main() {
             "tests/good/extra",
             "tests/good/extensions/arrays",
             "tests/good/extensions/struct",
+            "tests/good/extensions/objects",
             // "tests/good/extensions",
         ],
         "run_integration_test",
