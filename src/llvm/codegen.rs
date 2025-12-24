@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Write};
+use std::{collections::HashMap, fmt::Write, hash::Hash};
 
 use crate::{
     lir::{
@@ -536,7 +536,7 @@ impl<'a> LLVMGenerator<'a> {
 
                 let obj_ptr = format!("%r{}", dest.0);
                 self.emit_line_very_indented(&format!(
-                    "{} = bitcast i8* {} to %class.{}",
+                    "{} = bitcast i8* {} to %class.{}*",
                     obj_ptr, raw_ptr, class_name
                 ));
 
@@ -567,7 +567,7 @@ impl<'a> LLVMGenerator<'a> {
                 let field_type = self.get_llvm_type_from_register(dest);
 
                 self.emit_line_very_indented(&format!(
-                    "{} = getelementptr %struct.{}, %struct.{}* {}, i32 0, i32 {}",
+                    "{} = getelementptr %class.{}, %class.{}* {}, i32 0, i32 {}",
                     field_ptr, class_name, class_name, obj_val, field_idx
                 ));
                 self.emit_line_very_indented(&format!(
@@ -594,7 +594,7 @@ impl<'a> LLVMGenerator<'a> {
                 self.next_string_id += 1;
 
                 self.emit_line_very_indented(&format!(
-                    "{} = getelementptr %struct.{}, %struct.{}* {}, i32 0, i32 {}",
+                    "{} = getelementptr %class.{}, %class.{}* {}, i32 0, i32 {}",
                     field_ptr, class_name, class_name, obj_val, field_idx
                 ));
                 self.emit_line_very_indented(&format!(
@@ -644,8 +644,8 @@ impl<'a> LLVMGenerator<'a> {
                         LIRValue::BoolConst(_) => "i1".to_string(),
                         LIRValue::StringConst(_) => "i8*".to_string(),
                         LIRValue::Class(class_name) => format!("%class.{}*", class_name),
-                        LIRValue::Null => "null".to_string(),
-                        _ => unreachable!()
+                        LIRValue::Null => "ptr".to_string(),
+                        _ => unreachable!(),
                     };
                     self.emit_line_very_indented(
                         format!("ret {} {}", typ_str, formatted_val).as_str(),
@@ -666,8 +666,7 @@ impl<'a> LLVMGenerator<'a> {
             TypeKind::Int => "i32".to_string(),
             TypeKind::Bool => "i1".to_string(),
             TypeKind::Void => "void".to_string(),
-            TypeKind::Class(class_name) => format!("%class.{}", class_name.name),
-            // TypeKind::Array(inner) => format!("%array.{}*", inner.to_string()),
+            TypeKind::Class(class_name) => format!("%class.{}*", class_name.name),
             TypeKind::Array(_) => "i8*".to_string(),
             TypeKind::Error => {
                 panic!("Something went very wrong, Error type in LLVM backend!")

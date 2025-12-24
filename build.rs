@@ -178,7 +178,7 @@ fn main() {
             "tests/good/official",
             "tests/good/extra",
             "tests/good/extensions/arrays",
-            // "tests/good/extensions/struct",
+            "tests/good/extensions/struct",
             // "tests/good/extensions",
         ],
         "run_integration_test",
