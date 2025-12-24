@@ -118,7 +118,7 @@ impl MIRPlace {
     pub fn base_place(&self) -> &MIRPlace {
         match self {
             MIRPlace::Field { base, .. } => base.base_place(),
-            MIRPlace::Index { base, index } => base.base_place(),
+            MIRPlace::Index { base, .. } => base.base_place(),
             simple => simple,
         }
     }

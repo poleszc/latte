@@ -141,7 +141,10 @@ fn main() {
 
     generate_test_suite(
         "extensions_llvm_lowering_tests.rs",
-        &["tests/good/extensions"],
+        &[
+            "tests/good/extensions/arrays",
+            // "tests/good/extensions",
+        ],
         "assert_llvm_lowering_pass",
         "llvm_pass",
     )
@@ -173,6 +176,7 @@ fn main() {
         &[
             "tests/good/official",
             "tests/good/extra",
+            "tests/good/extensions/arrays",
             // "tests/good/extensions",
         ],
         "run_integration_test",

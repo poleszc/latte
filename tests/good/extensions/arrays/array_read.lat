@@ -1,5 +1,20 @@
 // Author: Tomasz Wysocki 277696
 int main() {
     (new int[1])[0];
+    int[] arr = new int[2];
+    printInt(arr[0]);
+    printInt(arr[1]);
+    
+    arr[0] = 2;
+    printInt(arr[0]);
+    arr[1] = 3;
+    printInt(arr[1]);
+    
+    int b = arr[0];
+    printInt(b);
+
+    arr[0]++;
+    printInt(arr[0]);
+
     return 0;
 }

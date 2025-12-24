@@ -1,4 +1,3 @@
-use std::thread::sleep;
 
 use super::MIRLoweringContext;
 use crate::{

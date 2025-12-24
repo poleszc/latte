@@ -1,4 +1,3 @@
-use core::panic;
 use std::{collections::HashMap, fmt::Write};
 
 use crate::{
@@ -269,6 +268,7 @@ impl<'a> LLVMGenerator<'a> {
             LIROperation::BoolNot => {
                 let dest = instr.destination.unwrap();
                 let val = self.format_value(&instr.operands[0]);
+                // TODO: Does XOR work here?
                 self.emit_line_very_indented(format!("%r{} = xor i1 {}, 1", dest.0, val).as_str());
             }
             LIROperation::StringConcat => {
@@ -356,25 +356,29 @@ impl<'a> LLVMGenerator<'a> {
             LIROperation::ArrayGet => {
                 let dest = instr.destination.unwrap();
                 let arr_val = self.format_value(&instr.operands[0]);
-                let idx = self.format_value(&instr.operands[1]);
+                let idx_val = self.format_value(&instr.operands[1]);
                 let elem_type = self.get_llvm_type_from_register(dest);
+                let id = self.next_string_id;
+                self.next_string_id += 1;
 
-                // First 4 bytes are for the length. Skip them.
-                let data_ptr_raw = format!("%data_ptr_raw_{}", dest.0);
+                self.emit_array_bounds_check(&arr_val, &idx_val);
+
+                // First 8 bytes are for the length. Skip them.
+                let data_ptr_raw = format!("%data_ptr_raw_{}", id);
                 self.emit_line_very_indented(&format!(
-                    "{} = getelementptr i8, i8* {}, i32 4",
+                    "{} = getelementptr i8, i8* {}, i32 8",
                     data_ptr_raw, arr_val
                 ));
-                let data_ptr = format!("%data_ptr_{}", dest.0);
+                let data_ptr = format!("%data_ptr_{}", id);
                 self.emit_line_very_indented(&format!(
                     "{} = bitcast i8* {} to {}*",
                     data_ptr, data_ptr_raw, elem_type
                 ));
 
-                let elem_ptr = format!("%elem_ptr_{}", dest.0);
+                let elem_ptr = format!("%elem_ptr_{}", id);
                 self.emit_line_very_indented(&format!(
                     "{} = getelementptr {}, {}* {}, i32 {}",
-                    elem_ptr, elem_type, elem_type, data_ptr, idx
+                    elem_ptr, elem_type, elem_type, data_ptr, idx_val
                 ));
                 self.emit_line_very_indented(&format!(
                     "%r{} = load {}, {}* {}",
@@ -386,9 +390,10 @@ impl<'a> LLVMGenerator<'a> {
                 let idx_val = self.format_value(&instr.operands[1]);
                 let val_to_store = self.format_value(&instr.operands[2]);
                 let elem_type = self.get_value_type(&instr.operands[2]);
-
                 let id = self.next_string_id;
                 self.next_string_id += 1;
+
+                self.emit_array_bounds_check(&arr_val, &idx_val);
 
                 let data_ptr_raw = format!("%set_data_ptr_raw_{}", id);
                 self.emit_line_very_indented(&format!(
@@ -402,7 +407,7 @@ impl<'a> LLVMGenerator<'a> {
                     data_ptr, data_ptr_raw, elem_type
                 ));
 
-                let elem_ptr = format!("%set_elem_ptr_{}", id);
+                let elem_ptr = format!("%elem_ptr_{}", id);
                 self.emit_line_very_indented(&format!(
                     "{} = getelementptr {}, {}* {}, i32 {}",
                     elem_ptr, elem_type, elem_type, data_ptr, idx_val
@@ -428,26 +433,35 @@ impl<'a> LLVMGenerator<'a> {
                 let dest = instr.destination.unwrap();
                 let count_val = self.format_value(&instr.operands[0]);
 
-                // TODO: Properly handle the alignement. For now I assume all array fields are 8 bits.
-                let count_i64 = format!("%count_i64_{}", dest.0);
+                let reg_info = &self.current_function.unwrap().registers[dest.0];
+                let elem_type = match &reg_info.typ.kind {
+                    TypeKind::Array(inner) => inner,
+                    _ => unreachable!(),
+                };
+
+                let element_size = self.sizeof_type(elem_type);
+                let id = dest.0;
+
                 self.emit_line_very_indented(&format!(
-                    "{} = sext i32 {} to i64",
-                    count_i64, count_val
+                    "%element_count_{} = sext i32 {} to i64",
+                    id, count_val
+                ));
+                self.emit_line_very_indented(&format!(
+                    "%data_size_{} = mul i64 %element_count_{}, {}",
+                    id, id, element_size
+                ));
+                self.emit_line_very_indented(&format!(
+                    "%total_size_{} = add i64 %data_size_{}, 8",
+                    id, id
                 ));
 
-                let data_size = format!("%data_size_{}", dest.0);
-                self.emit_line_very_indented(&format!("{} = mul i64 {}, 8", data_size, count_i64));
-
-                let total_size = format!("%total_size_{}", dest.0);
-                self.emit_line_very_indented(&format!("{} = add i64 {}, 8", total_size, data_size));
-
-                let raw_ptr = format!("%arr_raw_{}", dest.0);
+                let raw_ptr = format!("%raw_arr_{}", dest.0);
                 self.emit_line_very_indented(&format!(
-                    "{} = call i8* @calloc(i64 1, i64 {})",
-                    raw_ptr, total_size
+                    "{} = call i8* @calloc(i64 1, i64 %total_size_{})",
+                    raw_ptr, id
                 ));
 
-                let len_ptr = format!("%len_ptr_{}", dest.0);
+                let len_ptr = format!("%len_ptr_{}", id);
                 self.emit_line_very_indented(&format!(
                     "{} = bitcast i8* {} to i32*",
                     len_ptr, raw_ptr
@@ -617,7 +631,8 @@ impl<'a> LLVMGenerator<'a> {
             TypeKind::Bool => "i1".to_string(),
             TypeKind::Void => "void".to_string(),
             TypeKind::Class(class_name) => format!("%class.{}", class_name.name),
-            TypeKind::Array(_) => "i8*".to_string(), // TODO: Reconsider this
+            // TypeKind::Array(inner) => format!("%array.{}*", inner.to_string()),
+            TypeKind::Array(_) => "i8*".to_string(),
             TypeKind::Error => {
                 panic!("Something went very wrong, Error type in LLVM backend!")
             }
@@ -722,5 +737,50 @@ impl<'a> LLVMGenerator<'a> {
             LIRValue::Class(name) => format!("%class.{}*", name),
             _ => "i8*".to_string(),
         }
+    }
+
+    fn sizeof_type(&self, typ: &Type) -> usize {
+        match &typ.kind {
+            TypeKind::Int => 4,
+            TypeKind::Bool => 1,
+            TypeKind::String | TypeKind::Class(_) | TypeKind::Array(_) => 8,
+            _ => panic!("Unhanded type for size"),
+        }
+    }
+
+    fn emit_array_bounds_check(&mut self, arr_ptr: &str, index_val: &str) {
+        let id = self.next_string_id;
+        self.next_string_id += 1;
+
+        let len_ptr = format!("%len_ptr_check_{}", id);
+        let len_val = format!("%len_val_check_{}", id);
+        let cond_neg = format!("%cond_neg_{}", id);
+        let cond_ge = format!("%cond_ge_{}", id);
+        let cond_out = format!("%cond_out_{}", id);
+
+        // Retrieve the array size.
+        self.emit_line_very_indented(&format!("{} = bitcast i8* {} to i32*", len_ptr, arr_ptr));
+        self.emit_line_very_indented(&format!("{} = load i32, i32* {}", len_val, len_ptr));
+
+        // index >= 0
+        self.emit_line_very_indented(&format!("{} = icmp slt i32 {}, 0", cond_neg, index_val));
+        // index < length
+        self.emit_line_very_indented(&format!(
+            "{} = icmp sge i32 {}, {}",
+            cond_ge, index_val, len_val
+        ));
+
+        self.emit_line_very_indented(&format!("{} = or i1 {}, {}", cond_out, cond_neg, cond_ge));
+
+        self.emit_line_very_indented(&format!(
+            "br i1 {}, label %array_bounds_err_{}, label %array_bounds_ok_{}",
+            cond_out, id, id
+        ));
+
+        self.emit_line_indented(&format!("array_bounds_err_{}:", id));
+        self.emit_line_very_indented(&format!("call void @error()"));
+        self.emit_line_very_indented("unreachable");
+
+        self.emit_line_indented(&format!("array_bounds_ok_{}:", id));
     }
 }
