@@ -22,6 +22,7 @@ clean:
 	rm -rf tests/good/extensions/struct/*.json
 	rm -rf tests/good/extensions/virtual/*.json
 	rm -rf tests/bad/runtime/*.json
+	rm -rf tests/bad/semantic/basic/*.json
 
 	rm -rf tests/good/extra/*.mir
 	rm -rf tests/good/official/*.mir
@@ -30,6 +31,7 @@ clean:
 	rm -rf tests/good/extensions/struct/*.mir
 	rm -rf tests/good/extensions/virtual/*.mir
 	rm -rf tests/bad/runtime/*.mir
+	rm -rf tests/bad/semantic/basic/*.mir
 
 	rm -rf tests/good/extra/*.lir
 	rm -rf tests/good/official/*.lir
@@ -38,6 +40,7 @@ clean:
 	rm -rf tests/good/extensions/struct/*.lir
 	rm -rf tests/good/extensions/virtual/*.lir
 	rm -rf tests/bad/runtime/*.lir
+	rm -rf tests/bad/semantic/basic/*.lir
 
 	rm -rf tests/good/extra/*.ll
 	rm -rf tests/good/official/*.ll
@@ -46,6 +49,7 @@ clean:
 	rm -rf tests/good/extensions/struct/*.ll
 	rm -rf tests/good/extensions/virtual/*.ll
 	rm -rf tests/bad/runtime/*.ll
+	rm -rf tests/bad/semantic/basic/*.ll
 
 	rm -rf tests/good/extra/*.bc
 	rm -rf tests/good/official/*.bc
@@ -54,6 +58,7 @@ clean:
 	rm -rf tests/good/extensions/struct/*.bc
 	rm -rf tests/good/extensions/virtual/*.bc
 	rm -rf tests/bad/runtime/*.bc
+	rm -rf tests/bad/semantic/basic/*.bc
 
 	rm -rf tests/bad/*.json
 	rm -rf tests/bad/lexical/*.json
