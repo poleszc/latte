@@ -13,7 +13,11 @@ pub struct LLVMGenerator<'a> {
     string_constants: HashMap<String, String>,
     next_string_id: usize,
     current_function: Option<&'a LIRFunction>,
-    // TODO: A proper comment about that.
+    // A mapping from LIR BlockID to the name of the last label ending the block.
+    // This is a super ugly approach, since array accesses and integer division
+    // cause new blocks to appear which makes the phi functions generated in LIR invalid.
+    // This mapping is created on the first pass of lowering, new block end labels are created
+    // and used in the second pass when lowering the phi functions.
     lir_block_to_last_llvm_label: HashMap<BlockID, String>,
     current_block_split_count: usize,
 }
@@ -33,27 +37,6 @@ impl<'a> LLVMGenerator<'a> {
             current_function: None,
             lir_block_to_last_llvm_label: HashMap::new(),
             current_block_split_count: 0,
-        }
-    }
-    fn precalculate_exit_labels(&mut self, func: &LIRFunction) {
-        for (block_id, block) in &func.blocks {
-            let mut current_label = format!("B{}", block_id.0);
-            let mut split_count = 0;
-
-            for instr in &block.instructions {
-                match instr.operation {
-                    LIROperation::ArrayGet
-                    | LIROperation::ArraySet
-                    | LIROperation::IntDiv
-                    | LIROperation::IntMod => {
-                        current_label = format!("B{}_ok_{}", block_id.0, split_count);
-                        split_count += 1;
-                    }
-                    _ => {}
-                }
-            }
-            self.lir_block_to_last_llvm_label
-                .insert(*block_id, current_label);
         }
     }
 
@@ -92,6 +75,32 @@ impl<'a> LLVMGenerator<'a> {
         }
 
         format!("{}\n{}", string_constants, self.output)
+    }
+
+    /// Performs a pass through all function blocks looking for instructions which
+    /// cause the control flow to be changed. Precalculates the label names which
+    /// will end the blocks after they will be broken by the bound checks/zero 
+    /// division checks. This mapping is then used when lowering phi functions.
+    fn precalculate_exit_labels(&mut self, func: &LIRFunction) {
+        for (block_id, block) in &func.blocks {
+            let mut current_label = format!("B{}", block_id.0);
+            let mut split_count = 0;
+
+            for instr in &block.instructions {
+                match instr.operation {
+                    LIROperation::ArrayGet
+                    | LIROperation::ArraySet
+                    | LIROperation::IntDiv
+                    | LIROperation::IntMod => {
+                        current_label = format!("B{}_ok_{}", block_id.0, split_count);
+                        split_count += 1;
+                    }
+                    _ => {}
+                }
+            }
+            self.lir_block_to_last_llvm_label
+                .insert(*block_id, current_label);
+        }
     }
 }
 
@@ -146,6 +155,51 @@ impl<'a> LLVMGenerator<'a> {
             }
         }
         self.emit_line("}\n");
+    }
+    
+    fn emit_class_definition(&mut self, class: &LIRClass) {
+        let mut fields = vec!["i8**".to_string()];
+        for field in &class.fields {
+            fields.push(self.llvm_type(&field.typ));
+        }
+        self.emit_line(&format!(
+            "%class.{} = type {{ {} }}",
+            class.name,
+            fields.join(", ")
+        ));
+    }
+
+    fn emit_vtable_definition(&mut self, class: &LIRClass, program: &LIRProgram) {
+        let mut methods = Vec::new();
+        for method_name in &class.vtable {
+            let func = program
+                .functions
+                .get(method_name)
+                .expect("Virtual method not found");
+            let ret_type = self.llvm_type(&func.return_type);
+            let arg_types: Vec<String> = func
+                .parameter_types
+                .iter()
+                .map(|typ| self.llvm_type(typ))
+                .collect();
+
+            let func_signature = format!("{} ({})*", ret_type, arg_types.join(", "));
+            methods.push(format!(
+                "i8* bitcast ({} @{} to i8*)",
+                func_signature, method_name
+            ));
+        }
+        let len = class.vtable.len();
+        self.emit_line(&format!(
+            "@vtable.{} = constant [{} x i8*] [ {} ]",
+            class.name,
+            if len == 0 { 1 } else { len },
+            if len == 0 {
+                "i8* null".to_string()
+            } else {
+                methods.join(", ")
+            }
+        ));
     }
 
     fn emit_block(&mut self, block_id: BlockID, block: &LIRBlock) {
@@ -403,7 +457,7 @@ impl<'a> LLVMGenerator<'a> {
                 };
 
                 let method_args = &instr.operands[2..];
-                let class_name = self.get_class_name_from_reg(obj_reg_id);
+                let class_name = self.get_class_name_from_register(obj_reg_id);
                 let id = self.next_string_id;
                 self.next_string_id += 1;
 
@@ -642,7 +696,7 @@ impl<'a> LLVMGenerator<'a> {
                     _ => unreachable!(),
                 };
 
-                let class_name = self.get_class_name_from_reg(match &instr.operands[0] {
+                let class_name = self.get_class_name_from_register(match &instr.operands[0] {
                     LIRValue::Register(r) => *r,
                     _ => unreachable!(),
                 });
@@ -668,7 +722,7 @@ impl<'a> LLVMGenerator<'a> {
                 let val_to_store = self.format_value(&instr.operands[2]);
                 let val_type = self.get_value_type(&instr.operands[2]);
 
-                let class_name = self.get_class_name_from_reg(match &instr.operands[0] {
+                let class_name = self.get_class_name_from_register(match &instr.operands[0] {
                     LIRValue::Register(r) => *r,
                     _ => unreachable!(),
                 });
@@ -743,7 +797,51 @@ impl<'a> LLVMGenerator<'a> {
             }
         }
     }
+
+    fn emit_array_bounds_check(&mut self, arr_ptr: &str, index_val: &str, block_id: &BlockID) {
+        let split_id = self.current_block_split_count;
+        self.current_block_split_count += 1;
+        let id = self.next_string_id;
+        self.next_string_id += 1;
+
+        let len_ptr = format!("%len_ptr_check_{}", id);
+        let len_val = format!("%len_val_check_{}", id);
+        let cond_neg = format!("%cond_neg_{}", id);
+        let cond_ge = format!("%cond_ge_{}", id);
+        let cond_out = format!("%cond_out_{}", id);
+        let err_label = format!("B{}_err_{}", block_id.0, split_id);
+        let ok_label = format!("B{}_ok_{}", block_id.0, split_id);
+
+        // Retrieve the array size.
+        self.emit_line_very_indented(&format!("{} = bitcast i8* {} to i32*", len_ptr, arr_ptr));
+        self.emit_line_very_indented(&format!("{} = load i32, i32* {}", len_val, len_ptr));
+
+        // index >= 0
+        self.emit_line_very_indented(&format!("{} = icmp slt i32 {}, 0", cond_neg, index_val));
+        // index < length
+        self.emit_line_very_indented(&format!(
+            "{} = icmp sge i32 {}, {}",
+            cond_ge, index_val, len_val
+        ));
+
+        self.emit_line_very_indented(&format!("{} = or i1 {}, {}", cond_out, cond_neg, cond_ge));
+
+        self.emit_line_very_indented(&format!(
+            "br i1 {}, label %{}, label %{}",
+            cond_out, err_label, ok_label
+        ));
+
+        self.emit_line_indented(&format!("{}:", err_label));
+        self.emit_line_very_indented("call void @error()");
+        self.emit_line_very_indented("unreachable");
+
+        self.emit_line_indented(&format!("{}:", ok_label));
+    }
 }
+
+// ======================
+// Helpers
+// ======================
 impl<'a> LLVMGenerator<'a> {
     fn llvm_type(&self, typ: &Type) -> String {
         match &typ.kind {
@@ -757,6 +855,27 @@ impl<'a> LLVMGenerator<'a> {
             }
             crate::parser::TypeKind::Fun(_, _) => panic!("Function type in llvm"),
             _ => "i8*".to_string(),
+        }
+    }
+
+    fn get_value_type(&self, val: &LIRValue) -> String {
+        match val {
+            LIRValue::IntConst(_) => "i32".to_string(),
+            LIRValue::BoolConst(_) => "i1".to_string(),
+            LIRValue::StringConst(_) => "i8*".to_string(),
+            LIRValue::Null => "i8*".to_string(),
+            LIRValue::Register(id) => self.get_llvm_type_from_register(*id),
+            LIRValue::Class(name) => format!("%class.{}*", name),
+            _ => "i8*".to_string(),
+        }
+    }
+
+    fn sizeof_type(&self, typ: &Type) -> usize {
+        match &typ.kind {
+            TypeKind::Int => 4,
+            TypeKind::Bool => 1,
+            TypeKind::String | TypeKind::Class(_) | TypeKind::Array(_) => 8,
+            _ => panic!("Unhanded type for size"),
         }
     }
 
@@ -803,51 +922,7 @@ impl<'a> LLVMGenerator<'a> {
         self.llvm_type(&reg_info.typ)
     }
 
-    fn emit_class_definition(&mut self, class: &LIRClass) {
-        let mut fields = vec!["i8**".to_string()];
-        for field in &class.fields {
-            fields.push(self.llvm_type(&field.typ));
-        }
-        self.emit_line(&format!(
-            "%class.{} = type {{ {} }}",
-            class.name,
-            fields.join(", ")
-        ));
-    }
-
-    fn emit_vtable_definition(&mut self, class: &LIRClass, program: &LIRProgram) {
-        let mut methods = Vec::new();
-        for method_name in &class.vtable {
-            let func = program
-                .functions
-                .get(method_name)
-                .expect("Virtual method not found in program functions!");
-            let ret_type = self.llvm_type(&func.return_type);
-            let arg_types: Vec<String> = func
-                .parameter_types
-                .iter()
-                .map(|typ| self.llvm_type(typ))
-                .collect();
-
-            let func_signature = format!("{} ({})*", ret_type, arg_types.join(", "));
-            methods.push(format!(
-                "i8* bitcast ({} @{} to i8*)",
-                func_signature, method_name
-            ));
-        }
-        let len = class.vtable.len();
-        self.emit_line(&format!(
-            "@vtable.{} = constant [{} x i8*] [ {} ]",
-            class.name,
-            if len == 0 { 1 } else { len },
-            if len == 0 {
-                "i8* null".to_string()
-            } else {
-                methods.join(", ")
-            }
-        ));
-    }
-    fn get_class_name_from_reg(&self, reg_id: RegisterID) -> String {
+    fn get_class_name_from_register(&self, reg_id: RegisterID) -> String {
         let func = self.current_function.as_ref().expect("No current function");
         let reg_info = &func.registers[reg_id.0];
 
@@ -859,66 +934,5 @@ impl<'a> LLVMGenerator<'a> {
                 reg_id.0, reg_info.typ
             );
         }
-    }
-
-    fn get_value_type(&self, val: &LIRValue) -> String {
-        match val {
-            LIRValue::IntConst(_) => "i32".to_string(),
-            LIRValue::BoolConst(_) => "i1".to_string(),
-            LIRValue::StringConst(_) => "i8*".to_string(),
-            LIRValue::Null => "i8*".to_string(),
-            LIRValue::Register(id) => self.get_llvm_type_from_register(*id),
-            LIRValue::Class(name) => format!("%class.{}*", name),
-            _ => "i8*".to_string(),
-        }
-    }
-
-    fn sizeof_type(&self, typ: &Type) -> usize {
-        match &typ.kind {
-            TypeKind::Int => 4,
-            TypeKind::Bool => 1,
-            TypeKind::String | TypeKind::Class(_) | TypeKind::Array(_) => 8,
-            _ => panic!("Unhanded type for size"),
-        }
-    }
-
-    fn emit_array_bounds_check(&mut self, arr_ptr: &str, index_val: &str, block_id: &BlockID) {
-        let split_id = self.current_block_split_count;
-        self.current_block_split_count += 1;
-        let id = self.next_string_id;
-        self.next_string_id += 1;
-
-        let len_ptr = format!("%len_ptr_check_{}", id);
-        let len_val = format!("%len_val_check_{}", id);
-        let cond_neg = format!("%cond_neg_{}", id);
-        let cond_ge = format!("%cond_ge_{}", id);
-        let cond_out = format!("%cond_out_{}", id);
-        let err_label = format!("B{}_err_{}", block_id.0, split_id);
-        let ok_label = format!("B{}_ok_{}", block_id.0, split_id);
-
-        // Retrieve the array size.
-        self.emit_line_very_indented(&format!("{} = bitcast i8* {} to i32*", len_ptr, arr_ptr));
-        self.emit_line_very_indented(&format!("{} = load i32, i32* {}", len_val, len_ptr));
-
-        // index >= 0
-        self.emit_line_very_indented(&format!("{} = icmp slt i32 {}, 0", cond_neg, index_val));
-        // index < length
-        self.emit_line_very_indented(&format!(
-            "{} = icmp sge i32 {}, {}",
-            cond_ge, index_val, len_val
-        ));
-
-        self.emit_line_very_indented(&format!("{} = or i1 {}, {}", cond_out, cond_neg, cond_ge));
-
-        self.emit_line_very_indented(&format!(
-            "br i1 {}, label %{}, label %{}",
-            cond_out, err_label, ok_label
-        ));
-
-        self.emit_line_indented(&format!("{}:", err_label));
-        self.emit_line_very_indented("call void @error()");
-        self.emit_line_very_indented("unreachable");
-
-        self.emit_line_indented(&format!("{}:", ok_label));
     }
 }
