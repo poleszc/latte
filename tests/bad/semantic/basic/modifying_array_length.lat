@@ -1,0 +1,6 @@
+int main() {
+    int[] a = new int[3];
+    a.length = 23;
+
+    return 0;
+}

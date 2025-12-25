@@ -1,0 +1,69 @@
+class Data {
+    int id;
+    int a, b;
+    string name;
+    int[] arr;
+    boolean[] bool_arr;
+    
+    void init() {
+        id = 0;
+        a = 0;
+        b = 0;
+        name = "";
+        arr = new int[2];
+        bool_arr = new boolean[2];
+    }
+
+    
+    void debugPrint() {
+        printString("Data debug print:");
+        printString("A: " + intToString(a));
+        printString("B: " + intToString(b));
+        printString("Name: " + name);
+        
+        printString("Int array elements:");
+        for (int x : arr) 
+            printInt(x);
+
+        printString("Bool array elements:");
+        for (boolean x : bool_arr) 
+            printBool(x);
+
+    }
+
+}
+
+void printBool(boolean val) {
+    if (val) {
+        printString("true");
+    } else {
+        printString("false");
+    }
+}
+
+int main() {
+    Data data = new Data;
+    data.init();
+
+    data.id = 1;
+    data.a = 2;
+    data.b = 2;
+    data.name = "123";
+    data.arr[1] = 999;
+    data.bool_arr[1] = true;
+    
+    
+    data.debugPrint();
+
+
+    return 0;
+}
+
+string intToString(int n) {
+    if (n == 0) return "0";
+    if (n == 1) return "1";
+    if (n == 2) return "2";
+    if (n == 3) return "3";
+    if (n == 999) return "999";
+    return "unknown";
+}

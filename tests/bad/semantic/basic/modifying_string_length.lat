@@ -1,0 +1,6 @@
+int main() {
+    string b = "123";
+    b.length = 123;
+
+    return 0;
+}

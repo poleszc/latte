@@ -66,6 +66,9 @@ pub enum SemanticError {
         found: StrID,
         position: SourcePosition,
     },
+    InvalidCallBase {
+        position: SourcePosition,
+    },
     ForEachTypeMismatch {
         variable_type: StrID,
         collection_item_type: StrID,
@@ -206,10 +209,7 @@ impl SemanticError {
         prev_pos: &SourcePosition,
     ) -> Diagnostic {
         Diagnostic::error(format!("{} '{}' is already defined", what, name))
-            .label(
-                range(pos),
-                format!("Cannot redefine this {}", what.to_lowercase()),
-            )
+            .label(range(pos), format!("Cannot redefine this {}", what))
             .secondary_label(
                 range(prev_pos),
                 format!("'{}' was originally defined here", name),
@@ -253,9 +253,8 @@ impl SemanticError {
 impl ToDiagnostic for SemanticError {
     fn to_diagnostic(&self) -> Diagnostic {
         match self {
-            // --- Undefined Errors ---
             SemanticError::UndefinedVariable { name, position } => {
-                Self::simple(format!("Undefined variable '{}'", name), position, "Variable not found")
+                            Self::simple(format!("Undefined variable '{}'", name), position, "Variable not found")
                     .note("This variable was not declared in the current scope")
             }
             SemanticError::UndefinedFunction { name, position } => {
@@ -272,8 +271,6 @@ impl ToDiagnostic for SemanticError {
             SemanticError::UndefinedMethod { class_name, method_name, position, class_position } => {
                 Self::undefined_member("method", method_name, class_name, position, class_position)
             }
-
-            // --- Duplicate Errors ---
             SemanticError::DuplicateVariable { name, position, previous_position } => {
                 Self::duplicate("Variable", name, position, previous_position)
             }
@@ -284,15 +281,20 @@ impl ToDiagnostic for SemanticError {
                 Self::duplicate("Class", name, position, previous_position)
             }
             SemanticError::DuplicateClassField { class_name, field_name, position, previous_position } => {
-                Self::duplicate(&format!("Field for class '{}'", class_name), field_name, position, previous_position)
+                Self::duplicate(&format!("Field in class '{}': ", class_name), field_name, position, previous_position)
             }
             SemanticError::DuplicateMethod { class_name, method_name, position, previous_position } => {
                 Self::duplicate(&format!("Method for class '{}'", class_name), method_name, position, previous_position)
             }
-
-            // --- Type Mismatch Errors ---
             SemanticError::TypeMismatch { expected, found, position } => {
                 Self::mismatch(position, expected, found)
+            }
+            SemanticError::InvalidCallBase { position } => {
+                Diagnostic::error("This expression cannot be a call base").label(
+                    range(position),
+                    format!("Cannot call this expression"),
+                )
+                    .help("Perhaps you mistyped the '()'?")
             }
             SemanticError::ForEachTypeMismatch { variable_type, collection_item_type, variable_position, collection_position } => {
                 Diagnostic::error("Type mismatch in for-each loop")
@@ -331,8 +333,6 @@ impl ToDiagnostic for SemanticError {
                     .label(range(decl_type_position), format!("Variable '{}' declared with type '{}'", var_name, expected))
                     .help("Consider changing the variable type or the initializing expression.")
             }
-
-            // --- Invalid Operations ---
             SemanticError::InvalidOperands { operator, operand, position, type_position } => {
                 Diagnostic::error(format!("Invalid operands for operator '{}'", operator))
                     .label(range(position), format!("Cannot apply '{}' to a value of type '{}'", operator, operand))
@@ -345,10 +345,8 @@ impl ToDiagnostic for SemanticError {
             }
             SemanticError::InvalidLValue { position } => {
                 Self::simple("Invalid assignment target", position, "This expression cannot be assigned to")
-                    .help("Only variables, array elements, and object fields can be targets of an assignment.")
+                    .help("Only variables, array elements, and object fields (other than the builtin \"length\" field) can be targets of an assignment.")
             }
-
-            // --- Function & Return Errors ---
             SemanticError::WrongNumberOfArguments { name, expected, found, call_position, function_position } => {
                 Diagnostic::error(format!("Wrong number of arguments for function '{}'", name))
                     .label(range(call_position), format!("Called with {} argument(s)", found))
@@ -374,8 +372,6 @@ impl ToDiagnostic for SemanticError {
                     .label(range(position), format!("`{}` is not a valid return type", found))
                     .help(format!("Try one of: {}", expected.iter().map(|str| str.to_string()).collect::<Vec<String>>().join(", ")))
             }
-
-            // --- Main Function Errors ---
             SemanticError::UndefinedMain => {
                 Diagnostic::error("Missing `main` function")
                     .help("This program does not provide a `main` function. Please define one.")
@@ -390,8 +386,6 @@ impl ToDiagnostic for SemanticError {
                     .label(range(position), format!("Found {} arguments, expected 0", found))
                     .help("Change `main` to take zero arguments.")
             }
-
-            // --- Type/Cast Errors ---
             SemanticError::InvalidVariableType { found, expected, position } => {
                 Diagnostic::error("Invalid variable type")
                     .label(range(position), format!("`{}` is not valid here", found))
@@ -414,8 +408,6 @@ impl ToDiagnostic for SemanticError {
                     .secondary_label(range(cast_position), "Not a valid null cast")
                     .help(format!("Try one of: {}", expected.iter().map(|str| str.to_string()).collect::<Vec<String>>().join(", ")))
             }
-
-            // --- Class/OOP Errors ---
             SemanticError::ThisUsedOutsideClass { position } => {
                 Self::simple("Invalid use of 'this'", position, "'this' used outside of a class method")
                     .help("Remove 'this' or move the code into a class method.")
@@ -442,6 +434,6 @@ impl ToDiagnostic for SemanticError {
                 }
                 diag
             }
-        }
+                    }
     }
 }

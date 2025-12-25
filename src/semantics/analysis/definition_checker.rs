@@ -235,6 +235,7 @@ impl<'a> DefinitionChecker<'a> {
                             if let Some(prev_pos) =
                                 self.find_field_in_hierarchy(parent.name, ident.name)
                             {
+                                dbg!(&class_def);
                                 self.ctx.add_error(SemanticError::DuplicateClassField {
                                     class_name: class_def.name.name,
                                     field_name: ident.name,

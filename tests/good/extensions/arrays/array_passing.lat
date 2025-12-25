@@ -1,0 +1,54 @@
+int[] initArray(int start, int size) {
+    int[] arr = new int[size];
+    printInt(size);
+    printInt(arr.length);
+
+    int i = 0; 
+    while(i < arr.length) {
+        arr[i] = start;
+        start++;
+        i++;
+    }
+    return arr;
+}
+
+int[] combine(int[] a, int[] b) {
+    if (a.length != b.length) {
+        error();
+    }
+
+    int i = 0;
+    while(i < a.length) {
+        a[i] = a[i] + b[i];
+        i++;
+    }
+    return a;
+}
+
+
+int main() {
+    int[] arr1 = initArray(0, 10);
+    int[] arr2 = initArray(5, 10);
+
+    for(int x: arr1) {
+        printInt(x);
+    }
+
+    for(int x: arr2) {
+        printInt(x);
+    }
+    
+    printString("=========================");
+    
+    int[] comb = combine(arr1, arr2);
+    for(int x: comb) {
+        printInt(x);
+    }
+
+    comb[5] = 999;
+    printInt(arr1[5]);
+    
+
+
+    return 0;
+}

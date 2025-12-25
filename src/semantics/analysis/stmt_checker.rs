@@ -3,6 +3,7 @@ use crate::parser::ast::*;
 use crate::semantics::analysis::context::SemanticContext;
 use crate::semantics::analysis::expr_checker::ExpressionChecker;
 use crate::semantics::analysis::return_checker::ReturnChecker;
+use crate::semantics::tast::TExpr;
 use crate::semantics::{VariableInfo, tast};
 use crate::utils::StrID;
 
@@ -38,11 +39,20 @@ impl<'a> StatementChecker<'a> {
 // ======================
 impl<'a> StatementChecker<'a> {
     /// Checks if an expression is a LValue. Logs error otherwise.
-    fn check_lvalue(&mut self, expr: &Expr) {
-        let is_lvalue = matches!(
-            expr.kind,
-            ExprKind::Var(_) | ExprKind::ArrayAccess { .. } | ExprKind::FieldAccess { .. }
-        );
+    fn check_lvalue(&mut self, expr: &TExpr) {
+        let is_lvalue = match &expr.kind {
+            tast::TExprKind::Var(_) | tast::TExprKind::ArrayAccess { .. } => true,
+            tast::TExprKind::FieldAccess { object, field_name } => {
+                if field_name.name == StrID::from("length")
+                    && matches!(object.typ.kind, TypeKind::Array(_) | TypeKind::String)
+                {
+                    false
+                } else {
+                    true
+                }
+            }
+            _ => false,
+        };
 
         if !is_lvalue {
             self.ctx.add_error(SemanticError::InvalidLValue {
@@ -152,11 +162,12 @@ impl<'a> StatementChecker<'a> {
     }
 
     fn visit_assign(&mut self, target: &Expr, value: &Expr) -> tast::TStmtKind {
-        // Continue checking rhs even if lhs is invalid lvalue
-        self.check_lvalue(target);
-
         let mut expr_checker = ExpressionChecker::new(self.ctx);
         let typed_target = expr_checker.check(target);
+        // Continue checking rhs even if lhs is invalid lvalue
+        self.check_lvalue(&typed_target);
+
+        let mut expr_checker = ExpressionChecker::new(self.ctx);
         let typed_value = expr_checker.check(value);
 
         if !self.ctx.is_subtype(&typed_value.typ, &typed_target.typ) {
@@ -229,7 +240,7 @@ impl<'a> StatementChecker<'a> {
                 type_position: typed_expr.typ.position,
             });
         }
-        self.check_lvalue(expr);
+        self.check_lvalue(&typed_expr);
         tast::TStmtKind::Incr(typed_expr)
     }
 
@@ -245,7 +256,7 @@ impl<'a> StatementChecker<'a> {
                 type_position: typed_expr.typ.position,
             });
         }
-        self.check_lvalue(expr);
+        self.check_lvalue(&typed_expr);
         tast::TStmtKind::Decr(typed_expr)
     }
 
