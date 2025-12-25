@@ -342,7 +342,12 @@ impl<'a> LLVMGenerator<'a> {
                 .expect("Block order error");
             args.push(format!("[ {}, %{} ]", val, last_label));
         }
-        self.emit_instr(format!("%r{} = phi {} {}", dest.0, llvm_type, args.join(", ")));
+        self.emit_instr(format!(
+            "%r{} = phi {} {}",
+            dest.0,
+            llvm_type,
+            args.join(", ")
+        ));
     }
 
     fn emit_comparison(&mut self, instr: &LIRInstruction) {
@@ -480,7 +485,10 @@ impl<'a> LLVMGenerator<'a> {
             "{} = getelementptr i8*, i8** {}, i64 {}",
             method_ptr_ptr, vptr, method_idx
         ));
-        self.emit_instr(format!("{} = load i8*, i8** {}", method_ptr_raw, method_ptr_ptr));
+        self.emit_instr(format!(
+            "{} = load i8*, i8** {}",
+            method_ptr_raw, method_ptr_ptr
+        ));
 
         // Build the methods signature from register types. TODO: This is stupid.
         let ret_type = dest.map_or("void".to_string(), |r| self.get_llvm_type_from_register(r));
@@ -576,7 +584,10 @@ impl<'a> LLVMGenerator<'a> {
                     "{} = getelementptr {}, {}* {}, i32 {}",
                     elem_ptr, element_typ, element_typ, data_ptr, idx
                 ));
-                self.emit_instr(format!("store {} {}, {}* {}", element_typ, val, element_typ, elem_ptr));
+                self.emit_instr(format!(
+                    "store {} {}, {}* {}",
+                    element_typ, val, element_typ, elem_ptr
+                ));
             }
             LIROperation::ArrayLength => {
                 let dest = instr.destination.unwrap();
@@ -644,7 +655,10 @@ impl<'a> LLVMGenerator<'a> {
 
         // Actually allocate the object.
         let raw_ptr = format!("%raw_obj_{}", id);
-        self.emit_instr(format!("{} = call i8* @calloc(i64 1, i64 {})", raw_ptr, size_int));
+        self.emit_instr(format!(
+            "{} = call i8* @calloc(i64 1, i64 {})",
+            raw_ptr, size_int
+        ));
         self.emit_instr(format!(
             "%r{} = bitcast i8* {} to %class.{}*",
             id, raw_ptr, class_name
@@ -700,7 +714,10 @@ impl<'a> LLVMGenerator<'a> {
                     "{} = getelementptr %class.{}, %class.{}* {}, i32 0, i32 {}",
                     field_ptr, class_name, class_name, obj_val, field_idx
                 ));
-                self.emit_instr(format!("store {} {}, {}* {}", val_type, val, val_type, field_ptr));
+                self.emit_instr(format!(
+                    "store {} {}, {}* {}",
+                    val_type, val, val_type, field_ptr
+                ));
             }
             _ => unreachable!(),
         }
@@ -758,7 +775,10 @@ impl<'a> LLVMGenerator<'a> {
         // index >= 0
         self.emit_instr(format!("{} = icmp slt i32 {}, 0", cond_neg, index_val));
         // index < length
-        self.emit_instr(format!("{} = icmp sge i32 {}, {}", cond_ge, index_val, len_val));
+        self.emit_instr(format!(
+            "{} = icmp sge i32 {}, {}",
+            cond_ge, index_val, len_val
+        ));
         self.emit_instr(format!("{} = or i1 {}, {}", cond_out, cond_neg, cond_ge));
         self.emit_instr(format!(
             "br i1 {}, label %{}, label %{}",
