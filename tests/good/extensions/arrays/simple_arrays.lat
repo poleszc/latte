@@ -1,7 +1,19 @@
 int main() {
     int[] a;
-    int[   ] b;
+    a = new int[2];
+    a[0] = 1;
+    a[1] = 1;
+
+    int[   ] b = new int[4];
+    b[0] = 2;
+    b[1] = 2;
+    b[2] = 2;
+    b[3] = 4;
+
     int[] c = new int[a[1]];
-    a[2] + b[a[1] + 2];
-    return 1;
+    c[0] = 1; 
+    
+    printInt(a[1] + 2);
+    printInt(a[1] + b[a[1] + 2]); // 5
+    return 0;
 }

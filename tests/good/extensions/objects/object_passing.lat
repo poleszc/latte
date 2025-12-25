@@ -1,0 +1,38 @@
+class A {
+    int a;
+}
+
+class B {
+    int b;
+}
+
+class C {
+    int c;
+}
+
+class Combinator {
+    int combined;
+}
+
+Combinator combine(A a, B b, C c) {
+    Combinator comb = new Combinator;
+    comb.combined = a.a;
+    comb.combined = comb.combined + b.b;
+    comb.combined = comb.combined + c.c;
+    return comb;
+}
+
+int main() {
+    A a = new A;
+    B b = new B;
+    C c = new C;
+    
+    a.a = 1;
+    b.b = 2;
+    c.c = 3;
+    
+    Combinator comb = combine(a, b, c);
+    printInt(comb.combined);
+
+    return 0;
+}

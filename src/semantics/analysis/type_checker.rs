@@ -105,7 +105,7 @@ impl<'a> TypeChecker<'a> {
             BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
                 matches!(typ.kind, TypeKind::Int)
             }
-            BinaryOp::Eq | BinaryOp::Neq => true,
+            BinaryOp::Eq | BinaryOp::Neq => !matches!(typ.kind, TypeKind::Void),
             BinaryOp::And | BinaryOp::Or => {
                 matches!(typ.kind, TypeKind::Bool)
             }

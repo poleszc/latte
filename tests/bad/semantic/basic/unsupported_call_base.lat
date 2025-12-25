@@ -1,0 +1,14 @@
+class Data {}
+
+int main() {
+    Data data = new Data();
+    int[] a = new int[4];
+    int b = a();
+
+    return 0;
+}
+
+int a() {
+    printString("Kajak");
+    return 0;
+}

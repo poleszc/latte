@@ -252,6 +252,21 @@ impl MIRFunctionBuilder {
         });
     }
 
+    pub fn emit_array_set(
+        &mut self,
+        object: MIRValue,
+        field_index: MIRValue,
+        value: MIRValue,
+        position: SourcePosition,
+    ) {
+        self.emit(MIRInstruction {
+            operation: MIROperation::ArraySet,
+            destination: None,
+            operands: vec![object, field_index, value],
+            source_position: position,
+        });
+    }
+
     pub fn emit_call(
         &mut self,
         dest: Option<MIRPlace>,

@@ -360,7 +360,6 @@ impl<'a> ExpressionChecker<'a> {
         position: SourcePosition,
     ) -> (tast::TExprKind, Type) {
         // TODO: For now we only support direct calls on function names. Change that to use function types.
-        // TODO: implicit this.
         if let ExprKind::Var(name) = &callee.kind {
             match self.ctx.symbol_table.lookup_function(name) {
                 Ok(func_info) => {
@@ -392,6 +391,9 @@ impl<'a> ExpressionChecker<'a> {
                 }
             }
         } else {
+            self.ctx.add_error(SemanticError::InvalidCallBase {
+                position: callee.position,
+            });
             let typed_callee = self.visit_expr(callee);
             let typed_args: Vec<tast::TExpr> =
                 args.iter().map(|arg| self.visit_expr(arg)).collect();

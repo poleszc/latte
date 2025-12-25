@@ -1,7 +1,0 @@
-class A {}
-
-int main() {
-    A[] tab;
-    tab  = new A[3];
-    return 1;
-}

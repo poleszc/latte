@@ -1,0 +1,20 @@
+class B {}
+
+
+class A {
+    int val;
+
+    A builder(int x) {
+        A a = new A;
+        a.val = x;
+        return this;
+    }
+}
+
+int main() {
+    A a = new A;
+    a.val = 999;
+    A copy = a.builder(999);
+    printInt(copy.val);
+    return 0;
+}

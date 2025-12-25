@@ -174,6 +174,31 @@ impl<'a> DefinitionChecker<'a> {
         }
     }
 
+    fn find_field_in_hierarchy(
+        &self,
+        start_parent_name: StrID,
+        field_name: StrID,
+    ) -> Option<SourcePosition> {
+        let mut current_parent = Some(start_parent_name);
+
+        while let Some(parent_name) = current_parent {
+            let dummy_ident = Ident {
+                name: parent_name,
+                position: SourcePosition(0, 0),
+            };
+
+            if let Ok(class_info) = self.ctx.symbol_table.lookup_class(&dummy_ident) {
+                if let Some((_, pos)) = class_info.fields.get(&field_name) {
+                    return Some(*pos);
+                }
+                current_parent = class_info.parent.map(|p| p.name);
+            } else {
+                break;
+            }
+        }
+        None
+    }
+
     fn validate_class(&mut self, class_def: &ClassDef) {
         if let Some(parent) = &class_def.extends
             && !self.ctx.symbol_table.class_exists(parent.name)
@@ -203,61 +228,77 @@ impl<'a> DefinitionChecker<'a> {
             }
 
             // Check if all overrides are valid - have the same signature.
-            // TODO: Check if the field overrides are okay - have the same type.
             for entry in &class_def.entries {
-                if let ClassEntryKind::Method(method_def) = &entry.kind {
-                    let method_name = &method_def.name;
-
-                    let parent_method_opt = self
-                        .ctx
-                        .symbol_table
-                        .lookup_method(parent.name, method_name.name);
-
-                    if let Some(parent_method) = parent_method_opt {
-                        // TODO: Use types equal? or some other function which returns an enum on what the mismatch was
-                        // Argument count.
-                        if method_def.args.len() != parent_method.params.len() {
-                            self.ctx.add_error(SemanticError::InvalidOverride {
-                                method_name: method_name.name,
-                                parent_name: parent.name,
-                                reason: StrID::from("Different number of arguments"),
-                                position: method_name.position,
-                            });
-                            continue;
+                match &entry.kind {
+                    ClassEntryKind::Field(idents, _) => {
+                        for ident in idents {
+                            if let Some(prev_pos) =
+                                self.find_field_in_hierarchy(parent.name, ident.name)
+                            {
+                                dbg!(&class_def);
+                                self.ctx.add_error(SemanticError::DuplicateClassField {
+                                    class_name: class_def.name.name,
+                                    field_name: ident.name,
+                                    position: ident.position,
+                                    previous_position: prev_pos,
+                                });
+                            }
                         }
+                    }
+                    ClassEntryKind::Method(method_def) => {
+                        let method_name = &method_def.name;
 
-                        // Argument types.
-                        for (i, (arg, parent_type)) in method_def
-                            .args
-                            .iter()
-                            .zip(&parent_method.params)
-                            .enumerate()
-                        {
-                            if !self.ctx.types_equal(&arg.arg_type, parent_type) {
+                        let parent_method_opt = self
+                            .ctx
+                            .symbol_table
+                            .lookup_method(parent.name, method_name.name);
+
+                        if let Some(parent_method) = parent_method_opt {
+                            // TODO: Use types equal? or some other function which returns an enum on what the mismatch was
+                            // Argument count.
+                            if method_def.args.len() != parent_method.params.len() {
                                 self.ctx.add_error(SemanticError::InvalidOverride {
                                     method_name: method_name.name,
                                     parent_name: parent.name,
-                                    reason: StrID::from(format!(
-                                        "Argument #{} type mismatch",
-                                        i + 1
-                                    )),
+                                    reason: StrID::from("Different number of arguments"),
                                     position: method_name.position,
                                 });
                                 continue;
                             }
-                        }
 
-                        // Return type.
-                        if !self
-                            .ctx
-                            .types_equal(&method_def.return_type, &parent_method.return_type)
-                        {
-                            self.ctx.add_error(SemanticError::InvalidOverride {
-                                method_name: method_name.name,
-                                parent_name: parent.name,
-                                reason: StrID::from("Return type mismatch"),
-                                position: method_name.position,
-                            });
+                            // Argument types.
+                            for (i, (arg, parent_type)) in method_def
+                                .args
+                                .iter()
+                                .zip(&parent_method.params)
+                                .enumerate()
+                            {
+                                if !self.ctx.types_equal(&arg.arg_type, parent_type) {
+                                    self.ctx.add_error(SemanticError::InvalidOverride {
+                                        method_name: method_name.name,
+                                        parent_name: parent.name,
+                                        reason: StrID::from(format!(
+                                            "Argument #{} type mismatch",
+                                            i + 1
+                                        )),
+                                        position: method_name.position,
+                                    });
+                                    continue;
+                                }
+                            }
+
+                            // Return type.
+                            if !self
+                                .ctx
+                                .types_equal(&method_def.return_type, &parent_method.return_type)
+                            {
+                                self.ctx.add_error(SemanticError::InvalidOverride {
+                                    method_name: method_name.name,
+                                    parent_name: parent.name,
+                                    reason: StrID::from("Return type mismatch"),
+                                    position: method_name.position,
+                                });
+                            }
                         }
                     }
                 }

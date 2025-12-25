@@ -6,7 +6,6 @@ class MyClass {
 }
 
 int main() {
-    // TODO: This doesn't work well. Fix up the semantic checker.
     int x = "napis";
     y = 10;
     int z = 10 + true;

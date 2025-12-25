@@ -140,8 +140,11 @@ pub fn assert_llvm_lowering_pass(input_path: &str) {
 const LLVM_COMPILER_BIN: &str = env!("CARGO_BIN_EXE_latc_llvm");
 
 pub fn assert_compilation_fails(input_path: &str) {
+    let temp_dir = tempdir().expect("Failed to create a temp directory for tests");
     let output = Command::new(LLVM_COMPILER_BIN)
         .arg(&input_path)
+        .arg("--output-dir")
+        .arg(temp_dir.path())
         .output()
         .expect("Failed to execute the compiler binary");
     assert!(

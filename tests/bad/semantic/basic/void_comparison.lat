@@ -1,0 +1,9 @@
+void foo() {}
+void bar() {}
+
+int main() {
+    if (foo() == bar()) {
+        printString("Kurde no");
+    }
+    return 0;
+}

@@ -114,13 +114,13 @@ fn main() {
     )
     .expect("Generate extra LIR tests failed");
 
-    // generate_test_suite(
-    //     "extensions_lir_lowering_tests.rs",
-    //     &["tests/good/extensions"],
-    //     "assert_lir_lowering_pass",
-    //     "lir_pass",
-    // )
-    // .expect("Generate extensions LIR tests failed");
+    generate_test_suite(
+        "extensions_lir_lowering_tests.rs",
+        &["tests/good/extensions"],
+        "assert_lir_lowering_pass",
+        "lir_pass",
+    )
+    .expect("Generate extensions LIR tests failed");
 
     // ===================== LLVM ======================
     generate_test_suite(
@@ -139,13 +139,18 @@ fn main() {
     )
     .expect("Generate extra LLVM tests failed");
 
-    // generate_test_suite(
-    //     "extensions_llvm_lowering_tests.rs",
-    //     &["tests/good/extensions"],
-    //     "assert_llvm_lowering_pass",
-    //     "llvm_pass",
-    // )
-    // .expect("Generate extensions LLVM tests failed");
+    generate_test_suite(
+        "extensions_llvm_lowering_tests.rs",
+        &[
+            "tests/good/extensions/arrays",
+            "tests/good/extensions/struct",
+            "tests/good/extensions/objects",
+            "tests/good/extensions/virtual",
+        ],
+        "assert_llvm_lowering_pass",
+        "llvm_pass",
+    )
+    .expect("Generate extensions LLVM tests failed");
 
     // =============== INTEGRATION TESTS ================
     generate_test_suite(
@@ -173,7 +178,10 @@ fn main() {
         &[
             "tests/good/official",
             "tests/good/extra",
-            // "tests/good/extensions",
+            "tests/good/extensions/arrays",
+            "tests/good/extensions/struct",
+            "tests/good/extensions/objects",
+            "tests/good/extensions/virtual",
         ],
         "run_integration_test",
         "integration_pass",

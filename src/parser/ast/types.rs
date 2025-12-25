@@ -33,7 +33,7 @@ impl fmt::Display for TypeKind {
             TypeKind::Fun(ret, params) => {
                 let param_str = params
                     .iter()
-                    .map(|p| p.to_string()) // Teraz to zadziała dzięki implementacji Display dla Type
+                    .map(|p| p.to_string())
                     .collect::<Vec<String>>()
                     .join(", ");
                 write!(fmt, "({}) -> {}", param_str, ret)

@@ -9,14 +9,14 @@ class A {
 class B extends A {
     int b;
     int goo() {
-        return 1;
+        return 2;
     }
 }
 
 class C extends B {
     int c;
     int boo() {
-        return 1;
+        return 3;
     }
 }
 
@@ -25,23 +25,12 @@ int main() {
     B b = new B;
     C c = new C;
     
-    int x;
-    x = a.foo();
-    x = a.a;
-    
-    x = b.foo();
-    x = b.goo();
-    x = b.a;
-    x = b.b;
-    
-    x = c.foo();
-    x = c.goo();
-    x = c.boo();
-    x = c.a;
-    x = c.b;
-    x = c.c;
-
-    
+    printInt(a.foo());
+    printInt(b.foo());
+    printInt(b.goo());
+    printInt(c.foo());
+    printInt(c.goo());
+    printInt(c.boo());
     
     return 0;
 }

@@ -1,0 +1,14 @@
+class A {
+    int a;
+}
+
+int main() {
+    A[] tab;
+    tab  = new A[3];
+    tab[0] = new A;
+    tab[0].a = 1;
+
+    printInt(tab[0].a);
+
+    return 0;
+}

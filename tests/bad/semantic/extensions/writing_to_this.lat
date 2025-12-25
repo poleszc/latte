@@ -1,0 +1,10 @@
+class A {
+    void goo() {
+        A a = new A;
+        this = a;
+    }
+}
+
+int main() {
+    return 0;
+}

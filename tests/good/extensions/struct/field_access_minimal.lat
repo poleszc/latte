@@ -12,8 +12,16 @@ class list {
 int main() {
     list a = new list;
     a.elem++;
+    a.array = new int[4];
     a.array[0]++;
+    a.kajak = new Kajak;
     a.kajak.wartosc = 23;
+    printInt(a.kajak.wartosc);
+    a.kajak.wartosc = a.array[0];
+    printInt(a.kajak.wartosc);
 
-    return a.elem;
+    printInt(a.array[0]);
+
+
+    return a.array[2];
 }
