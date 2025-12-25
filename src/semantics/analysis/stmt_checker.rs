@@ -43,13 +43,8 @@ impl<'a> StatementChecker<'a> {
         let is_lvalue = match &expr.kind {
             tast::TExprKind::Var(_) | tast::TExprKind::ArrayAccess { .. } => true,
             tast::TExprKind::FieldAccess { object, field_name } => {
-                if field_name.name == StrID::from("length")
-                    && matches!(object.typ.kind, TypeKind::Array(_) | TypeKind::String)
-                {
-                    false
-                } else {
-                    true
-                }
+                !(field_name.name == StrID::from("length")
+                    && matches!(object.typ.kind, TypeKind::Array(_) | TypeKind::String))
             }
             _ => false,
         };

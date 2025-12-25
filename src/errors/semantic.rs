@@ -292,7 +292,7 @@ impl ToDiagnostic for SemanticError {
             SemanticError::InvalidCallBase { position } => {
                 Diagnostic::error("This expression cannot be a call base").label(
                     range(position),
-                    format!("Cannot call this expression"),
+                    "Cannot call this expression",
                 )
                     .help("Perhaps you mistyped the '()'?")
             }

@@ -64,12 +64,12 @@ impl<'a> LLVMGenerator<'a> {
         let mut sorted_classes: Vec<_> = program.classes.keys().cloned().collect();
         sorted_classes.sort_by_key(|id| id.to_string());
         for class_id in &sorted_classes {
-            let class = &program.classes[&class_id];
+            let class = &program.classes[class_id];
             self.emit_class_definition(class);
         }
 
         for class_id in &sorted_classes {
-            let class = &program.classes[&class_id];
+            let class = &program.classes[class_id];
             self.emit_vtable_definition(class, program);
         }
 
@@ -247,8 +247,8 @@ impl<'a> LLVMGenerator<'a> {
 
                     let last_label = self
                         .lir_block_to_last_llvm_label
-                        .get(&block_id)
-                        .expect(&format!("Block order error: {}", block_id.0));
+                        .get(block_id)
+                        .expect("Block order error: {}");
 
                     args.push(format!("[ {}, %{} ]", val, last_label));
                 }
@@ -916,10 +916,9 @@ impl<'a> LLVMGenerator<'a> {
         ));
 
         self.emit_line_indented(&format!("{}:", err_label));
-        self.emit_line_very_indented(&format!("call void @error()"));
+        self.emit_line_very_indented("call void @error()");
         self.emit_line_very_indented("unreachable");
 
-        let ok_label = format!("{}", ok_label);
         self.emit_line_indented(&format!("{}:", ok_label));
     }
 }
