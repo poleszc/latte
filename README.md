@@ -9,120 +9,143 @@
 2) Budowanie projektu:
    - Projekt sam skompiluje się po wykonaniu skryptu `build`. Jeżeli jednak zajdzie potrzeba ponownej
     kompilacji (pomijajac już samą instalacje Rust) w katalogu głównym projektu trzeba uruchomić `make`,
-    który skompiluje projekt i przekopiuje pliki wykonywalne `insc_jvm` oraz `insc_llvm` do katalogu głównego.
+    który skompiluje projekt i przekopiuje pliki wykonywalne `latc_llvm` oraz `insc_llvm` do katalogu głównego.
     - **Dodatkowe opcje:**
-      - `make build-jvm` - przebuduje jedynie binarkę z backendem Jasminowym
       - `make build-llvm` - przebuduje jedynie binarkę z backendem LLVM
-      - `make clean` - usuwa zbudowane binarki oraz pliki `*.{j, class, ll, bc}` z katalogu `tests/in`
-      - `make clean-all` - usuwa to co `make clean` oraz wszystkie pliki depencencji
+      - `make clean` - usuwa zbudowane binarki oraz pliki `*.{mir.txt, tast.txt, json, ll, bc}` z katalogu `tests/in`
+      - `make clean-all` - usuwa to co `make clean` oraz wszystkie pliki dependencji
+
+## Raport z pierwszej iteracji
+- W czasie pisania projektu, trochę zmieniały mi się plany na implementacje. Początkowo planowałem przejść 
+  przez cały pipeline kompilatora wąsko (z małą liczbą feature'ów) i nastepie po kolei dodawać do niego 
+  kolejne funkcjonalności. Ostatecznie plan się zmienił i przez warstwy przechodziłem grubo (od razu ze wszystkimi feature'ami).
+- Aktualny stan projektu jest taki, że działa pełna analiza semantyczna dla języka ze wszystkimi rozszerzeniami(tablice, struktury, 
+  klasy, dziedziczenie), która jest zintegrowana z Ariadne(błędy są naprawde ładne i duo czasu zajęło mi pisanie ich (pewnie 
+  nawet za dużo, zakładam że troche zoverkillowałem)). Działa także obniżanie reprezentacji drzewowej do MIRa(Mid Intermediate 
+  Representation, reprezentacja blokowa programu, jeszcze bez SSA(single static assignment)) dla wszystkich feature'ów.
+- Ostatecznie powstało na razie 5600 linii kodu
+
+### Co miało być wykonane i zostało wykonane
+- W pełni funkcjonalny parser, z ładnymi błędami parsowania - zrobione, nawet z analizą semantyczną dla rozszerzeń
+- Integracja z lalrpopem, ariadne, logosem - zrobione, lekser używa logosa, parser lalrpopa, do błędów używam ariadne
+- Zaimplementowana semantyczna weryfikacja dla podstawowej wersji(+ stringi) - zrobione nie tylko dla wersji podstawowej, jest też analiza semantyczna dla wszystkich rozszerzeń
+- Asynchroniczny "Framework" do testów kompilatora zintegrowany z cargo - nie ukrywam, że to nie jest do końca to co planowałem, ale cargo automatycznie puszcza testy współbieżnie, więc jakby przymknąć oko to współbieżne testy kompilatora są :). Tutaj jestem całkiem zadowolony z automatycznej generacji testów (`build.rs`) dla plików w folderach testowych, które tworzą się automatycznie, gdy nowy plik testowy pojawi się w folderze. Jestem ciekawy na ile takie rozwiązanie jest "produkcyjne".
+    - Testy parsowania - zrobione
+    - Testy poprawności semantycznej - zrobione
+    - Podbudowa pod testy integracyjne - powiem szczerze, że aktualny stan implementacji tej części to nie jest to czego się spodziewałem 
+        na oddając plan projektu, ale myślę, że wykonaną pracę można uznać za "podbudowe", więc uznam ten punkt za zrobiony.
+### Co miało być wykonane i nie zostało wykonane
+- Zaimplementowana prosta logika ewaluacji wyrażeń podczas kompilacji - tego nie ma, stwierdziłem, że to optymalizacja czym wole zająć się 
+  potem (albo optymalizować LIRa(low intermediate representation, reprezentacja już z SSA) a nie AST). Priotytetyzowałem przepchnięcie się przez cały pipeline kompilacji
+### Co nie miało być wykonane i zostało wykonane
+- Analiza semantyczna dla wszystkich rozszerzeń
+- Solidne error recovery - mój kompilator nie wywala się na pierwszym błędzie, tylko całkiem mądrze handluje i robi recovery jeżeli będzie błąd. Kompilacja programu nie wywala się na pierwszym spotkanym błędzie tylko zwraca listę błędów.
+- Dodanie obniżania aż do MIRa(czyli jakies dodatkowe 2k linii kodu)
+- String interning i StrID używane w całym projekcie (`src/utils/StrID`)
 
 ## Użycie kompilatora
-Domyślna kompilacja:
 ```bash
-# Skompiluje plik test01.ins. Pliki `*.j` oraz '*.class` domyślnie znajdą się tej samej lokalizacji co plik kompilowany.
-./insc_jvm tests/in/test01.ins 
-# Analogicznie dla backendu LLVM. 
-./insc_llvm tests/in/test01.ins
+# Wykona parsowanie, analize semantyczną oraz przejście przez dwie pierwsze fazy kompilacji, generacje otypowanego AST oraz MIRa.
+# Wszystkie reprezentacje pośrednie zostaną zapisane w plikach (domyślnie w katalogu, w którym znajduje się plik kompilowany, można też dodać flage --output-dir)
+# plik: {nazwa_testu}.ast.json - zawiera zserializowane AST, bezpośrednio po parsowaniu pliku
+# plik: {nazwa_testu}.tast.json - zawiera zserializowane AST, wzbogacone o informacje typową.
+# plik: {nazwa_testu}.mir.json - zawiera zserializowanego MIRa (raczej nie ma się tam co patrzeć, wygodniejszy do oglądania jest *.mir.txt)
+# plik: {nazwa_testu}.mir.txt - zawiera zserializowanego MIRa, co własnego formatu przyjemnego dla oka i możliwego do czytania.
+
+# Program kończy się kodem 1 w przypadku błędu analizy semantycznej (i wypisze błąd na STDOUT) i kodem 0 w przypadku sukcesu. 
+./latc_llvm tests/in/test01.ins 
+# lub
+cargo run tests/in/test01.ins 
+```
+## Struktura testów
+- W przetestowaniu funkcjonalności może pomóc znajomość folderu z testami sprawdzić jak działa kompilator.
+```bash
+tests
+├── bad                     # Testy, które powinny nie przejść analizy semantycznej i wypisać błąd
+│   ├── lexical             # Test z błedami leksykalnymi
+│   ├── official            # Oficjalne testy na przedmiot MRJP. Pomieszana błędny semantyczne, leksykalne, składniowe
+│   ├── runtime             # Testy z błędami wykrywanymi w runtime'ie
+│   └── semantic
+│       ├── basic           # Dodatkowe testy latte bez rozszerzeń
+│       ├── error_recovery  # Testy sprawdzające error recovery.
+│       └── extensions      # Testy sprawdzające wykrywanie błędów semantycznych w przypadku rozszerzeń.
+└─ good                     # Testy, które powinny przejść i powinien się dla nich wygenerować poprawny MIR.
+    ├── extensions          # Prawidłowe testy dla rozszerzeń, dla których powinien się generować poprawny MIR.
+    │   ├── arrays
+    │   ├── objects
+    │   ├── struct
+    │   └── virtual
+    ├── extra               # Dodatkowe testy podstawy latte, bez rozszerzeń.
+    └── official            # Oficjalne, prawidłowe testy MRJP
+
+
 ```
 
-Uruchomienie programu po kompilacji:
-```bash
-# Skompiluje plik test01.ins oraz uruchomi JVM na skompilowanym pliku.
-./insc_jvm tests/in/test01.ins --run
-# Skompiluje plik test01.ins oraz uruchomi lli na skompilowanym pliku.
-./insc_llvm tests/in/test01.ins --run
-```
-
-Specyfikowanie ścieżki wyjściowej:
-```bash
-# Skompiluje plik test01.ins. Pliki pośrednie znajdą się w katalogu `output`. Bez tej opcji 
-# pliki pośrednie znajdą się tam gdzie plik kompilowany.
-./insc_jvm tests/in/test01.ins --output-dir output
-# Analogicznie dla backendu LLVM. 
-./insc_llvm tests/in/test01.ins
-```
 
 ## Struktura projektu
 ```bash
-.
-├── build.rs            # Skrypt wykonujący się automatycznie przez rozpoczęciem kompilacji. Buduje parser `lalrpop` na podstawie gramatyki lalrpop oraz automatycznie generuje testy.
-├── build.sh            # Skrypt instalujący Rust i budujący projekt.
-├── Cargo.lock
-├── Cargo.toml          # Konfiguracja projektu, dependencje itp.
-├── Instant.cf          # Gramatyka BNCF. W tym projekcie nie używana.
-├── instant.md          # Treść zadania
-├── lib
-│   ├── jvm
-│   │   └── jasmin.jar
-│   └── llvm
-│       ├── runtime.bc
-│       └── runtime.ll
-├── Makefile
-├── README.md
-├── src
-│   ├── bin
-│   │   ├── insc_jvm.rs     # Binarka uruchamiająca kompilacje z backendem Jasmine.
-│   │   └── insc_llvm.rs    # Binarka uruchamiająca kompilacje z backendem LLVM.
-│   ├── config.rs           # Definicja konfiguracji kompilatora (argumentów linii poleceń). Tutaj użyta jest biblioteka CLAP.
-│   ├── diagnostics.rs      # Produkcja ładnych błędów kompilacji za pomocą biblioteki Ariadne.
-│   ├── driver.rs           # Główny silnik kompilacji, czyta pliki, wywołuje parsowanie, tworzy katalogi na pliki wyjściowe. 
-                            # Kompiluje sparsowany program podanym backendem.
-│   ├── error.rs            # Definicje błędów kompilacji (błędy syntaktyczne, semantyczne, błędy wykonania polecen zewnętrznych, itp.)
-│   ├── instant.lalrpop     # Gramatyka języka instant w formacie lalrpop.
-│   ├── jvm
-│   │   ├── driver.rs       # Główny silnik zarządzający kompilacją backendem Jasmine. Wykonuje kompilacje, 
-                            # uruchamia jasmine, uruchamia program na JVM (jeżeli taka opcja została przekazana).
-│   │   ├── instructions.rs # Abstrakcja nad instrukcjami JVM. 
-│   │   ├── lowering.rs     # Główna logika kompilacji. Struktura JasmineGenerator zarządza całym przekształceniem 
-                            # AST w kod Jasmine.
-│   │   └── mod.rs          # Definicje funkcji/struktur eksportowanych z modułu
-│   ├── lib.rs
-│   ├── llvm # Zawartość tego projektu jest analogiczna jak w przypadku `src/jvm` tylko dla LLVM.
-│   │   ├── driver.rs
-│   │   ├── instructions.rs
-│   │   ├── lowering.rs
+```md
+src/
+├── bin
+│   └── latc_llvm.rs                # Punkt wejścia kompilatora. Uruchamia driver i pełen pipeline.
+├── config.rs                       # Definicje opcji i argumentów CLI (Clap).
+├── driver.rs                       # Główny sterownik kompilacji. Łączy: parser -> TAST -> MIR -> LIR -> LLVM.
+├── errors                          # Obsługa błędów i diagnostyka.
+│   ├── diagnostics.rs              # Formatowanie błędów (Ariadne).
+│   ├── lexical.rs                  # Błędy leksera.
+│   ├── parsing.rs                  # Błędy parsera.
+│   ├── semantic.rs                 # Błędy analizy semantycznej.
+│   └── mod.rs
+├── latte.lalrpop                   # Plik gramatyki LALRPOP.
+├── lib.rs                      
+├── mir                             # MIR – blokowa reprezentacja pośrednia.
+│   ├── builders                    # Buildery do budowania grafu bloków MIR.
+│   ├── lowering                    # Obniżanie TAST (Typed AST) do MIR.
+│   ├── mir_structure.rs            # Struktury danych dla MIR (instrukcje, bloki).
+│   ├── mir_display.rs              # Debug-print dla MIR.
+│   └── mod.rs
+├── lir                             # LIR – Low Intermediate Representation (z SSA).
+│   ├── lowering                    # Transformacja MIR -> LIR.
+│   │   ├── cfg.rs                  # Analiza grafu przepływu sterowania, dominatory itp.
+│   │   ├── function_lowering.rs    # Generowanie postaci SSA (wstawianie węzłów Phi).
+│   │   ├── program_lowering.rs     # Koordynacja obniżania całego programu.
 │   │   └── mod.rs
-│   └── parser
-│       ├── ast.rs      # Definicja drzewa AST i funkcji liczących głębokości poddrzew.
-│       ├── lexer.rs    # Implementacja leksera.
-│       ├── mod.rs
-│       └── tokens.rs # Definicja struktury tokenów.
-└── tests
-    ├── common.rs # Definicja funkcji do testów automatycznych.
-    ├── compiler_tests.rs
-    ├── in
-    │   ├── bad_01.ins
-    │   ├── bad_02.ins
-    │   ├── bad_03.ins
-    │   ├── bad_04.ins
-    │   ├── bad_05.ins
-    │   ├── bad_06.ins
-    │   ├── error_01.ins
-    │   ├── error_02.ins
-    │   ├── error_03.ins
-    │   ├── error_04.ins
-    │   ├── test01.ins
-    │   ├── test02.ins
-    │   ├── test03.ins
-    │   ├── test04.ins
-    │   ├── test05.ins
-    │   ├── test06.ins
-    │   ├── test07.ins
-    │   └── test08.ins
-    └── out
-        ├── test01.output
-        ├── test02.output
-        ├── test03.output
-        ├── test04.output
-        ├── test05.output
-        ├── test06.output
-        └── test07.output
-
+│   ├── lir_structure.rs            # Definicje rejestrów wirtualnych, instrukcji SSA i terminatorów.
+│   ├── lir_display.rs              # Formatowanie LIR do czytelnego formatu tekstowego.
+│   └── mod.rs
+├── llvm                            # Backend LLVM.
+│   ├── codegen.rs                  # Główny generator kodu LLVM IR z LIR
+│   ├── driver.rs                   # Integracja z zewnętrznymi narzędziami (llvm-as, llvm-link, lli).
+│   └── mod.rs
+├── parser                          # Lekser, parser i surowe AST.
+│   ├── ast                         # Węzły AST (nietypowane).
+│   ├── lexer.rs                    # Lekser (Logos).
+│   ├── tokens.rs                   # Definicje tokenów.
+│   └── mod.rs
+├── semantics                       # Analiza semantyczna i generacja TAST.
+│   ├── analysis
+│   │   ├── context.rs              # Kontekst analizy (scope, tablica symboli).
+│   │   ├── definition_checker.rs   # Weryfikacja definicji (funkcji/klas)
+│   │   ├── expr_checker.rs         # Sprawdzanie typów wyrażeń.
+│   │   ├── stmt_checker.rs         # Sprawdzanie instrukcji.
+│   │   ├── return_checker.rs       # Weryfikacja return.
+│   │   ├── type_checker.rs         # Logika zgodności typów.
+│   │   └── mod.rs
+│   ├── builtins.rs                 # Definicje funkcji wbudowanych (printInt, printString, itp.).
+│   ├── symbol_table.rs             # Tablica symboli (zmienne, funkcje, klasy).
+│   ├── symbols.rs                  # Struktury pomocnicze dla symboli.
+│   ├── tast                        # TAST — otypowane AST (wynik analizy semantycznej).
+│   └── mod.rs
+└── utils
+    ├── str_id.rs                   # String interning (StrID/Ustr).
+    └── mod.rs
 ```
 
-## Użyte biblioteki
-- [Clap](https://crates.io/crates/clap) - parser argumentów podanych z wiersza lini poleceń.
-- [Lalrpop](https://lalrpop.github.io/lalrpop/index.html) - generator parserów dla języka Rust. Gramatyka **lalrpop** użyta w tym projekcie znajduje się [tutaj](./src/instant.lalrpop).
-- [Logos](https://crates.io/crates/logos) - generator lekserów dla języka Rust. 
-- [Ariadne](https://crates.io/crates/ariadne) - biblioteka do generacji ładnych błędów kompilacji.
-- [tempfile](https://crates.io/crates/tempfile) - biblioteka do zarządzania plikami tymczasowymi w systemie. W tym projekcie używana do testów integracyjnych.
+## Użyte biblioteki (Crates)
+*   [**Clap**](https://crates.io/crates/clap) – parsowanie argumentów linii poleceń.
+*   [**Lalrpop**](https://github.com/lalrpop/lalrpop) – generator parsera.
+*   [**Logos**](https://crates.io/crates/logos) – generator leksera.
+*   [**Ariadne**](https://crates.io/crates/ariadne) – biblioteka do wizualizacji błędów kompilacji (kolorowanie składni, podkreślanie błędów).
+*   [**Ustr**](https://crates.io/crates/ustr) – string interning (używane jako `StrID`), co przyspiesza porównywanie identyfikatorów i oszczędza kopiowania stringów.
+*   [**Serde**](https://crates.io/crates/serde) – serializacja struktur danych.
+```
