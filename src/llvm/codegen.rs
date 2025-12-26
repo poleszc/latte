@@ -20,6 +20,7 @@ pub struct LLVMGenerator<'a> {
     // and used in the second pass when lowering the phi functions.
     lir_block_to_last_llvm_label: HashMap<BlockID, String>,
     current_block_split_count: usize,
+    error_block_label: Option<String>,
 }
 
 impl<'a> Default for LLVMGenerator<'a> {
@@ -37,9 +38,11 @@ impl<'a> LLVMGenerator<'a> {
             current_function: None,
             lir_block_to_last_llvm_label: HashMap::new(),
             current_block_split_count: 0,
+            error_block_label: None,
         }
     }
 
+    /// Generate a LLVM program from LIR program.
     pub fn generate_program(mut self, program: &'a LIRProgram) -> String {
         // Emit builtins.
         self.emit_preambule();
@@ -149,6 +152,7 @@ impl<'a> LLVMGenerator<'a> {
 
     fn emit_function(&mut self, func: &LIRFunction) {
         self.lir_block_to_last_llvm_label.clear();
+        self.error_block_label = None;
         self.precalculate_exit_labels(func);
 
         let ret_type = self.llvm_type(&func.return_type);
@@ -166,6 +170,9 @@ impl<'a> LLVMGenerator<'a> {
             if let Some(block) = func.blocks.get(block_id) {
                 self.emit_block(*block_id, block);
             }
+        }
+        if self.error_block_label.is_some() {
+            self.emit_error_block();
         }
         self.emit_line("}\n");
     }
@@ -226,6 +233,19 @@ impl<'a> LLVMGenerator<'a> {
         } else {
             panic!("NO TERMINATOR NOOOOOO: {}", block_id.0);
         }
+    }
+
+    fn get_error_label(&mut self) -> String {
+        if self.error_block_label.is_none() {
+            self.error_block_label = Some("B_runtime_error".to_string())
+        }
+        self.error_block_label.clone().unwrap()
+    }
+
+    fn emit_error_block(&mut self) {
+        self.emit_label(self.error_block_label.clone().unwrap());
+        self.emit_instr("call void @error()");
+        self.emit_instr("unreachable");
     }
 }
 
@@ -307,7 +327,7 @@ impl<'a> LLVMGenerator<'a> {
         let split_id = self.current_block_split_count;
         self.current_block_split_count += 1;
 
-        let err_label = format!("B{}_div_err_{}", block_id.0, split_id);
+        let err_label = self.get_error_label();
         let ok_label = format!("B{}_ok_{}", block_id.0, split_id);
 
         self.emit_instr(format!(
@@ -318,10 +338,6 @@ impl<'a> LLVMGenerator<'a> {
             "br i1 %cond_z_{}_{}, label %{}, label %{}",
             block_id.0, split_id, err_label, ok_label
         ));
-
-        self.emit_label(err_label);
-        self.emit_instr("call void @error()");
-        self.emit_instr("unreachable");
 
         self.emit_label(ok_label);
         let op = if instr.operation == LIROperation::IntDiv {
@@ -514,11 +530,13 @@ impl<'a> LLVMGenerator<'a> {
         ));
 
         let mut call_args = vec![format!("%class.{}* {}", class_name, obj_val)];
-        call_args.extend(
-            instr.operands[2..]
-                .iter()
-                .map(|arg| format!("{} {}", self.llvm_type_from_value(arg), self.format_value(arg))),
-        );
+        call_args.extend(instr.operands[2..].iter().map(|arg| {
+            format!(
+                "{} {}",
+                self.llvm_type_from_value(arg),
+                self.format_value(arg)
+            )
+        }));
 
         let call_prefix = dest.map_or("".to_string(), |r| format!("%r{} = ", r.0));
         self.emit_instr(format!(
@@ -770,7 +788,7 @@ impl<'a> LLVMGenerator<'a> {
         let cond_neg = format!("%cond_neg_{}", id);
         let cond_ge = format!("%cond_ge_{}", id);
         let cond_out = format!("%cond_final_{}", id);
-        let err_label = format!("B{}_err_{}", block_id.0, split_id);
+        let err_label = self.get_error_label();
         let ok_label = format!("B{}_ok_{}", block_id.0, split_id);
 
         // Retrieve the array size.
@@ -789,9 +807,6 @@ impl<'a> LLVMGenerator<'a> {
             cond_out, err_label, ok_label
         ));
 
-        self.emit_label(err_label);
-        self.emit_instr("call void @error()");
-        self.emit_instr("unreachable");
         self.emit_label(ok_label);
     }
 }
