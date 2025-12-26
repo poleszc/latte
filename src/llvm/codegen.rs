@@ -11,7 +11,7 @@ use crate::{
 pub struct LLVMGenerator<'a> {
     output: String,
     string_constants: HashMap<String, String>,
-    next_string_id: usize,
+    next_unique_id: usize,
     current_function: Option<&'a LIRFunction>,
     // A mapping from LIR BlockID to the name of the last label ending the block.
     // This is a super ugly approach, since array accesses and integer division
@@ -33,7 +33,7 @@ impl<'a> LLVMGenerator<'a> {
         Self {
             output: String::new(),
             string_constants: HashMap::new(),
-            next_string_id: 0,
+            next_unique_id: 0,
             current_function: None,
             lir_block_to_last_llvm_label: HashMap::new(),
             current_block_split_count: 0,
@@ -103,6 +103,12 @@ impl<'a> LLVMGenerator<'a> {
             self.lir_block_to_last_llvm_label
                 .insert(*block_id, current_label);
         }
+    }
+
+    fn unique_id(&mut self) -> usize {
+        let id = self.next_unique_id;
+        self.next_unique_id += 1;
+        id
     }
 }
 
@@ -229,10 +235,11 @@ impl<'a> LLVMGenerator<'a> {
 impl<'a> LLVMGenerator<'a> {
     fn emit_instruction(&mut self, instr: &LIRInstruction, block_id: BlockID) {
         match instr.operation {
+            // TODO: Remove that in the future.
             LIROperation::Assign => {
                 let dest = instr.destination.unwrap();
                 let val = self.format_value(&instr.operands[0]);
-                let typ = self.get_llvm_type_from_register(dest);
+                let typ = self.llvm_type_from_register(dest);
                 self.emit_instr(format!("%r{} = bitcast {} {} to {}", dest.0, typ, val, typ));
             }
             LIROperation::IntAdd | LIROperation::IntSub | LIROperation::IntMul => {
@@ -328,7 +335,7 @@ impl<'a> LLVMGenerator<'a> {
 
     fn emit_phi(&mut self, instr: &LIRInstruction) {
         let dest = instr.destination.unwrap();
-        let llvm_type = self.get_llvm_type_from_register(dest);
+        let llvm_type = self.llvm_type_from_register(dest);
         let mut args = Vec::new();
         for i in (0..instr.operands.len()).step_by(2) {
             let val = self.format_value(&instr.operands[i]);
@@ -363,7 +370,7 @@ impl<'a> LLVMGenerator<'a> {
         let dest = instr.destination.unwrap();
         let lhs = self.format_value(&instr.operands[0]);
         let rhs = self.format_value(&instr.operands[1]);
-        let llvm_type = self.get_value_type(&instr.operands[0]);
+        let llvm_type = self.llvm_type_from_value(&instr.operands[0]);
         self.emit_instr(format!(
             "%r{} = icmp {} {} {}, {}",
             dest.0, cond, llvm_type, lhs, rhs
@@ -436,12 +443,12 @@ impl<'a> LLVMGenerator<'a> {
         };
         let args: Vec<_> = instr.operands[1..]
             .iter()
-            .map(|v| format!("{} {}", self.get_value_type(v), self.format_value(v)))
+            .map(|v| format!("{} {}", self.llvm_type_from_value(v), self.format_value(v)))
             .collect();
         let args_str = args.join(", ");
 
         if let Some(dest) = instr.destination {
-            let ret_type = self.get_llvm_type_from_register(dest);
+            let ret_type = self.llvm_type_from_register(dest);
             self.emit_instr(format!(
                 "%r{} = call {} @{}({})",
                 dest.0, ret_type, func_name, args_str
@@ -465,8 +472,7 @@ impl<'a> LLVMGenerator<'a> {
         };
         let class_name = self.get_class_name_from_register(obj_reg);
 
-        let id = self.next_string_id;
-        self.next_string_id += 1;
+        let id = self.unique_id();
 
         // TODO: Check for null ptr access.
         // Get the VTable pointer from the zeroth field.
@@ -491,12 +497,12 @@ impl<'a> LLVMGenerator<'a> {
         ));
 
         // Build the methods signature from register types. TODO: This is stupid.
-        let ret_type = dest.map_or("void".to_string(), |r| self.get_llvm_type_from_register(r));
+        let ret_type = dest.map_or("void".to_string(), |r| self.llvm_type_from_register(r));
         let mut arg_types = vec![format!("%class.{}*", class_name)];
         arg_types.extend(
             instr.operands[2..]
                 .iter()
-                .map(|arg| self.get_value_type(arg)),
+                .map(|arg| self.llvm_type_from_value(arg)),
         );
         let func_type = format!("{} ({})*", ret_type, arg_types.join(", "));
 
@@ -511,7 +517,7 @@ impl<'a> LLVMGenerator<'a> {
         call_args.extend(
             instr.operands[2..]
                 .iter()
-                .map(|arg| format!("{} {}", self.get_value_type(arg), self.format_value(arg))),
+                .map(|arg| format!("{} {}", self.llvm_type_from_value(arg), self.format_value(arg))),
         );
 
         let call_prefix = dest.map_or("".to_string(), |r| format!("%r{} = ", r.0));
@@ -530,9 +536,8 @@ impl<'a> LLVMGenerator<'a> {
                 let dest = instr.destination.unwrap();
                 let arr = self.format_value(&instr.operands[0]);
                 let idx = self.format_value(&instr.operands[1]);
-                let elem_type = self.get_llvm_type_from_register(dest);
-                let id = self.next_string_id;
-                self.next_string_id += 1;
+                let elem_type = self.llvm_type_from_register(dest);
+                let id = self.unique_id();
 
                 self.emit_array_bounds_check(&arr, &idx, &block_id);
 
@@ -561,10 +566,10 @@ impl<'a> LLVMGenerator<'a> {
                 let arr = self.format_value(&instr.operands[0]);
                 let idx = self.format_value(&instr.operands[1]);
                 let val = self.format_value(&instr.operands[2]);
-                let element_typ = self.get_value_type(&instr.operands[2]);
+                let element_typ = self.llvm_type_from_value(&instr.operands[2]);
                 // TODO: Get rid of that
-                let id = self.next_string_id;
-                self.next_string_id += 1;
+                let id = self.next_unique_id;
+                self.next_unique_id += 1;
 
                 self.emit_array_bounds_check(&arr, &idx, &block_id);
 
@@ -608,7 +613,7 @@ impl<'a> LLVMGenerator<'a> {
             TypeKind::Array(inner) => inner,
             _ => unreachable!(),
         };
-        let elem_size = self.sizeof_type(elem_type);
+        let elem_size = self.llvm_sizeof_type(elem_type);
         let id = dest.0;
 
         let element_count = format!("%element_count_{}", id);
@@ -694,7 +699,7 @@ impl<'a> LLVMGenerator<'a> {
             LIROperation::FieldGet => {
                 let dest = instr.destination.unwrap();
                 let field_ptr = format!("%field_ptr_{}", dest.0);
-                let field_type = self.get_llvm_type_from_register(dest);
+                let field_type = self.llvm_type_from_register(dest);
                 self.emit_instr(format!(
                     "{} = getelementptr %class.{}, %class.{}* {}, i32 0, i32 {}",
                     field_ptr, class_name, class_name, obj_val, field_idx
@@ -706,10 +711,10 @@ impl<'a> LLVMGenerator<'a> {
             }
             LIROperation::FieldSet => {
                 let val = self.format_value(&instr.operands[2]);
-                let val_type = self.get_value_type(&instr.operands[2]);
-                let field_ptr = format!("%field_set_ptr_{}", self.next_string_id);
-                // TODO: Separate counter.
-                self.next_string_id += 1;
+                let val_type = self.llvm_type_from_value(&instr.operands[2]);
+                let id = self.unique_id();
+
+                let field_ptr = format!("%field_set_ptr_{}", id);
                 self.emit_instr(format!(
                     "{} = getelementptr %class.{}, %class.{}* {}, i32 0, i32 {}",
                     field_ptr, class_name, class_name, obj_val, field_idx
@@ -743,7 +748,7 @@ impl<'a> LLVMGenerator<'a> {
             LIRTerminator::Return { value, .. } => {
                 if let Some(val) = value {
                     let formatted_val = self.format_value(val);
-                    let val_type = self.get_value_type(val);
+                    let val_type = self.llvm_type_from_value(val);
                     self.emit_instr(format!("ret {} {}", val_type, formatted_val));
                 } else {
                     self.emit_instr("ret void");
@@ -758,8 +763,7 @@ impl<'a> LLVMGenerator<'a> {
     fn emit_array_bounds_check(&mut self, arr_ptr: &str, index_val: &str, block_id: &BlockID) {
         let split_id = self.current_block_split_count;
         self.current_block_split_count += 1;
-        let id = self.next_string_id;
-        self.next_string_id += 1;
+        let id = self.unique_id();
 
         let len_ptr = format!("%len_ptr_check_{}", id);
         let len_val = format!("%len_val_check_{}", id);
@@ -807,23 +811,23 @@ impl<'a> LLVMGenerator<'a> {
         }
     }
 
-    fn get_value_type(&self, val: &LIRValue) -> String {
+    fn llvm_type_from_value(&self, val: &LIRValue) -> String {
         match val {
             LIRValue::IntConst(_) => "i32".to_string(),
             LIRValue::BoolConst(_) => "i1".to_string(),
             LIRValue::StringConst(_) => "i8*".to_string(),
             LIRValue::Null => "i8*".to_string(),
-            LIRValue::Register(id) => self.get_llvm_type_from_register(*id),
+            LIRValue::Register(id) => self.llvm_type_from_register(*id),
             LIRValue::Class(name) => format!("%class.{}*", name),
             _ => "i8*".to_string(),
         }
     }
 
-    fn sizeof_type(&self, typ: &Type) -> usize {
+    fn llvm_sizeof_type(&self, typ: &Type) -> usize {
         match &typ.kind {
             TypeKind::Int => 4,
             TypeKind::Bool => 1,
-            TypeKind::String | TypeKind::Class(_) | TypeKind::Array(_) => 8,
+            TypeKind::String | TypeKind::Class(_) | TypeKind::Array(_) => 8, // Size of pointer
             _ => panic!("Unhanded type for size"),
         }
     }
@@ -834,12 +838,12 @@ impl<'a> LLVMGenerator<'a> {
             LIRValue::IntConst(n) => n.to_string(),
             LIRValue::BoolConst(b) => if *b { "1" } else { "0" }.to_string(),
             LIRValue::StringConst(s) => {
-                let id = self
+                let id = self.unique_id();
+                let string_id = self
                     .string_constants
                     .entry(s.clone())
                     .or_insert_with(|| {
-                        let name = format!("str{}", self.next_string_id);
-                        self.next_string_id += 1;
+                        let name = format!("str{}", id);
                         name
                     })
                     .clone();
@@ -847,7 +851,7 @@ impl<'a> LLVMGenerator<'a> {
                 let len = s.len() + 1; // \0
                 format!(
                     "getelementptr inbounds ([{} x i8], [{} x i8]* @{}, i32 0, i32 0)",
-                    len, len, id
+                    len, len, string_id
                 )
             }
             LIRValue::Null => "null".to_string(),
@@ -855,7 +859,7 @@ impl<'a> LLVMGenerator<'a> {
         }
     }
 
-    fn get_llvm_type_from_register(&self, reg_id: RegisterID) -> String {
+    fn llvm_type_from_register(&self, reg_id: RegisterID) -> String {
         let func = self.current_function.as_ref().expect("No current function");
         self.llvm_type(&func.registers[reg_id.0].typ)
     }
