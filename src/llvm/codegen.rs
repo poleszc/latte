@@ -96,9 +96,22 @@ impl<'a> LLVMGenerator<'a> {
                     LIROperation::ArrayGet
                     | LIROperation::ArraySet
                     | LIROperation::IntDiv
-                    | LIROperation::IntMod => {
+                    | LIROperation::IntMod
+                    | LIROperation::FieldGet
+                    | LIROperation::FieldSet
+                    | LIROperation::VCall
+                    | LIROperation::ArrayLength => {
                         current_label = format!("B{}_ok_{}", block_id.0, split_count);
                         split_count += 1;
+
+                        // These instructions perform two splits, one for null ptr check, one for array bound check.
+                        if matches!(
+                            instr.operation,
+                            LIROperation::ArrayGet | LIROperation::ArraySet
+                        ) {
+                            current_label = format!("B{}_ok_{}", block_id.0, split_count);
+                            split_count += 1;
+                        }
                     }
                     _ => {}
                 }
@@ -292,14 +305,14 @@ impl<'a> LLVMGenerator<'a> {
                 self.emit_string_op(instr);
             }
             LIROperation::Call => self.emit_call(instr),
-            LIROperation::VCall => self.emit_vcall(instr),
+            LIROperation::VCall => self.emit_vcall(instr, &block_id),
             LIROperation::ArrayGet | LIROperation::ArraySet | LIROperation::ArrayLength => {
                 self.emit_array_op(instr, block_id);
             }
             LIROperation::NewArray => self.emit_new_array(instr),
             LIROperation::NewObject => self.emit_new_object(instr),
             LIROperation::FieldGet | LIROperation::FieldSet => {
-                self.emit_field_op(instr);
+                self.emit_field_op(instr, &block_id);
             }
             LIROperation::IsNull => {
                 let dest = instr.destination.unwrap();
@@ -474,7 +487,7 @@ impl<'a> LLVMGenerator<'a> {
         }
     }
 
-    fn emit_vcall(&mut self, instr: &LIRInstruction) {
+    fn emit_vcall(&mut self, instr: &LIRInstruction, block_id: &BlockID) {
         let dest = instr.destination;
         let obj = &instr.operands[0];
         let obj_val = self.format_value(obj);
@@ -482,13 +495,15 @@ impl<'a> LLVMGenerator<'a> {
             LIRValue::Register(r) => *r,
             _ => unreachable!(),
         };
+        let class_name = self.get_class_name_from_register(obj_reg);
+        let obj_type = format!("%class.{}*", class_name);
         let method_idx = match &instr.operands[1] {
             LIRValue::IntConst(i) => *i,
             _ => unreachable!(),
         };
-        let class_name = self.get_class_name_from_register(obj_reg);
-
         let id = self.unique_id();
+
+        self.emit_null_check(&obj_val, &obj_type, block_id);
 
         // TODO: Check for null ptr access.
         // Get the VTable pointer from the zeroth field.
@@ -549,11 +564,13 @@ impl<'a> LLVMGenerator<'a> {
     }
 
     fn emit_array_op(&mut self, instr: &LIRInstruction, block_id: BlockID) {
+        let arr = self.format_value(&instr.operands[0]);
+        self.emit_null_check(&arr, "i8*", &block_id);
+
         match instr.operation {
             LIROperation::ArrayGet => {
-                let dest = instr.destination.unwrap();
-                let arr = self.format_value(&instr.operands[0]);
                 let idx = self.format_value(&instr.operands[1]);
+                let dest = instr.destination.unwrap();
                 let elem_type = self.llvm_type_from_register(dest);
                 let id = self.unique_id();
 
@@ -581,7 +598,6 @@ impl<'a> LLVMGenerator<'a> {
                 ));
             }
             LIROperation::ArraySet => {
-                let arr = self.format_value(&instr.operands[0]);
                 let idx = self.format_value(&instr.operands[1]);
                 let val = self.format_value(&instr.operands[2]);
                 let element_typ = self.llvm_type_from_value(&instr.operands[2]);
@@ -699,13 +715,17 @@ impl<'a> LLVMGenerator<'a> {
         self.emit_instr(format!("store i8** {}, i8*** {}", vtable_gep, vptr_ptr));
     }
 
-    fn emit_field_op(&mut self, instr: &LIRInstruction) {
+    fn emit_field_op(&mut self, instr: &LIRInstruction, block_id: &BlockID) {
         let obj_val = self.format_value(&instr.operands[0]);
         let obj_reg = match &instr.operands[0] {
             LIRValue::Register(r) => *r,
             _ => unreachable!(),
         };
         let class_name = self.get_class_name_from_register(obj_reg);
+        let obj_type = format!("%class.{}*", class_name);
+
+        self.emit_null_check(&obj_val, &obj_type, block_id);
+
         let field_idx = match &instr.operands[1] {
             LIRValue::IntConst(i) => i + 1,
             _ => unreachable!(),
@@ -805,6 +825,23 @@ impl<'a> LLVMGenerator<'a> {
             cond_out, err_label, ok_label
         ));
 
+        self.emit_label(ok_label);
+    }
+
+    fn emit_null_check(&mut self, ptr: &str, ptr_type: &str, block_id: &BlockID) {
+        let split_id = self.current_block_split_count;
+        self.current_block_split_count += 1;
+        let id = self.unique_id();
+
+        let is_null = format!("%is_null_{}", id);
+        let err_label = self.get_error_label();
+        let ok_label = format!("B{}_ok_{}", block_id.0, split_id);
+
+        self.emit_instr(format!("{} = icmp eq {} {}, null", is_null, ptr_type, ptr));
+        self.emit_instr(format!(
+            "br i1 {}, label %{}, label %{}",
+            is_null, err_label, ok_label
+        ));
         self.emit_label(ok_label);
     }
 }

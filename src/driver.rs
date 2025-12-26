@@ -51,7 +51,7 @@ pub fn run_compiler<
             ))
         })?;
 
-    if args.emit_ast {
+    if args.emit_ast || args.emit_all {
         dump_ast_to_json(&output_dir, file_stem, &parsed_program)?;
     }
 
@@ -68,7 +68,7 @@ pub fn run_compiler<
         }
     };
 
-    if args.emit_tast {
+    if args.emit_tast || args.emit_all {
         dump_tast_to_json(&output_dir, file_stem, &semantic_analysis_result.tast)?;
     }
 
@@ -78,14 +78,14 @@ pub fn run_compiler<
         &semantic_analysis_result.tast,
         semantic_analysis_result.symbol_table,
     );
-    if args.emit_mir {
+    if args.emit_mir || args.emit_all {
         dump_mir(&output_dir, file_stem, &mir_program)?;
     }
 
     // ============= LIR LOWERING ===============
     eprintln!("[LATTE]: Lowering to LIR...");
     let lir_program = lir::lower_to_lir(mir_program);
-    if args.emit_lir {
+    if args.emit_lir || args.emit_all {
         dump_lir(&output_dir, file_stem, &lir_program)?;
     }
 
