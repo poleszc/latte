@@ -52,6 +52,4 @@ pub enum TExprKind {
         size: Box<TExpr>,
     },
     TypedNull(Type),
-    // TODO: Maybe remove that?
-    ExprTypedNull(Box<TExpr>),
 }

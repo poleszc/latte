@@ -384,6 +384,8 @@ Expr4: Box<ast::Expr> = {
         position: SourcePosition(start, end),
     }),
 
+    // To avoid conflicts with parenthesised expressions, we allow all expression to 
+    // be targets of cast expressions and check if the cast is valid in the frontend.
     <start: @L> "(" <expr: Expr> ")" "null" <end: @R> => Box::new(ast::Expr {
             kind: ast::ExprKind::ExprTypedNull(expr),
             position: SourcePosition(start, end),

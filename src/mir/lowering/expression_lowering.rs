@@ -47,7 +47,6 @@ impl MIRLoweringContext {
                 args,
             } => self.lower_method_call(object, method_name.name, args, expr.position, &expr.typ),
             TExprKind::Paren(expr) => self.lower_expr(expr),
-            TExprKind::ExprTypedNull(_) => MIRValue::Null,
         }
     }
 
