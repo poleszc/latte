@@ -147,7 +147,6 @@ pub struct LIRClass {
 pub struct LIRField {
     pub name: StrID,
     pub typ: Type,
-    pub offset: usize,
     pub index: usize,
 }
 

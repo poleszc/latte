@@ -226,8 +226,6 @@ pub struct MIRField {
     pub name: StrID,
     /// Field type.
     pub typ: Type,
-    /// Offset in the class.
-    pub offset: usize, // TODO: Remove?
     /// Field index.
     pub index: usize,
 }

@@ -20,7 +20,6 @@ impl MIRLoweringContext {
             .map(|(index, (name, typ, _pos))| MIRField {
                 name,
                 typ,
-                offset: index,
                 index,
             })
             .collect();

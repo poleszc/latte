@@ -34,7 +34,6 @@ impl LIRLowering {
                 .map(|field| LIRField {
                     name: field.name,
                     typ: field.typ.clone(),
-                    offset: field.offset,
                     index: field.index,
                 })
                 .collect(),
