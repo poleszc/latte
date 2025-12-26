@@ -91,7 +91,7 @@ pub fn run_compiler<
 
     // ============= LLVM BACKEND ===============
     eprintln!("[LATTE]: Generating LLVM...");
-    backend_driver(&lir_program, &output_dir, file_stem, &args)?;
+    backend_driver(&lir_program, &output_dir, file_stem, args)?;
 
     // TODO:
     // - LIR opts

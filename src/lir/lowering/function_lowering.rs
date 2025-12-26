@@ -323,7 +323,6 @@ impl LIRFunctionBuilder {
         }
 
         // Populate a LIR block with a list of it's predecessors.
-        // TODO: Maybe not needed?
         let mut final_preds = Vec::new();
         if let Some(p_list) = cfg_analysis.predecessors.get(&block_id) {
             for p in p_list {
@@ -426,7 +425,7 @@ impl LIRFunctionBuilder {
             MIRValue::Block(block_id) => LIRValue::Block(LirBID(block_id.0)),
             MIRValue::Function(func_name) => LIRValue::Function(*func_name),
             MIRValue::Class(class_name) => LIRValue::Class(*class_name),
-            MIRValue::Unit => panic!("Tried to lower a unit MIRValue")
+            MIRValue::Unit => panic!("Tried to lower a unit MIRValue"),
         }
     }
 }

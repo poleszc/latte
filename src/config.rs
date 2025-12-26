@@ -23,14 +23,14 @@ pub struct LatteArgs {
     pub runtime_path: PathBuf,
     // Emits the AST to a .json file.
     #[arg(long)]
-    pub emit_ast: bool, 
+    pub emit_ast: bool,
     // Emits the TAST to a .json file.
     #[arg(long)]
-    pub emit_tast: bool, 
+    pub emit_tast: bool,
     // Emits the Mid Intermediate Representation to a .mir text file.
     #[arg(long)]
-    pub emit_mir: bool, 
+    pub emit_mir: bool,
     // Emits the Low Intermediate Representation to a .lir text file.
     #[arg(long)]
-    pub emit_lir: bool, 
+    pub emit_lir: bool,
 }

@@ -43,10 +43,7 @@ pub fn compile_llvm(
 }
 
 fn llvm_assemble(ll_path: &PathBuf, bc_path: &PathBuf) -> Result<(), CompilerError> {
-    eprintln!(
-        "[LLVM]: Assembling bitcode for: {}",
-        ll_path.display()
-    );
+    eprintln!("[LLVM]: Assembling bitcode for: {}", ll_path.display());
     let as_output = Command::new("llvm-as")
         .arg(ll_path)
         .arg("-o")
@@ -70,10 +67,7 @@ fn lower_lir_to_llvm_and_save(
     let llvm_generator = LLVMGenerator::new();
     let llvm_ir = llvm_generator.generate_program(lir_program);
     fs::write(ll_path, llvm_ir)?;
-    eprintln!(
-        "[LLVM]: Dumped LLVM IR to file: {}",
-        ll_path.display()
-    );
+    eprintln!("[LLVM]: Dumped LLVM IR to file: {}", ll_path.display());
     Ok(())
 }
 

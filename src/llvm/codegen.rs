@@ -73,7 +73,7 @@ impl<'a> LLVMGenerator<'a> {
             let len = string_val.len() + 1;
             writeln!(
                 string_constants,
-                "@{} = private unnamed_addr constant [{} x i8] c\"{}\\00\", align 1",
+                "@{} = internal constant [{} x i8] c\"{}\\00\", align 1",
                 id, len, escaped
             )
             .unwrap();
@@ -512,7 +512,7 @@ impl<'a> LLVMGenerator<'a> {
             method_ptr_raw, method_ptr_ptr
         ));
 
-        // Build the methods signature from register types. TODO: This is stupid.
+        // Build the methods signature from register types.
         let ret_type = dest.map_or("void".to_string(), |r| self.llvm_type_from_register(r));
         let mut arg_types = vec![format!("%class.{}*", class_name)];
         arg_types.extend(
@@ -860,10 +860,9 @@ impl<'a> LLVMGenerator<'a> {
                         name
                     })
                     .clone();
-                // TODO: Why is inbounds here?
                 let len = s.len() + 1; // \0
                 format!(
-                    "getelementptr inbounds ([{} x i8], [{} x i8]* @{}, i32 0, i32 0)",
+                    "getelementptr ([{} x i8], [{} x i8]* @{}, i32 0, i32 0)",
                     len, len, string_id
                 )
             }

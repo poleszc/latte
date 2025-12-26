@@ -5,7 +5,7 @@ use latte::llvm::compile_llvm;
 fn main() {
     eprintln!("[LATTE]: Running compiler");
     let args = latte::LatteArgs::parse();
-    if let Err(_) = run_compiler(compile_llvm, &args) {
+    if run_compiler(compile_llvm, &args).is_err() {
         eprintln!("ERROR");
         std::process::exit(1);
     }

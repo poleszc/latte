@@ -17,11 +17,7 @@ impl MIRLoweringContext {
         let fields: Vec<MIRField> = field_layout
             .into_iter()
             .enumerate()
-            .map(|(index, (name, typ, _pos))| MIRField {
-                name,
-                typ,
-                index,
-            })
+            .map(|(index, (name, typ, _pos))| MIRField { name, typ, index })
             .collect();
 
         let vtable_layout = self.symbol_table.get_class_vtable_layout(class_name);
