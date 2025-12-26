@@ -33,4 +33,7 @@ pub struct LatteArgs {
     // Emits the Low Intermediate Representation to a .lir text file.
     #[arg(long)]
     pub emit_lir: bool,
+    // Emits all the intermediate representations.
+    #[arg(long)]
+    pub emit_all: bool,
 }

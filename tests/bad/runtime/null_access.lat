@@ -1,0 +1,7 @@
+// Author: Tomasz Wysocki 277696
+int main() {
+    int[] a;
+    a = null;
+    int b = a[0];
+    return 0;
+}
