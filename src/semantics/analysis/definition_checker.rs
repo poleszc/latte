@@ -252,7 +252,6 @@ impl<'a> DefinitionChecker<'a> {
                             .lookup_method(parent.name, method_name.name);
 
                         if let Some(parent_method) = parent_method_opt {
-                            // TODO: Use types equal? or some other function which returns an enum on what the mismatch was
                             // Argument count.
                             if method_def.args.len() != parent_method.params.len() {
                                 self.ctx.add_error(SemanticError::InvalidOverride {
@@ -333,11 +332,8 @@ impl<'a> DefinitionChecker<'a> {
         self.ctx.symbol_table.enter_scope();
         self.ctx.validate_function_return_type(&func.return_type);
 
-        // TODO: Try to use parametrized lifetime here to avoid cloning?
         let previous_return_type = self.ctx.current_return_type.take();
         self.ctx.current_return_type = Some(func.return_type.clone());
-
-        // TODO: Here we should look for all nested function definitions and handle them.
 
         // Add arguments to scope.
         for arg in &func.args {

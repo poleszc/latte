@@ -235,7 +235,6 @@ impl<'a> StatementChecker<'a> {
         if !matches!(typed_expr.typ.kind, TypeKind::Int | TypeKind::Error) {
             self.ctx.add_error(SemanticError::InvalidOperands {
                 operator: StrID::from("--"),
-                // TODO: Imlement type_to_str_id?
                 operand: StrID::from(typed_expr.typ.to_string()),
                 position: expr.position,
                 type_position: typed_expr.typ.position,
