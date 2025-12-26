@@ -114,4 +114,11 @@ impl SemanticContext {
         let type_checker = TypeChecker::new(&self.symbol_table);
         type_checker.error_type(pos)
     }
+
+    pub fn mock_identifier(&self, name: StrID) -> Ident {
+        Ident {
+            name,
+            position: SourcePosition(0, 0),
+        }
+    }
 }

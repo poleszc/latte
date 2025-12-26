@@ -147,11 +147,7 @@ impl<'a> DefinitionChecker<'a> {
         let mut current_name = start_class;
 
         loop {
-            let ident = Ident {
-                name: current_name,
-                position: SourcePosition(0, 0),
-            };
-
+            let ident = self.ctx.mock_identifier(current_name);
             let class_info = match self.ctx.symbol_table.lookup_class(&ident) {
                 Ok(info) => info,
                 Err(_) => return None,
@@ -181,11 +177,7 @@ impl<'a> DefinitionChecker<'a> {
         let mut current_parent = Some(start_parent_name);
 
         while let Some(parent_name) = current_parent {
-            let dummy_ident = Ident {
-                name: parent_name,
-                position: SourcePosition(0, 0),
-            };
-
+            let dummy_ident = self.ctx.mock_identifier(parent_name);
             if let Ok(class_info) = self.ctx.symbol_table.lookup_class(&dummy_ident) {
                 if let Some((_, pos)) = class_info.fields.get(&field_name) {
                     return Some(*pos);
@@ -407,11 +399,7 @@ impl<'a> DefinitionChecker<'a> {
     }
 
     fn validate_main(&mut self) {
-        let main_ident = Ident {
-            name: StrID::from("main"),
-            position: SourcePosition(0, 0),
-        };
-
+        let main_ident = self.ctx.mock_identifier(StrID::from("main"));
         match self.ctx.symbol_table.lookup_function(&main_ident) {
             Ok(signature) => {
                 if !matches!(signature.return_type.kind, TypeKind::Int) {

@@ -71,7 +71,6 @@ impl<'a> TypeChecker<'a> {
 
         let mut current = subclass;
         loop {
-            // TODO: Remove temporary ident creation? Why is that even here xd
             let current_ident = Ident {
                 name: current,
                 position: SourcePosition(0, 0),

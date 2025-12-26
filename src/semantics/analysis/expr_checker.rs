@@ -249,10 +249,7 @@ impl<'a> ExpressionChecker<'a> {
             }
             ExprKind::This => {
                 let typ = if let Some(class_name) = &self.ctx.current_class {
-                    let class_ident = Ident {
-                        name: *class_name,
-                        position,
-                    };
+                    let class_ident = self.ctx.mock_identifier(*class_name);
                     Type {
                         kind: TypeKind::Class(class_ident),
                         position,
