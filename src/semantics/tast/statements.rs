@@ -1,22 +1,24 @@
+use serde::Serialize;
+
 use crate::{
     SourcePosition,
     parser::ast::{Ident, Type},
     semantics::tast::expressions::TExpr,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct TBlock {
     pub stmts: Vec<TStmt>,
     pub position: SourcePosition,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct TStmt {
     pub kind: TStmtKind,
     pub position: SourcePosition,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum TStmtKind {
     Empty,
     Block(TBlock),
@@ -48,13 +50,13 @@ pub enum TStmtKind {
     Expr(TExpr),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct TItem {
     pub kind: TItemKind,
     pub position: SourcePosition,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum TItemKind {
     NoInit(Ident),
     Init(Ident, TExpr),

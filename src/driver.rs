@@ -10,7 +10,7 @@ use crate::{
     mir::{self, *},
     parser::{self, ast::Program},
     report_compiler_error,
-    semantics::SemanticChecker,
+    semantics::{SemanticChecker, tast::TProgram},
 };
 
 /// Main driver for the compiler. Performs all the generic operations for both backends.
@@ -20,7 +20,7 @@ use crate::{
 pub fn run_compiler<
     F: FnOnce(&LIRProgram, &Path, &str, &LatteArgs) -> Result<(), CompilerError>,
 >(
-    backend_compile: F,
+    backend_driver: F,
     args: &LatteArgs,
 ) -> Result<(), CompilerError> {
     let output_dir = match args.output_dir {
@@ -35,7 +35,7 @@ pub fn run_compiler<
     fs::create_dir_all(&output_dir)?;
 
     // ============= PARSING ===============
-    eprintln!("[Parsing] Parsing program...");
+    eprintln!("[LATTE] Parsing program...");
     let input_file = &args.input_file;
     let source_code = fs::read_to_string(input_file)?;
     let parsed_program = parser::parse(&source_code)?;
@@ -50,12 +50,13 @@ pub fn run_compiler<
                 input_file.display()
             ))
         })?;
-    eprintln!("[Parsing] Parsing successful...");
-    dump_ast_to_json(&output_dir, file_stem, &parsed_program)?;
-    eprintln!("[Parsing] Dumped AST to JSON...");
+
+    if args.emit_ast {
+        dump_ast_to_json(&output_dir, file_stem, &parsed_program)?;
+    }
 
     // ============= SEMANTIC ANALYSIS ===============
-    eprintln!("[Semantic] Running semantic analysis...");
+    eprintln!("[LATTE] Running semantic analysis...");
     let semantic_analysis_result = match SemanticChecker::check(&parsed_program) {
         Ok(table) => table,
         Err(errors) => {
@@ -67,92 +68,65 @@ pub fn run_compiler<
         }
     };
 
-    eprintln!("[Semantic] Semantic analysis completed successfully");
-    dump_tast_to_json(&output_dir, file_stem, &parsed_program)?;
-    eprintln!("[Semantic] Dumped TAST to JSON...");
+    if args.emit_tast {
+        dump_tast_to_json(&output_dir, file_stem, &semantic_analysis_result.tast)?;
+    }
 
     // ============= MIR LOWERING ===============
-    eprintln!("[MIR] Lowering to MIR...");
+    eprintln!("[LATTE] Lowering to MIR...");
     let mir_program = mir::lower_to_mir(
         &semantic_analysis_result.tast,
         semantic_analysis_result.symbol_table,
     );
-
-    eprintln!("[MIR] Lowering to MIR completed successfully...");
-    dump_mir(&output_dir, file_stem, &mir_program)?;
-    eprintln!("[MIR] Dumped MIR to JSON...");
+    if args.emit_mir {
+        dump_mir(&output_dir, file_stem, &mir_program)?;
+    }
 
     // ============= LIR LOWERING ===============
-    eprintln!("[LIR] Lowering to LIR...");
+    eprintln!("[LATTE] Lowering to LIR...");
     let lir_program = lir::lower_to_lir(mir_program);
-    eprintln!("[LIR] Lowering to LIR completed successfully...");
-    dump_lir(&output_dir, file_stem, &lir_program)?;
-    eprintln!("[LIR] Dumped LIR to JSON...");
+    if args.emit_lir {
+        dump_lir(&output_dir, file_stem, &lir_program)?;
+    }
 
     // ============= LLVM BACKEND ===============
-    backend_compile(&lir_program, &output_dir, file_stem, &args)?;
+    eprintln!("[LATTE] Generating LLVM...");
+    backend_driver(&lir_program, &output_dir, file_stem, &args)?;
 
     // TODO:
-    // - LIR optss
-    // - Detect unused functions and variables.
-    // - Skip empty functions?
+    // - LIR opts
 
     Ok(())
 }
 
 /// Dumps the AST to a JSON file in a specified output_dir and a given file name.
-// TODO: Move those somewhere
 fn dump_ast_to_json(
     output_dir: &PathBuf,
     file_stem: &str,
     program: &Program,
 ) -> Result<(), CompilerError> {
     println!("[LATTE]: Dumping AST to file");
-    let mut json_output_path = PathBuf::from(&output_dir);
-    json_output_path.push(format!("{}.ast.json", file_stem));
-
-    let json_string = serde_json::to_string_pretty(&program)
-        .map_err(|e| CompilerError::Other(format!("Failed to serialize AST to JSON: {}", e)))?;
-
-    fs::write(&json_output_path, json_string).map_err(|e| {
-        CompilerError::Other(format!(
-            "Failed to write AST to file '{}': {}",
-            json_output_path.display(),
-            e
-        ))
-    })?;
-
-    println!(
-        "[LATTE]: Successfully parsed and saved AST to {}",
-        json_output_path.display()
-    );
+    program.dump_to_file(
+        PathBuf::from(&output_dir)
+            .join(format!("{}.ast.json", file_stem))
+            .as_path(),
+    )?;
     Ok(())
 }
 
+/// Dumps the TAST to a JSON file in a specified output_dir and a given file name.
 fn dump_tast_to_json(
     output_dir: &PathBuf,
     file_stem: &str,
-    program: &Program,
+    program: &TProgram,
 ) -> Result<(), CompilerError> {
     println!("[LATTE]: Dumping TAST to file");
-    let mut json_output_path = PathBuf::from(&output_dir);
-    json_output_path.push(format!("{}.tast.json", file_stem));
+    program.dump_to_file(
+        PathBuf::from(&output_dir)
+            .join(format!("{}.tast.json", file_stem))
+            .as_path(),
+    )?;
 
-    let json_string = serde_json::to_string_pretty(&program)
-        .map_err(|e| CompilerError::Other(format!("Failed to serialize TAST to JSON: {}", e)))?;
-
-    fs::write(&json_output_path, json_string).map_err(|e| {
-        CompilerError::Other(format!(
-            "Failed to write TAST to file '{}': {}",
-            json_output_path.display(),
-            e
-        ))
-    })?;
-
-    println!(
-        "[LATTE]: Successfully parsed and saved TAST to {}",
-        json_output_path.display()
-    );
     Ok(())
 }
 
@@ -169,10 +143,6 @@ fn dump_mir(
             .as_path(),
     )?;
 
-    println!(
-        "[MIR]: Successfully saved MIR to {}",
-        PathBuf::from(&output_dir).display()
-    );
     Ok(())
 }
 
@@ -188,10 +158,5 @@ fn dump_lir(
             .join(format!("{}.lir", file_stem))
             .as_path(),
     )?;
-
-    println!(
-        "[LIR]: Successfully saved LIR to {}",
-        PathBuf::from(&output_dir).display()
-    );
     Ok(())
 }
