@@ -39,7 +39,6 @@ pub enum TStmtKind {
         cond: TExpr,
         body: Box<TStmt>,
     },
-    // TODO: Add nested functions and classic for loops.
     ForEach {
         element_type: Type,
         item_name: Ident,

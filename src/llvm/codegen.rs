@@ -585,9 +585,7 @@ impl<'a> LLVMGenerator<'a> {
                 let idx = self.format_value(&instr.operands[1]);
                 let val = self.format_value(&instr.operands[2]);
                 let element_typ = self.llvm_type_from_value(&instr.operands[2]);
-                // TODO: Get rid of that
-                let id = self.next_unique_id;
-                self.next_unique_id += 1;
+                let id = self.unique_id();
 
                 self.emit_array_bounds_check(&arr, &idx, &block_id);
 

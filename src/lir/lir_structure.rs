@@ -1,10 +1,8 @@
 use std::collections::HashMap;
-// TODO: remove json serialization?
-use serde::Serialize;
 
 use crate::{SourcePosition, parser::ast::Type, utils::StrID};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RegisterID(pub usize);
 impl RegisterID {
     pub fn new(id: usize) -> Self {
@@ -12,7 +10,7 @@ impl RegisterID {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BlockID(pub usize);
 impl BlockID {
     pub fn new(id: usize) -> Self {
@@ -20,7 +18,7 @@ impl BlockID {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub enum LIRValue {
     Register(RegisterID),
     IntConst(i32),
@@ -32,7 +30,7 @@ pub enum LIRValue {
     Block(BlockID),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum LIROperation {
     Phi,
     Assign,
@@ -79,7 +77,7 @@ pub enum LIROperation {
     IsNull,    // obj.field = ...
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub enum LIRTerminator {
     Jump {
         target: BlockID,
@@ -100,7 +98,7 @@ pub enum LIRTerminator {
     },
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct LIRInstruction {
     pub operation: LIROperation,
     pub destination: Option<RegisterID>,
@@ -108,14 +106,14 @@ pub struct LIRInstruction {
     pub source_position: SourcePosition,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct RegisterInfo {
     pub id: RegisterID,
     pub typ: Type,
     pub name: Option<StrID>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct LIRBlock {
     pub id: BlockID,
     pub instructions: Vec<LIRInstruction>,
@@ -124,7 +122,7 @@ pub struct LIRBlock {
 }
 
 /// Single function representation in MIR.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct LIRFunction {
     pub name: StrID,
     pub return_type: Type,
@@ -137,7 +135,7 @@ pub struct LIRFunction {
     pub source_position: SourcePosition,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct LIRClass {
     pub name: StrID,
     pub parent: Option<StrID>,
@@ -147,7 +145,7 @@ pub struct LIRClass {
     pub source_position: SourcePosition,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct LIRField {
     pub name: StrID,
     pub typ: Type,
@@ -155,7 +153,7 @@ pub struct LIRField {
     pub index: usize,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct LIRProgram {
     pub functions: HashMap<StrID, LIRFunction>,
     pub classes: HashMap<StrID, LIRClass>,

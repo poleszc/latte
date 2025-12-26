@@ -34,7 +34,6 @@ impl MIRLoweringContext {
                 if_false,
             } => self.lower_if(cond, if_true, if_false, stmt.position),
             TStmtKind::While { cond, body } => self.lower_while(cond, body, stmt.position),
-            // TODO: Add a classic for loop
             TStmtKind::ForEach {
                 element_type,
                 item_name,
@@ -43,7 +42,7 @@ impl MIRLoweringContext {
             } => self.lower_for_each(element_type, item_name, collection, body, stmt.position),
             TStmtKind::Expr(expr) => {
                 self.lower_expr(expr);
-            } // TODO: Add nested functions
+            }
         }
     }
 

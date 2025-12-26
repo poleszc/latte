@@ -3,9 +3,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use clap::Parser;
-
-// TODO: Fix these imports.
 use crate::{
     LatteArgs,
     errors::CompilerError,
@@ -24,10 +21,8 @@ pub fn run_compiler<
     F: FnOnce(&LIRProgram, &Path, &str, &LatteArgs) -> Result<(), CompilerError>,
 >(
     backend_compile: F,
+    args: &LatteArgs,
 ) -> Result<(), CompilerError> {
-    // TODO: Create a CONFIG structure instead of this multiple arg parsing.
-    let args = LatteArgs::parse();
-
     let output_dir = match args.output_dir {
         Some(ref path) => path.clone(),
         None => args
@@ -68,8 +63,7 @@ pub fn run_compiler<
                 let comp_error = CompilerError::Semantic(err);
                 report_compiler_error(args.input_file.to_str().unwrap(), &source_code, &comp_error);
             }
-            // TODO: remove kajak...
-            return Err(CompilerError::Other("Kajak".to_string()));
+            return Err(CompilerError::Other("Semantic analysis failed".to_string()));
         }
     };
 
