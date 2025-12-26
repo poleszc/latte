@@ -206,10 +206,6 @@ impl fmt::Display for LIRClass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "class {}", self.name)?;
 
-        if let Some(parent) = self.parent {
-            write!(f, " extends {}", parent)?;
-        }
-
         writeln!(f, " {{")?;
 
         if !self.fields.is_empty() {

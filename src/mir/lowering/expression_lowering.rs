@@ -17,7 +17,7 @@ impl MIRLoweringContext {
             TExprKind::LiteralTrue => MIRValue::BoolConst(true),
             TExprKind::LiteralFalse => MIRValue::BoolConst(false),
             TExprKind::This => {
-                // TODO: This may be bugged.
+                // This should be inserted into the variable map if we analyze a method.
                 let local_id = self.variable_map.get(&StrID::from("this")).unwrap();
                 MIRValue::Local(*local_id)
             }

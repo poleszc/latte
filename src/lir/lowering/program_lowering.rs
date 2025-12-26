@@ -28,7 +28,6 @@ impl LIRLowering {
     pub fn lower_class_to_lir(mir_class: &MIRClass) -> LIRClass {
         LIRClass {
             name: mir_class.name,
-            parent: mir_class.parent,
             fields: mir_class
                 .fields
                 .iter()
@@ -39,7 +38,6 @@ impl LIRLowering {
                     index: field.index,
                 })
                 .collect(),
-            methods: mir_class.methods.clone(), // TODO: Probably remove? Just VTable is needed.
             vtable: mir_class.vtable.clone(),
             source_position: mir_class.source_position,
         }

@@ -102,8 +102,6 @@ impl<'a> StatementChecker<'a> {
 
     fn visit_block(&mut self, block: &Block) -> tast::TBlock {
         self.ctx.symbol_table.enter_scope();
-        // TODO: Here we should:
-        // - Look for defined functions
         let stmts = block.stmts.iter().map(|s| self.visit_stmt(s)).collect();
         self.ctx.symbol_table.leave_scope();
         tast::TBlock {

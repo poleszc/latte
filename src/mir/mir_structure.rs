@@ -101,7 +101,6 @@ pub enum MIRPlace {
         field_name: StrID,
         field_index: usize,
     },
-    // TODO: Is box needed here?
     Index {
         base: Box<MIRPlace>,
         index: Box<MIRValue>,
@@ -213,12 +212,9 @@ pub struct MIRFunction {
 pub struct MIRClass {
     /// Class name.
     pub name: StrID,
-    /// Parent class.
-    pub parent: Option<StrID>, // TODO: Is that needed?
-    /// Class fields.
+    /// Class fields in order.
     pub fields: Vec<MIRField>,
-    /// Class method names.
-    pub methods: Vec<StrID>, // TODO: Remove that?
+    /// Class method names in order. Names are after mangling.
     pub vtable: Vec<StrID>,
     pub source_position: SourcePosition,
 }

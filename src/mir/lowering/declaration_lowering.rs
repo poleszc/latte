@@ -43,9 +43,7 @@ impl MIRLoweringContext {
 
         MIRClass {
             name: class_name,
-            parent: class_def.extends.map(|e| e.name),
             fields,
-            methods,
             vtable,
             source_position: class_def.position,
         }

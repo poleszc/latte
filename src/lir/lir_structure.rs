@@ -138,9 +138,7 @@ pub struct LIRFunction {
 #[derive(Debug, Clone)]
 pub struct LIRClass {
     pub name: StrID,
-    pub parent: Option<StrID>,
     pub fields: Vec<LIRField>,
-    pub methods: Vec<StrID>,
     pub vtable: Vec<StrID>,
     pub source_position: SourcePosition,
 }

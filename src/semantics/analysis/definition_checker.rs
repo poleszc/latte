@@ -214,7 +214,6 @@ impl<'a> DefinitionChecker<'a> {
             if let Some(cycle_path) = self.detect_inheritance_cycle(class_def.name.name) {
                 // A simple hack to deduplicate the cycle errors. Sort the class names
                 // lexicographically and report only when we're the smallest (lexically) class.
-                // TODO: Introduce and move that to error handler?
                 let leader_name = cycle_path
                     .iter()
                     .map(|(name, _, _)| name)
