@@ -41,12 +41,6 @@ pub enum StmtKind {
         cond: Box<Expr>,
         body: Box<Stmt>,
     },
-    For {
-        init: Option<Box<Stmt>>,
-        cond: Option<Box<Expr>>,
-        post: Option<Box<Expr>>,
-        body: Box<Stmt>,
-    },
     ForEach {
         element_type: Type,
         item_name: Ident,

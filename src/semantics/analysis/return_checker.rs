@@ -28,8 +28,6 @@ impl ReturnChecker {
                 if_false,
             } => Self::if_guarantees_return(cond, if_true, if_false),
             StmtKind::While { cond, body } => Self::while_guarantees_return(cond, body),
-            // TODO: For now it doesn't work for fors as it's not required. Change that.
-            StmtKind::For { .. } => false,
             StmtKind::ForEach { .. } => false,
             // Other statements don't guarantee return.
             _ => false,

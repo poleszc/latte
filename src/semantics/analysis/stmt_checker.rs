@@ -87,12 +87,6 @@ impl<'a> StatementChecker<'a> {
                 if_false,
             } => self.visit_if(cond, if_true, if_false),
             StmtKind::While { cond, body } => self.visit_while(cond, body),
-            StmtKind::For {
-                init,
-                cond,
-                post,
-                body,
-            } => self.visit_for(init, cond, post, body),
             StmtKind::ForEach {
                 element_type,
                 item_name,
@@ -302,42 +296,6 @@ impl<'a> StatementChecker<'a> {
             cond: typed_cond,
             body: typed_body,
         }
-    }
-
-    fn visit_for(
-        &mut self,
-        init: &Option<Box<Stmt>>,
-        cond: &Option<Box<Expr>>,
-        post: &Option<Box<Expr>>,
-        body: &Stmt,
-    ) -> tast::TStmtKind {
-        self.ctx.symbol_table.enter_scope();
-
-        if let Some(init_stmt) = init {
-            // The init variable will be defined in `visit_statement`.
-            self.visit_stmt(init_stmt);
-        }
-
-        if let Some(cond_expr) = cond {
-            let cond_type = ExpressionChecker::new(self.ctx).check(cond_expr);
-            if !matches!(cond_type.typ.kind, TypeKind::Bool | TypeKind::Error) {
-                self.ctx.add_error(SemanticError::TypeMismatch {
-                    expected: StrID::from("boolean"),
-                    found: StrID::from(cond_type.typ.to_string()),
-                    position: cond_expr.position,
-                });
-            }
-        }
-
-        if let Some(post_expr) = post {
-            ExpressionChecker::new(self.ctx).check(post_expr);
-        }
-
-        self.visit_stmt(body);
-        self.ctx.symbol_table.leave_scope();
-
-        // TODO: For now just skip the for loop. In the future probably remove.
-        tast::TStmtKind::Empty
     }
 
     fn visit_for_each(
