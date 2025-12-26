@@ -70,7 +70,6 @@ impl MIRLoweringContext {
 
                 let obj_value = self.lower_place_as_value(base, &base_type);
                 let temp_dest = self.builder().create_temp(typ.clone());
-                // TODO: Probably remove position from here.
                 self.builder().emit_field_get(
                     MIRPlace::Temp(temp_dest),
                     obj_value,
@@ -82,7 +81,6 @@ impl MIRLoweringContext {
             MIRPlace::Index { base, index } => {
                 let array_value = self.lower_place_as_value(base, typ);
                 let temp_dest = self.builder().create_temp(typ.clone());
-                // TODO: Probably remove position from here.
                 self.builder().emit_array_get(
                     MIRPlace::Temp(temp_dest),
                     array_value,
@@ -142,7 +140,6 @@ impl MIRLoweringContext {
                     );
                 };
 
-                // TODO: Make this a map.
                 let field_layout = self.symbol_table.get_class_field_layout(class_name);
                 let (field_index, (field_name, typ, _)) = field_layout
                     .iter()

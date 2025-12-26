@@ -92,7 +92,6 @@ impl MIRLoweringContext {
             panic!("Field access on non-class type");
         };
         let field_layout = self.symbol_table.get_class_field_layout(class_name);
-        // TODO: Map for faster lookup?
         let (field_index, _) = field_layout
             .iter()
             .enumerate()

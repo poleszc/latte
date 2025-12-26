@@ -29,7 +29,7 @@ pub struct TFuncDef {
 
 #[derive(Debug)]
 pub struct TClassDef {
-    pub name: Ident, // TODO: New ident without the source position?
+    pub name: Ident,
     pub extends: Option<Ident>,
     pub entries: Vec<TClassEntry>,
     pub position: SourcePosition,

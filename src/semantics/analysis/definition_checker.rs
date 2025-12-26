@@ -147,7 +147,6 @@ impl<'a> DefinitionChecker<'a> {
         let mut current_name = start_class;
 
         loop {
-            // TODO: while let Some?
             let ident = Ident {
                 name: current_name,
                 position: SourcePosition(0, 0),

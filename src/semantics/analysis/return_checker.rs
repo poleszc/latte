@@ -76,8 +76,6 @@ impl ReturnChecker {
     fn while_guarantees_return(cond: &Expr, _body: &Stmt) -> bool {
         match &cond.kind {
             ExprKind::LiteralTrue => true,
-            // TODO: Think about that.
-            // ExprKind::LiteralTrue => Self::stmt_guarantees_return(body),
             _ => false, // Other while loops may not execute
         }
     }

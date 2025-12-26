@@ -45,7 +45,6 @@ impl SymbolTable {
         self.scopes.pop().expect("Cannot leave the global scope");
     }
 
-    // TODO: Template the define functions?
     pub fn define_variable(&mut self, var_info: VariableInfo) -> Result<(), SemanticError> {
         let scope = self
             .scopes
@@ -111,7 +110,6 @@ impl SymbolTable {
         Ok(())
     }
 
-    // TODO: Template the lookup functions?
     pub fn lookup_variable(&self, ident: &Ident) -> Result<Type, SemanticError> {
         for scope in self.scopes.iter().rev() {
             if let Some(SymbolKind::Variable(var_info)) = scope.get(&ident.name) {

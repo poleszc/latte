@@ -18,7 +18,6 @@ mod statement_lowering;
 
 pub struct MIRLoweringContext {
     symbol_table: SymbolTable,
-    // TODO: Try to remove that and make more use of the symbol table.
     variable_map: HashMap<StrID, LocalID>,
     current_function: Option<MIRFunctionBuilder>,
     current_class_fields: HashMap<StrID, (usize, Type)>,

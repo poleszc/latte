@@ -127,7 +127,7 @@ impl MIRLoweringContext {
                 let base_val = self.lower_place_as_value(
                     &base,
                     &Type {
-                        kind: TypeKind::Int, // TODO: Bugged?
+                        kind: TypeKind::Int,
                         position: pos,
                     },
                 );

@@ -8,7 +8,6 @@ use crate::utils::StrID;
 #[derive(Debug, Default)]
 pub struct SemanticContext {
     pub symbol_table: SymbolTable,
-    /// TODO: This should be a stack once we support nested functions.
     /// Return type of the function we're currently analyzing.
     pub current_return_type: Option<Type>,
     /// Class we're currently analyzing.
@@ -114,25 +113,5 @@ impl SemanticContext {
     pub fn error_type(&self, pos: SourcePosition) -> Type {
         let type_checker = TypeChecker::new(&self.symbol_table);
         type_checker.error_type(pos)
-    }
-}
-
-// ======================
-// Misc / Shared Validation Logic
-// ======================
-impl SemanticContext {
-    // TODO: Is this used?
-    pub fn resolve_method(&self, class_name: StrID, method_name: StrID) -> Option<FunctionInfo> {
-        self.symbol_table.lookup_method(class_name, method_name)
-    }
-
-    // TODO: Is this used?
-    pub fn resolve_field(
-        &self,
-        class_name: StrID,
-        field_name: StrID,
-    ) -> Option<(Type, SourcePosition)> {
-        let all_fields = self.symbol_table.get_all_class_fields(class_name);
-        all_fields.get(&field_name).cloned()
     }
 }

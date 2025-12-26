@@ -227,7 +227,7 @@ pub struct MIRField {
     /// Field type.
     pub typ: Type,
     /// Offset in the class.
-    pub offset: usize,
+    pub offset: usize, // TODO: Remove?
     /// Field index.
     pub index: usize,
 }
@@ -236,7 +236,6 @@ pub struct MIRField {
 #[derive(Debug, Clone)]
 pub struct MIRProgram {
     /// Top level functions in the program.
-    /// TODO: What with nested functions.
     pub functions: HashMap<StrID, MIRFunction>,
     /// All programs classes.
     pub classes: HashMap<StrID, MIRClass>,

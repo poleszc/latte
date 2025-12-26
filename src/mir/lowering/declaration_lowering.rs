@@ -20,7 +20,7 @@ impl MIRLoweringContext {
             .map(|(index, (name, typ, _pos))| MIRField {
                 name,
                 typ,
-                offset: index, // TODO: Change that
+                offset: index,
                 index,
             })
             .collect();
@@ -91,7 +91,6 @@ impl MIRLoweringContext {
 
         // If a void function
         if matches!(method.return_type.kind, TypeKind::Void) {
-            // TODO: Make a utility which unwraps the builder.
             let builder = self.builder();
             if !builder.is_current_block_terminated() {
                 builder.emit_return(None, method.position);
@@ -102,7 +101,6 @@ impl MIRLoweringContext {
     }
 
     pub(super) fn lower_function(&mut self, func_def: &TFuncDef) -> MIRFunction {
-        // TODO: This is duplicated with method validation. Fix that.
         let mut builder = MIRFunctionBuilder::new(
             func_def.name.name,
             func_def.return_type.clone(),

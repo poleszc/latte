@@ -33,7 +33,7 @@ impl<'a> TypeChecker<'a> {
     /// This includes:
     /// - Same types
     /// - Subclasses in inheritance hierarchy
-    /// - Null as subtype of all classes and arrays. TODO: Probably change that and expect explicitly types nulls.
+    /// - Null as subtype of all classes and arrays.
     pub fn is_subtype(&self, subtype: &Type, supertype: &Type) -> bool {
         // Ignore error types to prevent cascading errors
         if matches!(subtype.kind, TypeKind::Error) || matches!(supertype.kind, TypeKind::Error) {
