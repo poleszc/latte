@@ -1,4 +1,3 @@
-// Author: Tomasz Wysocki 277696
 int main() {
     int[] a;
     a = null;

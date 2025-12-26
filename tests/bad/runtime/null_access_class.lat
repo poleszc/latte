@@ -1,0 +1,14 @@
+class B {
+    int a;
+}
+
+class A {
+    B b;
+}
+
+int main() {
+    A a = new A;
+    B b = a.b;
+    b.a = 123;
+    return 0;
+}
