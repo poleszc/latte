@@ -17,7 +17,7 @@ impl MIRLoweringContext {
             TExprKind::LiteralTrue => MIRValue::BoolConst(true),
             TExprKind::LiteralFalse => MIRValue::BoolConst(false),
             TExprKind::This => {
-                // TODO: This may be bugged.
+                // This should be inserted into the variable map if we analyze a method.
                 let local_id = self.variable_map.get(&StrID::from("this")).unwrap();
                 MIRValue::Local(*local_id)
             }
@@ -47,7 +47,6 @@ impl MIRLoweringContext {
                 args,
             } => self.lower_method_call(object, method_name.name, args, expr.position, &expr.typ),
             TExprKind::Paren(expr) => self.lower_expr(expr),
-            TExprKind::ExprTypedNull(_) => MIRValue::Null,
         }
     }
 
@@ -71,7 +70,6 @@ impl MIRLoweringContext {
 
                 let obj_value = self.lower_place_as_value(base, &base_type);
                 let temp_dest = self.builder().create_temp(typ.clone());
-                // TODO: Probably remove position from here.
                 self.builder().emit_field_get(
                     MIRPlace::Temp(temp_dest),
                     obj_value,
@@ -83,7 +81,6 @@ impl MIRLoweringContext {
             MIRPlace::Index { base, index } => {
                 let array_value = self.lower_place_as_value(base, typ);
                 let temp_dest = self.builder().create_temp(typ.clone());
-                // TODO: Probably remove position from here.
                 self.builder().emit_array_get(
                     MIRPlace::Temp(temp_dest),
                     array_value,
@@ -143,7 +140,6 @@ impl MIRLoweringContext {
                     );
                 };
 
-                // TODO: Make this a map.
                 let field_layout = self.symbol_table.get_class_field_layout(class_name);
                 let (field_index, (field_name, typ, _)) = field_layout
                     .iter()

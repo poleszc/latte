@@ -45,7 +45,6 @@ impl SymbolTable {
         self.scopes.pop().expect("Cannot leave the global scope");
     }
 
-    // TODO: Template the define functions?
     pub fn define_variable(&mut self, var_info: VariableInfo) -> Result<(), SemanticError> {
         let scope = self
             .scopes
@@ -111,7 +110,6 @@ impl SymbolTable {
         Ok(())
     }
 
-    // TODO: Template the lookup functions?
     pub fn lookup_variable(&self, ident: &Ident) -> Result<Type, SemanticError> {
         for scope in self.scopes.iter().rev() {
             if let Some(SymbolKind::Variable(var_info)) = scope.get(&ident.name) {
@@ -185,7 +183,6 @@ impl SymbolTable {
         let mut all_fields = HashMap::new();
         let mut current_class = class_name;
         while let Some(class_info) = self.classes.get(&current_class) {
-            // TODO: Parent fields will be overridden if redefined. If this ok?
             for (field_name, field_info) in &class_info.fields {
                 if !all_fields.contains_key(field_name) {
                     all_fields.insert(*field_name, field_info.clone());

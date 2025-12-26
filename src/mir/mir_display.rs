@@ -218,24 +218,12 @@ impl fmt::Display for MIRFunction {
 impl fmt::Display for MIRClass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "[MIR] Class {}", self.name)?;
-
-        if let Some(parent) = self.parent {
-            write!(f, " extends {}", parent)?;
-        }
-
         writeln!(f, " {{")?;
 
         if !self.fields.is_empty() {
             writeln!(f, "  Fields:")?;
             for field in &self.fields {
                 writeln!(f, "    [{}] {}: {}", field.index, field.name, field.typ)?;
-            }
-        }
-
-        if !self.methods.is_empty() {
-            writeln!(f, "  Methods:")?;
-            for method in &self.methods {
-                writeln!(f, "    {}", method)?;
             }
         }
 
@@ -319,16 +307,11 @@ impl MIRProgram {
         if !self.classes.is_empty() {
             println!("Classes ({}): ", self.classes.len());
             for (name, class) in &self.classes {
-                let parent_str = class
-                    .parent
-                    .map(|p| format!(" extends {}", p))
-                    .unwrap_or_default();
                 println!(
-                    "  {} {} fields, {} methods{}",
+                    "  {} fields, {} methods {}",
                     name,
                     class.fields.len(),
-                    class.methods.len(),
-                    parent_str
+                    class.vtable.len(),
                 );
             }
             println!();

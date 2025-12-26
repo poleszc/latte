@@ -1,16 +1,18 @@
+use serde::Serialize;
+
 use crate::{
     SourcePosition,
     parser::ast::{BinaryOp, Ident, Type, UnaryOp},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TExpr {
     pub kind: TExprKind,
     pub position: SourcePosition,
     pub typ: Type,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum TExprKind {
     Var(Ident),
     LiteralInt(i32),
@@ -52,6 +54,4 @@ pub enum TExprKind {
         size: Box<TExpr>,
     },
     TypedNull(Type),
-    // TODO: Maybe remove that?
-    ExprTypedNull(Box<TExpr>),
 }

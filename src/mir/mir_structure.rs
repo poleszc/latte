@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 
-// TODO: remove json serialization?
 use crate::{SourcePosition, parser::ast::Type, utils::StrID};
-use serde::Serialize;
 
 /// Unique identifier of a single block.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BlockID(pub usize);
 impl BlockID {
     pub fn new(id: usize) -> Self {
@@ -14,7 +12,7 @@ impl BlockID {
 }
 
 /// Unique identifier of a single local variable.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LocalID(pub usize);
 impl LocalID {
     pub fn new(id: usize) -> Self {
@@ -23,7 +21,7 @@ impl LocalID {
 }
 
 /// Unique identifier of a temporary local variable.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TempID(pub usize);
 impl TempID {
     pub fn new(id: usize) -> Self {
@@ -32,7 +30,7 @@ impl TempID {
 }
 
 /// All MIR operations.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MIROperation {
     Assign,
     Call,
@@ -78,7 +76,7 @@ pub enum MIROperation {
 }
 
 /// Representation of a MIR value.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MIRValue {
     Unit, // void
     IntConst(i32),
@@ -93,7 +91,7 @@ pub enum MIRValue {
 }
 
 /// Representation of a MIR place <-> lvalue.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MIRPlace {
     Local(LocalID),
     Temp(TempID),
@@ -103,7 +101,6 @@ pub enum MIRPlace {
         field_name: StrID,
         field_index: usize,
     },
-    // TODO: Is box needed here?
     Index {
         base: Box<MIRPlace>,
         index: Box<MIRValue>,
@@ -125,7 +122,7 @@ impl MIRPlace {
 }
 
 // Single MIR instruction.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct MIRInstruction {
     pub operation: MIROperation,
     pub destination: Option<MIRPlace>, // Some ops don't return a value.
@@ -134,7 +131,7 @@ pub struct MIRInstruction {
 }
 
 /// Terminator instruction - ends the block.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub enum MIRTerminator {
     Jump {
         target: BlockID,
@@ -156,7 +153,7 @@ pub enum MIRTerminator {
 }
 
 /// Single MIR block in the CFG.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct MIRBlock {
     pub id: BlockID,
     /// List of instructions with no terminator.
@@ -166,7 +163,7 @@ pub struct MIRBlock {
 }
 
 /// Single local variable information.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct LocalInfo {
     pub id: LocalID,
     /// Local variable name - for debugging
@@ -180,7 +177,7 @@ pub struct LocalInfo {
 }
 
 /// Single temporary variable information.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct TempInfo {
     pub id: TempID,
     /// Temporary variable type
@@ -188,7 +185,7 @@ pub struct TempInfo {
 }
 
 /// Single function representation in MIR.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct MIRFunction {
     /// Function name.
     pub name: StrID,
@@ -211,38 +208,32 @@ pub struct MIRFunction {
 }
 
 /// Single class information.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct MIRClass {
     /// Class name.
     pub name: StrID,
-    /// Parent class.
-    pub parent: Option<StrID>, // TODO: Is that needed?
-    /// Class fields.
+    /// Class fields in order.
     pub fields: Vec<MIRField>,
-    /// Class method names.
-    pub methods: Vec<StrID>, // TODO: Remove that?
+    /// Class method names in order. Names are after mangling.
     pub vtable: Vec<StrID>,
     pub source_position: SourcePosition,
 }
 
 /// Single class field information.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct MIRField {
     /// Field name.
     pub name: StrID,
     /// Field type.
     pub typ: Type,
-    /// Offset in the class.
-    pub offset: usize,
     /// Field index.
     pub index: usize,
 }
 
 /// Represents a whole MIR program.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct MIRProgram {
     /// Top level functions in the program.
-    /// TODO: What with nested functions.
     pub functions: HashMap<StrID, MIRFunction>,
     /// All programs classes.
     pub classes: HashMap<StrID, MIRClass>,

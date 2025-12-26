@@ -217,77 +217,39 @@ impl<'a> ExpressionChecker<'a> {
                     StrID::from("{string}"),
                 ];
 
-                let (resolved_type, inner_tast_expr) = match &expr.kind {
+                let resolved_type = match &expr.kind {
                     ExprKind::Var(ident) => {
                         if !self.ctx.symbol_table.class_exists(ident.name) {
                             self.ctx.add_error(SemanticError::UndefinedClass {
                                 name: ident.name,
                                 position: ident.position,
                             });
-
-                            let inner_tast = tast::TExpr {
-                                kind: tast::TExprKind::Var(*ident),
-                                position: expr.position,
-                                typ: self.ctx.error_type(expr.position),
-                            };
-
-                            (self.ctx.error_type(position), inner_tast)
+                            self.ctx.error_type(position)
                         } else {
-                            let typ = Type {
+                            Type {
                                 kind: TypeKind::Class(*ident),
                                 position: ident.position,
-                            };
-
-                            let inner_tast = tast::TExpr {
-                                kind: tast::TExprKind::Var(*ident),
-                                position: expr.position,
-                                typ: typ.clone(),
-                            };
-
-                            (typ, inner_tast)
+                            }
                         }
                     }
-                    ExprKind::LiteralString(s) => {
-                        let typ = Type {
-                            kind: TypeKind::String,
-                            position: outer_expr.position,
-                        };
-                        let inner_tast = tast::TExpr {
-                            kind: tast::TExprKind::LiteralString(s.clone()),
-                            position: expr.position,
-                            typ: typ.clone(),
-                        };
-
-                        (typ, inner_tast)
-                    }
-
                     _ => {
                         self.ctx.add_error(SemanticError::InvalidNullCastExpr {
                             expected,
                             cast_position: expr.position,
                             expr_position: position,
                         });
-                        // Tworzymy placeholder TAST, aby kontynuować analizę.
-                        let inner_tast = tast::TExpr {
-                            kind: tast::TExprKind::LiteralNull, // Placeholder
-                            position: expr.position,
-                            typ: self.ctx.error_type(expr.position),
-                        };
-                        (self.ctx.error_type(position), inner_tast)
+                        self.ctx.error_type(position)
                     }
                 };
 
                 (
-                    tast::TExprKind::ExprTypedNull(Box::new(inner_tast_expr)),
+                    tast::TExprKind::TypedNull(resolved_type.clone()),
                     resolved_type,
                 )
             }
             ExprKind::This => {
                 let typ = if let Some(class_name) = &self.ctx.current_class {
-                    let class_ident = Ident {
-                        name: *class_name,
-                        position,
-                    };
+                    let class_ident = self.ctx.mock_identifier(*class_name);
                     Type {
                         kind: TypeKind::Class(class_ident),
                         position,
@@ -359,7 +321,6 @@ impl<'a> ExpressionChecker<'a> {
         args: &[Expr],
         position: SourcePosition,
     ) -> (tast::TExprKind, Type) {
-        // TODO: For now we only support direct calls on function names. Change that to use function types.
         if let ExprKind::Var(name) = &callee.kind {
             match self.ctx.symbol_table.lookup_function(name) {
                 Ok(func_info) => {

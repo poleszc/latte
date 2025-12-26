@@ -147,12 +147,7 @@ impl<'a> DefinitionChecker<'a> {
         let mut current_name = start_class;
 
         loop {
-            // TODO: while let Some?
-            let ident = Ident {
-                name: current_name,
-                position: SourcePosition(0, 0),
-            };
-
+            let ident = self.ctx.mock_identifier(current_name);
             let class_info = match self.ctx.symbol_table.lookup_class(&ident) {
                 Ok(info) => info,
                 Err(_) => return None,
@@ -182,11 +177,7 @@ impl<'a> DefinitionChecker<'a> {
         let mut current_parent = Some(start_parent_name);
 
         while let Some(parent_name) = current_parent {
-            let dummy_ident = Ident {
-                name: parent_name,
-                position: SourcePosition(0, 0),
-            };
-
+            let dummy_ident = self.ctx.mock_identifier(parent_name);
             if let Ok(class_info) = self.ctx.symbol_table.lookup_class(&dummy_ident) {
                 if let Some((_, pos)) = class_info.fields.get(&field_name) {
                     return Some(*pos);
@@ -214,7 +205,6 @@ impl<'a> DefinitionChecker<'a> {
             if let Some(cycle_path) = self.detect_inheritance_cycle(class_def.name.name) {
                 // A simple hack to deduplicate the cycle errors. Sort the class names
                 // lexicographically and report only when we're the smallest (lexically) class.
-                // TODO: Introduce and move that to error handler?
                 let leader_name = cycle_path
                     .iter()
                     .map(|(name, _, _)| name)
@@ -254,7 +244,6 @@ impl<'a> DefinitionChecker<'a> {
                             .lookup_method(parent.name, method_name.name);
 
                         if let Some(parent_method) = parent_method_opt {
-                            // TODO: Use types equal? or some other function which returns an enum on what the mismatch was
                             // Argument count.
                             if method_def.args.len() != parent_method.params.len() {
                                 self.ctx.add_error(SemanticError::InvalidOverride {
@@ -335,11 +324,8 @@ impl<'a> DefinitionChecker<'a> {
         self.ctx.symbol_table.enter_scope();
         self.ctx.validate_function_return_type(&func.return_type);
 
-        // TODO: Try to use parametrized lifetime here to avoid cloning?
         let previous_return_type = self.ctx.current_return_type.take();
         self.ctx.current_return_type = Some(func.return_type.clone());
-
-        // TODO: Here we should look for all nested function definitions and handle them.
 
         // Add arguments to scope.
         for arg in &func.args {
@@ -413,11 +399,7 @@ impl<'a> DefinitionChecker<'a> {
     }
 
     fn validate_main(&mut self) {
-        let main_ident = Ident {
-            name: StrID::from("main"),
-            position: SourcePosition(0, 0),
-        };
-
+        let main_ident = self.ctx.mock_identifier(StrID::from("main"));
         match self.ctx.symbol_table.lookup_function(&main_ident) {
             Ok(signature) => {
                 if !matches!(signature.return_type.kind, TypeKind::Int) {

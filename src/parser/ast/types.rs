@@ -5,7 +5,6 @@ use serde::Serialize;
 use super::{Ident, SourcePosition};
 
 /// TYPES ///
-// TODO: Move that to type system.
 #[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum TypeKind {
     Int,
@@ -14,9 +13,8 @@ pub enum TypeKind {
     Void,
     Null,
     Class(Ident),
-    Array(Box<Type>), // TODO: Box?
-    // TODO: Think about that. Maybe it will be used internally by the type checker.
-    Fun(Box<Type>, Vec<Type>), // TODO: Probably remove it.
+    Array(Box<Type>),
+    Fun(Box<Type>, Vec<Type>),
     Error,
 }
 
@@ -46,7 +44,6 @@ impl fmt::Display for TypeKind {
 #[derive(Debug, PartialEq, Clone, Serialize)]
 pub struct Type {
     pub kind: TypeKind,
-    // TODO: remove source position from Type once it's moved to type system and store it only in the AST.
     pub position: SourcePosition,
 }
 impl fmt::Display for Type {

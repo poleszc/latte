@@ -7,7 +7,6 @@ use std::{
 fn main() {
     println!("cargo:rerun-if-changed=src/latte.lalrpop");
     lalrpop::process_root().unwrap();
-    // TODO: Macro?
 
     // ===================== LEXER ======================
     generate_test_suite(

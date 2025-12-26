@@ -2,7 +2,6 @@ use crate::errors::SemanticError;
 use crate::parser::ast::*;
 use crate::semantics::analysis::context::SemanticContext;
 use crate::semantics::analysis::expr_checker::ExpressionChecker;
-use crate::semantics::analysis::return_checker::ReturnChecker;
 use crate::semantics::tast::TExpr;
 use crate::semantics::{VariableInfo, tast};
 use crate::utils::StrID;
@@ -88,12 +87,6 @@ impl<'a> StatementChecker<'a> {
                 if_false,
             } => self.visit_if(cond, if_true, if_false),
             StmtKind::While { cond, body } => self.visit_while(cond, body),
-            StmtKind::For {
-                init,
-                cond,
-                post,
-                body,
-            } => self.visit_for(init, cond, post, body),
             StmtKind::ForEach {
                 element_type,
                 item_name,
@@ -103,15 +96,12 @@ impl<'a> StatementChecker<'a> {
             StmtKind::Expr(expr) => {
                 tast::TStmtKind::Expr(ExpressionChecker::new(self.ctx).check(expr))
             }
-            StmtKind::FuncDef(func_def) => self.visit_nested_function_definition(func_def),
         };
         tast::TStmt { kind, position }
     }
 
     fn visit_block(&mut self, block: &Block) -> tast::TBlock {
         self.ctx.symbol_table.enter_scope();
-        // TODO: Here we should:
-        // - Look for defined functions
         let stmts = block.stmts.iter().map(|s| self.visit_stmt(s)).collect();
         self.ctx.symbol_table.leave_scope();
         tast::TBlock {
@@ -245,7 +235,6 @@ impl<'a> StatementChecker<'a> {
         if !matches!(typed_expr.typ.kind, TypeKind::Int | TypeKind::Error) {
             self.ctx.add_error(SemanticError::InvalidOperands {
                 operator: StrID::from("--"),
-                // TODO: Imlement type_to_str_id?
                 operand: StrID::from(typed_expr.typ.to_string()),
                 position: expr.position,
                 type_position: typed_expr.typ.position,
@@ -306,42 +295,6 @@ impl<'a> StatementChecker<'a> {
         }
     }
 
-    fn visit_for(
-        &mut self,
-        init: &Option<Box<Stmt>>,
-        cond: &Option<Box<Expr>>,
-        post: &Option<Box<Expr>>,
-        body: &Stmt,
-    ) -> tast::TStmtKind {
-        self.ctx.symbol_table.enter_scope();
-
-        if let Some(init_stmt) = init {
-            // The init variable will be defined in `visit_statement`.
-            self.visit_stmt(init_stmt);
-        }
-
-        if let Some(cond_expr) = cond {
-            let cond_type = ExpressionChecker::new(self.ctx).check(cond_expr);
-            if !matches!(cond_type.typ.kind, TypeKind::Bool | TypeKind::Error) {
-                self.ctx.add_error(SemanticError::TypeMismatch {
-                    expected: StrID::from("boolean"),
-                    found: StrID::from(cond_type.typ.to_string()),
-                    position: cond_expr.position,
-                });
-            }
-        }
-
-        if let Some(post_expr) = post {
-            ExpressionChecker::new(self.ctx).check(post_expr);
-        }
-
-        self.visit_stmt(body);
-        self.ctx.symbol_table.leave_scope();
-
-        // TODO: For now just skip the for loop. In the future probably remove.
-        tast::TStmtKind::Empty
-    }
-
     fn visit_for_each(
         &mut self,
         element_type: &Type,
@@ -378,39 +331,5 @@ impl<'a> StatementChecker<'a> {
             collection: typed_collection,
             body: Box::new(typed_body),
         }
-    }
-
-    // TODO: Remove that?
-    fn visit_nested_function_definition(&mut self, func: &FuncDef) -> tast::TStmtKind {
-        self.ctx.symbol_table.enter_scope();
-        self.ctx.validate_function_return_type(&func.return_type);
-
-        // TODO: Try to use parametrized lifetime here to avoid cloning?
-        let previous_return_type = self.ctx.current_return_type.take();
-        self.ctx.current_return_type = Some(func.return_type.clone());
-        // TODO: Here we should look for all nested function definitions and handle them.
-
-        // Add arguments to scope.
-        for arg in &func.args {
-            self.ctx.validate_variable_type(&arg.arg_type);
-            self.ctx.define_variable(arg.name, arg.arg_type.clone());
-        }
-        self.visit_block(&func.body);
-
-        // Check if function is guaranteed to return.
-        if !matches!(func.return_type.kind, TypeKind::Void)
-            && !ReturnChecker::function_guarantees_return(&func.body)
-        {
-            self.ctx.add_error(SemanticError::MissingReturn {
-                function_name: func.name.name,
-                position: func.position,
-            });
-        }
-
-        // TODO: This is bugged in nested functions.
-        self.ctx.current_return_type = previous_return_type;
-        self.ctx.symbol_table.leave_scope();
-        // TODO: Think about that. Probably remove.
-        tast::TStmtKind::Empty
     }
 }

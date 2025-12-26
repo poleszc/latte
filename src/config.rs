@@ -21,4 +21,16 @@ pub struct LatteArgs {
     // Path to the LLVM runtime library.
     #[arg(long, value_name = "PATH", default_value = "lib/runtime.ll")]
     pub runtime_path: PathBuf,
+    // Emits the AST to a .json file.
+    #[arg(long)]
+    pub emit_ast: bool,
+    // Emits the TAST to a .json file.
+    #[arg(long)]
+    pub emit_tast: bool,
+    // Emits the Mid Intermediate Representation to a .mir text file.
+    #[arg(long)]
+    pub emit_mir: bool,
+    // Emits the Low Intermediate Representation to a .lir text file.
+    #[arg(long)]
+    pub emit_lir: bool,
 }

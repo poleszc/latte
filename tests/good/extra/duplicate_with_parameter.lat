@@ -1,0 +1,12 @@
+int foo(int a) {
+    printInt(a);
+    int a = 123;
+    printInt(a);
+    return a;
+}
+
+int main() {
+    int a = foo(9);
+    printInt(a);
+    return 0;
+}

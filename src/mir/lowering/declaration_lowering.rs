@@ -17,12 +17,7 @@ impl MIRLoweringContext {
         let fields: Vec<MIRField> = field_layout
             .into_iter()
             .enumerate()
-            .map(|(index, (name, typ, _pos))| MIRField {
-                name,
-                typ,
-                offset: index, // TODO: Change that
-                index,
-            })
+            .map(|(index, (name, typ, _pos))| MIRField { name, typ, index })
             .collect();
 
         let vtable_layout = self.symbol_table.get_class_vtable_layout(class_name);
@@ -43,9 +38,7 @@ impl MIRLoweringContext {
 
         MIRClass {
             name: class_name,
-            parent: class_def.extends.map(|e| e.name),
             fields,
-            methods,
             vtable,
             source_position: class_def.position,
         }
@@ -93,7 +86,6 @@ impl MIRLoweringContext {
 
         // If a void function
         if matches!(method.return_type.kind, TypeKind::Void) {
-            // TODO: Make a utility which unwraps the builder.
             let builder = self.builder();
             if !builder.is_current_block_terminated() {
                 builder.emit_return(None, method.position);
@@ -104,7 +96,6 @@ impl MIRLoweringContext {
     }
 
     pub(super) fn lower_function(&mut self, func_def: &TFuncDef) -> MIRFunction {
-        // TODO: This is duplicated with method validation. Fix that.
         let mut builder = MIRFunctionBuilder::new(
             func_def.name.name,
             func_def.return_type.clone(),

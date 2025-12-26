@@ -61,3 +61,16 @@ pub enum ClassEntryKind {
     Field(Vec<Ident>, Type),
     Method(FuncDef),
 }
+
+impl Program {
+    pub fn dump_to_file(&self, path: &std::path::Path) -> std::io::Result<()> {
+        use std::fs::File;
+        use std::io::Write;
+
+        let json_string = serde_json::to_string_pretty(&self)?;
+        let mut file = File::create(path)?;
+        write!(file, "{}", json_string)?;
+
+        Ok(())
+    }
+}

@@ -1,6 +1,5 @@
 use serde::Serialize;
 
-use super::definitions::FuncDef;
 use super::expressions::Expr;
 use super::types::Type;
 use super::{Ident, SourcePosition};
@@ -42,12 +41,6 @@ pub enum StmtKind {
         cond: Box<Expr>,
         body: Box<Stmt>,
     },
-    For {
-        init: Option<Box<Stmt>>,
-        cond: Option<Box<Expr>>,
-        post: Option<Box<Expr>>,
-        body: Box<Stmt>,
-    },
     ForEach {
         element_type: Type,
         item_name: Ident,
@@ -55,7 +48,6 @@ pub enum StmtKind {
         body: Box<Stmt>,
     },
     Expr(Box<Expr>),
-    FuncDef(FuncDef), // Embedded functions.
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize)]
