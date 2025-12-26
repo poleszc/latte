@@ -270,10 +270,6 @@ SimpleStmt: ast::Stmt = {
         kind: ast::StmtKind::Expr(expr),
         position: SourcePosition(start, end),
     },
-    <start: @L> <f: FuncDef> <end: @R> => ast::Stmt {
-        kind: ast::StmtKind::FuncDef(f),
-        position: SourcePosition(start, end),
-    },
 };
 
 DeclItem: ast::Item = {

@@ -423,11 +423,10 @@ impl LIRFunctionBuilder {
             }
             MIRValue::StringConst(s) => LIRValue::StringConst(s.clone()),
             MIRValue::Null => LIRValue::Null,
-            // TODO: Remove those?
             MIRValue::Block(block_id) => LIRValue::Block(LirBID(block_id.0)),
             MIRValue::Function(func_name) => LIRValue::Function(*func_name),
             MIRValue::Class(class_name) => LIRValue::Class(*class_name),
-            MIRValue::Unit => todo!("Unit"),
+            MIRValue::Unit => panic!("Tried to lower a unit MIRValue")
         }
     }
 }

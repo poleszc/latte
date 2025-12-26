@@ -2,7 +2,6 @@ use crate::errors::SemanticError;
 use crate::parser::ast::*;
 use crate::semantics::analysis::context::SemanticContext;
 use crate::semantics::analysis::expr_checker::ExpressionChecker;
-use crate::semantics::analysis::return_checker::ReturnChecker;
 use crate::semantics::tast::TExpr;
 use crate::semantics::{VariableInfo, tast};
 use crate::utils::StrID;
@@ -103,7 +102,6 @@ impl<'a> StatementChecker<'a> {
             StmtKind::Expr(expr) => {
                 tast::TStmtKind::Expr(ExpressionChecker::new(self.ctx).check(expr))
             }
-            StmtKind::FuncDef(func_def) => self.visit_nested_function_definition(func_def),
         };
         tast::TStmt { kind, position }
     }
@@ -378,39 +376,5 @@ impl<'a> StatementChecker<'a> {
             collection: typed_collection,
             body: Box::new(typed_body),
         }
-    }
-
-    // TODO: Remove that?
-    fn visit_nested_function_definition(&mut self, func: &FuncDef) -> tast::TStmtKind {
-        self.ctx.symbol_table.enter_scope();
-        self.ctx.validate_function_return_type(&func.return_type);
-
-        // TODO: Try to use parametrized lifetime here to avoid cloning?
-        let previous_return_type = self.ctx.current_return_type.take();
-        self.ctx.current_return_type = Some(func.return_type.clone());
-        // TODO: Here we should look for all nested function definitions and handle them.
-
-        // Add arguments to scope.
-        for arg in &func.args {
-            self.ctx.validate_variable_type(&arg.arg_type);
-            self.ctx.define_variable(arg.name, arg.arg_type.clone());
-        }
-        self.visit_block(&func.body);
-
-        // Check if function is guaranteed to return.
-        if !matches!(func.return_type.kind, TypeKind::Void)
-            && !ReturnChecker::function_guarantees_return(&func.body)
-        {
-            self.ctx.add_error(SemanticError::MissingReturn {
-                function_name: func.name.name,
-                position: func.position,
-            });
-        }
-
-        // TODO: This is bugged in nested functions.
-        self.ctx.current_return_type = previous_return_type;
-        self.ctx.symbol_table.leave_scope();
-        // TODO: Think about that. Probably remove.
-        tast::TStmtKind::Empty
     }
 }

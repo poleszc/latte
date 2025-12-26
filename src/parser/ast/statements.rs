@@ -1,6 +1,5 @@
 use serde::Serialize;
 
-use super::definitions::FuncDef;
 use super::expressions::Expr;
 use super::types::Type;
 use super::{Ident, SourcePosition};
@@ -55,7 +54,6 @@ pub enum StmtKind {
         body: Box<Stmt>,
     },
     Expr(Box<Expr>),
-    FuncDef(FuncDef), // Embedded functions.
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize)]
