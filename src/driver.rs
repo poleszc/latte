@@ -35,7 +35,7 @@ pub fn run_compiler<
     fs::create_dir_all(&output_dir)?;
 
     // ============= PARSING ===============
-    eprintln!("[LATTE]: Parsing program...");
+    println!("[LATTE]: Parsing program...");
     let input_file = &args.input_file;
     let source_code = fs::read_to_string(input_file)?;
     let parsed_program = parser::parse(&source_code)?;
@@ -56,7 +56,7 @@ pub fn run_compiler<
     }
 
     // ============= SEMANTIC ANALYSIS ===============
-    eprintln!("[LATTE]: Running semantic analysis...");
+    println!("[LATTE]: Running semantic analysis...");
     let semantic_analysis_result = match SemanticChecker::check(&parsed_program) {
         Ok(table) => table,
         Err(errors) => {
@@ -73,7 +73,7 @@ pub fn run_compiler<
     }
 
     // ============= MIR LOWERING ===============
-    eprintln!("[LATTE]: Lowering to MIR...");
+    println!("[LATTE]: Lowering to MIR...");
     let mir_program = mir::lower_to_mir(
         &semantic_analysis_result.tast,
         semantic_analysis_result.symbol_table,
@@ -83,14 +83,14 @@ pub fn run_compiler<
     }
 
     // ============= LIR LOWERING ===============
-    eprintln!("[LATTE]: Lowering to LIR...");
+    println!("[LATTE]: Lowering to LIR...");
     let lir_program = lir::lower_to_lir(mir_program);
     if args.emit_lir || args.emit_all {
         dump_lir(&output_dir, file_stem, &lir_program)?;
     }
 
     // ============= LLVM BACKEND ===============
-    eprintln!("[LATTE]: Generating LLVM...");
+    println!("[LATTE]: Generating LLVM...");
     backend_driver(&lir_program, &output_dir, file_stem, args)?;
 
     // TODO:

@@ -43,7 +43,7 @@ pub fn compile_llvm(
 }
 
 fn llvm_assemble(ll_path: &PathBuf, bc_path: &PathBuf) -> Result<(), CompilerError> {
-    eprintln!("[LLVM]: Assembling bitcode for: {}", ll_path.display());
+    println!("[LLVM]: Assembling bitcode for: {}", ll_path.display());
     let as_output = Command::new("llvm-as")
         .arg(ll_path)
         .arg("-o")
@@ -63,16 +63,16 @@ fn lower_lir_to_llvm_and_save(
     lir_program: &LIRProgram,
     ll_path: &PathBuf,
 ) -> Result<(), CompilerError> {
-    eprintln!("[LLVM]: Lowering to LLVM...");
+    println!("[LLVM]: Lowering to LLVM...");
     let llvm_generator = LLVMGenerator::new();
     let llvm_ir = llvm_generator.generate_program(lir_program);
     fs::write(ll_path, llvm_ir)?;
-    eprintln!("[LLVM]: Dumped LLVM IR to file: {}", ll_path.display());
+    println!("[LLVM]: Dumped LLVM IR to file: {}", ll_path.display());
     Ok(())
 }
 
 fn llvm_link(linked_path: &PathBuf, paths_to_link: Vec<PathBuf>) -> Result<(), CompilerError> {
-    eprintln!(
+    println!(
         "[LLVM]: Linking paths: [{}]",
         paths_to_link
             .iter()
@@ -92,7 +92,7 @@ fn llvm_link(linked_path: &PathBuf, paths_to_link: Vec<PathBuf>) -> Result<(), C
             String::from_utf8_lossy(&link_output.stderr)
         )));
     }
-    eprintln!(
+    println!(
         "[LLVM]: Generated linked bitcode: {}",
         linked_path.display()
     );
@@ -100,7 +100,7 @@ fn llvm_link(linked_path: &PathBuf, paths_to_link: Vec<PathBuf>) -> Result<(), C
 }
 
 fn llvm_run(bc_path: &PathBuf) -> Result<(), CompilerError> {
-    eprintln!("[LLVM]: Running program");
+    println!("[LLVM]: Running program");
 
     Command::new("lli")
         .arg(bc_path)

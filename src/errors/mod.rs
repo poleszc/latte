@@ -56,7 +56,7 @@ pub fn report_compiler_error(file_path: &str, source: &str, error: &CompilerErro
             .to_diagnostic()
             .render(file_path, source);
         }
-        CompilerError::Io(e) => eprintln!("I/O Error: {}", e),
-        CompilerError::Other(msg) => eprintln!("Error: {}", msg),
+        CompilerError::Io(e) => println!("I/O Error: {}", e),
+        CompilerError::Other(msg) => println!("Error: {}", msg),
     }
 }
