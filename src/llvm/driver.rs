@@ -102,11 +102,13 @@ fn llvm_link(linked_path: &PathBuf, paths_to_link: Vec<PathBuf>) -> Result<(), C
 fn llvm_run(bc_path: &PathBuf) -> Result<(), CompilerError> {
     println!("[LLVM]: Running program");
 
+    println!("============== STDOUT ===============");
     Command::new("lli")
         .arg(bc_path)
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit())
         .status()?;
+    println!("============ END STDOUT =============");
     Ok(())
 }

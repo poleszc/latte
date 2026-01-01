@@ -34,6 +34,11 @@
 ./latc_llvm tests/good/official/core001.lat
 # lub
 cargo run tests/good/official/core001.lat
+
+# Można też dodać flagę `--run`, która uruchomi `lli` na skompilowanym pliku.
+./latc_llvm tests/good/official/core001.lat --run
+# lub
+cargo run tests/good/official/core001.lat --run
 ```
 
 ### Reprezentacje pośrednie
