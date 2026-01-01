@@ -60,6 +60,7 @@ pub fn run_compiler<
     let semantic_analysis_result = match SemanticChecker::check(&parsed_program) {
         Ok(table) => table,
         Err(errors) => {
+            eprintln!("ERROR\n");
             for err in errors {
                 let comp_error = CompilerError::Semantic(err);
                 report_compiler_error(args.input_file.to_str().unwrap(), &source_code, &comp_error);

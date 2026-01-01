@@ -1,4 +1,14 @@
 # Latte - Piotr Oleszczuk, nr 448390
+## Co jest zrobione
+- Pełna podstawowa wersja zadania z backend'em LLVM
+- Dodatkowo z rozszerzeń (zarówno we frontendzie i backendzie):
+  - Użycie rejestrów i phi zamiast alloca (aktualnie w generowanym LLVM IR pojawiają się jeszcze instrukcje typu `%r0 = bitcast i32 10 to i32`, czyli odpowiednik `%r0 = 10`. To oczywiscie zniknie po pierwszym passie constant propagation, którego jeszcze nie ma.)
+  - Tablice (bez tablic tablic, nie do końca jest dla mnie jasne, czy powinny one być)
+  - Struktury
+  - Obiekty
+  - Metody wirtualne
+  - Zagnieżdżone struktury, obiekty, tablice struktur, obiekty z tablicami itp.
+
 ## Budowanie projektu
 1) Instalacja Rust:
    - Aby zainstalować należy uruchomić skrypt `build.sh` znajdujący się w katalogu głównym projektu.
@@ -15,15 +25,6 @@
       - `make clean` - usuwa zbudowane binarki oraz pliki `*.{mir, lir, tast.json, json, ll, bc}` z katalogu `tests/in`
       - `make clean-all` - usuwa to co `make clean` oraz wszystkie pliki dependencji
 
-## Co jest zrobione
-- Pełna podstawowa wersja zadania z backend'em LLVM
-- Dodatkowo z rozszerzeń (zarówno we frontendzie i backendzie):
-  - Użycie rejestrów i phi zamiast alloca (aktualnie w generowanym LLVM IR pojawiają się jeszcze instrukcje typu `%r0 = bitcast i32 10 to i32`, czyli odpowiednik `%r0 = 10`. To oczywiscie zniknie po pierwszym passie constant propagation, którego jeszcze nie ma.)
-  - Tablice (bez tablic tablic, nie do końca jest dla mnie jasne, czy powinny one być)
-  - Struktury
-  - Obiekty
-  - Metody wirtualne
-  - Zagnieżdżone struktury, obiekty, tablice struktur, obiekty z tablicami itp.
 
 ## Użycie kompilatora
 ### Podstawowe użycie
