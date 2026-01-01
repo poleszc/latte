@@ -65,7 +65,7 @@ impl Diagnostic {
 
         report
             .finish()
-            .print((file_path, source_cache))
+            .eprint((file_path, source_cache))
             .expect("Failed to report an ariadne error")
     }
 }

@@ -1,4 +1,14 @@
 # Latte - Piotr Oleszczuk, nr 448390
+## Co jest zrobione
+- Pełna podstawowa wersja zadania z backend'em LLVM
+- Dodatkowo z rozszerzeń (zarówno we frontendzie i backendzie):
+  - Użycie rejestrów i phi zamiast alloca (aktualnie w generowanym LLVM IR pojawiają się jeszcze instrukcje typu `%r0 = bitcast i32 10 to i32`, czyli odpowiednik `%r0 = 10`. To oczywiscie zniknie po pierwszym passie constant propagation, którego jeszcze nie ma.)
+  - Tablice (bez tablic tablic, nie do końca jest dla mnie jasne, czy powinny one być)
+  - Struktury
+  - Obiekty
+  - Metody wirtualne
+  - Zagnieżdżone struktury, obiekty, tablice struktur, obiekty z tablicami itp.
+
 ## Budowanie projektu
 1) Instalacja Rust:
    - Aby zainstalować należy uruchomić skrypt `build.sh` znajdujący się w katalogu głównym projektu.
@@ -12,51 +22,41 @@
     który skompiluje projekt i przekopiuje pliki wykonywalne `latc_llvm` oraz `insc_llvm` do katalogu głównego.
     - **Dodatkowe opcje:**
       - `make build-llvm` - przebuduje jedynie binarkę z backendem LLVM
-      - `make clean` - usuwa zbudowane binarki oraz pliki `*.{mir.txt, tast.txt, json, ll, bc}` z katalogu `tests/in`
+      - `make clean` - usuwa zbudowane binarki oraz pliki `*.{mir, lir, tast.json, json, ll, bc}` z katalogu `tests/in`
       - `make clean-all` - usuwa to co `make clean` oraz wszystkie pliki dependencji
 
-## Raport z pierwszej iteracji
-- W czasie pisania projektu, trochę zmieniały mi się plany na implementacje. Początkowo planowałem przejść 
-  przez cały pipeline kompilatora wąsko (z małą liczbą feature'ów) i nastepie po kolei dodawać do niego 
-  kolejne funkcjonalności. Ostatecznie plan się zmienił i przez warstwy przechodziłem grubo (od razu ze wszystkimi feature'ami).
-- Aktualny stan projektu jest taki, że działa pełna analiza semantyczna dla języka ze wszystkimi rozszerzeniami(tablice, struktury, 
-  klasy, dziedziczenie), która jest zintegrowana z Ariadne(błędy są naprawde ładne i duo czasu zajęło mi pisanie ich (pewnie 
-  nawet za dużo, zakładam że troche zoverkillowałem)). Działa także obniżanie reprezentacji drzewowej do MIRa(Mid Intermediate 
-  Representation, reprezentacja blokowa programu, jeszcze bez SSA(single static assignment)) dla wszystkich feature'ów.
-- Ostatecznie powstało na razie 5600 linii kodu
-
-### Co miało być wykonane i zostało wykonane
-- W pełni funkcjonalny parser, z ładnymi błędami parsowania - zrobione, nawet z analizą semantyczną dla rozszerzeń
-- Integracja z lalrpopem, ariadne, logosem - zrobione, lekser używa logosa, parser lalrpopa, do błędów używam ariadne
-- Zaimplementowana semantyczna weryfikacja dla podstawowej wersji(+ stringi) - zrobione nie tylko dla wersji podstawowej, jest też analiza semantyczna dla wszystkich rozszerzeń
-- Asynchroniczny "Framework" do testów kompilatora zintegrowany z cargo - nie ukrywam, że to nie jest do końca to co planowałem, ale cargo automatycznie puszcza testy współbieżnie, więc jakby przymknąć oko to współbieżne testy kompilatora są :). Tutaj jestem całkiem zadowolony z automatycznej generacji testów (`build.rs`) dla plików w folderach testowych, które tworzą się automatycznie, gdy nowy plik testowy pojawi się w folderze. Jestem ciekawy na ile takie rozwiązanie jest "produkcyjne".
-    - Testy parsowania - zrobione
-    - Testy poprawności semantycznej - zrobione
-    - Podbudowa pod testy integracyjne - powiem szczerze, że aktualny stan implementacji tej części to nie jest to czego się spodziewałem 
-        na oddając plan projektu, ale myślę, że wykonaną pracę można uznać za "podbudowe", więc uznam ten punkt za zrobiony.
-### Co miało być wykonane i nie zostało wykonane
-- Zaimplementowana prosta logika ewaluacji wyrażeń podczas kompilacji - tego nie ma, stwierdziłem, że to optymalizacja czym wole zająć się 
-  potem (albo optymalizować LIRa(low intermediate representation, reprezentacja już z SSA) a nie AST). Priotytetyzowałem przepchnięcie się przez cały pipeline kompilacji
-### Co nie miało być wykonane i zostało wykonane
-- Analiza semantyczna dla wszystkich rozszerzeń
-- Solidne error recovery - mój kompilator nie wywala się na pierwszym błędzie, tylko całkiem mądrze handluje i robi recovery jeżeli będzie błąd. Kompilacja programu nie wywala się na pierwszym spotkanym błędzie tylko zwraca listę błędów.
-- Dodanie obniżania aż do MIRa(czyli jakies dodatkowe 2k linii kodu)
-- String interning i StrID używane w całym projekcie (`src/utils/StrID`)
 
 ## Użycie kompilatora
+### Podstawowe użycie
 ```bash
-# Wykona parsowanie, analize semantyczną oraz przejście przez dwie pierwsze fazy kompilacji, generacje otypowanego AST oraz MIRa.
-# Wszystkie reprezentacje pośrednie zostaną zapisane w plikach (domyślnie w katalogu, w którym znajduje się plik kompilowany, można też dodać flage --output-dir)
-# plik: {nazwa_testu}.ast.json - zawiera zserializowane AST, bezpośrednio po parsowaniu pliku
-# plik: {nazwa_testu}.tast.json - zawiera zserializowane AST, wzbogacone o informacje typową.
-# plik: {nazwa_testu}.mir.json - zawiera zserializowanego MIRa (raczej nie ma się tam co patrzeć, wygodniejszy do oglądania jest *.mir.txt)
-# plik: {nazwa_testu}.mir.txt - zawiera zserializowanego MIRa, co własnego formatu przyjemnego dla oka i możliwego do czytania.
+# Uruchomienie `latc_llvm` na pliku z rozszerzeniem `.lat` wykona analize semantyczną i kompilacje do LLVM. W lokalizacji pliku źródłowego pojawi się plik `*.ll` z LLVM IR kompilowanego kodu, plik `*_raw.bc` z bitkodem kompilowanego pliku oraz `*.bc` z bitkodem skompilowanego pliku zlinkowanym z biblioteką `runtime.ll` z katalogu `lib/`. To ten plik '*.bc' bez sufiksu raw można odpalać za pomocą `lli`.
 
 # Program kończy się kodem 1 w przypadku błędu analizy semantycznej (i wypisze błąd na STDOUT) i kodem 0 w przypadku sukcesu. 
-./latc_llvm tests/in/test01.ins 
+./latc_llvm tests/good/official/core001.lat
 # lub
-cargo run tests/in/test01.ins 
+cargo run tests/good/official/core001.lat
+
+# Można też dodać flagę `--run`, która uruchomi `lli` na skompilowanym pliku.
+./latc_llvm tests/good/official/core001.lat --run
+# lub
+cargo run tests/good/official/core001.lat --run
 ```
+
+### Reprezentacje pośrednie
+- Domyślnie emitowanie wszystkich reprezentacji pośrednich jest wyłączone, po dodaniu odpowiednich flag, kompilator dodatkowo wypluje pliki z reprezentacjami pośrednimi (flagi można oczywiście ze sobą łączyć):
+```bash
+# Wyemituje plik ze sparsowanym AST (*.ast.json)
+./latc_llvm tests/good/official/core001.lat --emit-ast
+# Wyemituje plik z AST analize semantycznej i otypowaniu. (*.tast.json)
+./latc_llvm tests/good/official/core001.lat --emit-tast
+# Wyemituje plik z tekstową reprezentacja MIR (Mid Intermediate Representation). Prosta reprezentacja blokowa z kodem czwórkowym i bez złożonych LValue (zagnieżdżone accessy są już rozbite na kilka instrukcji). (*.mir)
+./latc_llvm tests/good/official/core001.lat --emit-mir
+# Wyemituje plik z tekstową reprezentacja LIR (Low Intermediate Representation). Reprezentacja blokowa z SSA i phi. (*.lir)
+./latc_llvm tests/good/official/core001.lat --emit-lir
+# Wyemituje pliki ze wszystkimi reprezentacjami pośrednimi.
+./latc_llvm tests/good/official/core001.lat --emit-all
+```
+
 ## Struktura testów
 - W przetestowaniu funkcjonalności może pomóc znajomość folderu z testami sprawdzić jak działa kompilator.
 ```bash
@@ -77,10 +77,7 @@ tests
     │   └── virtual
     ├── extra               # Dodatkowe testy podstawy latte, bez rozszerzeń.
     └── official            # Oficjalne, prawidłowe testy MRJP
-
-
 ```
-
 
 ## Struktura projektu
 ```bash

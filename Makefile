@@ -3,8 +3,8 @@ all: build-all
 build-all: build-llvm
 
 build-llvm:
-	cargo build --bin insc_llvm --release
-	cp target/release/insc_llvm .
+	cargo build --bin latc_llvm --release
+	cp target/release/latc_llvm .
 
 test: build
 	@echo "Running tests..."
@@ -14,7 +14,7 @@ clean-all: clean
 
 clean:
 	echo "Cleaning up..."
-	rm -rf insc_llvm
+	rm -rf latc_llvm
 	rm -rf tests/good/extra/*.json
 	rm -rf tests/good/official/*.json
 	rm -rf tests/good/extensions/arrays/*.json
