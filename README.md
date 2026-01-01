@@ -8,6 +8,7 @@
   - Obiekty
   - Metody wirtualne
   - Zagnieżdżone struktury, obiekty, tablice struktur, obiekty z tablicami itp.
+  - Jawna obsługa błędów wykonania takich jak dzielenie przez 0, null ptr access (poprzez wywołanie `error()` z `runtime.ll`)
 
 ## Budowanie projektu
 1) Instalacja Rust:
@@ -31,7 +32,7 @@
 ```bash
 # Uruchomienie `latc_llvm` na pliku z rozszerzeniem `.lat` wykona analize semantyczną i kompilacje do LLVM. W lokalizacji pliku źródłowego pojawi się plik `*.ll` z LLVM IR kompilowanego kodu, plik `*_raw.bc` z bitkodem kompilowanego pliku oraz `*.bc` z bitkodem skompilowanego pliku zlinkowanym z biblioteką `runtime.ll` z katalogu `lib/`. To ten plik '*.bc' bez sufiksu raw można odpalać za pomocą `lli`.
 
-# Program kończy się kodem 1 w przypadku błędu analizy semantycznej (i wypisze błąd na STDOUT) i kodem 0 w przypadku sukcesu. 
+# Program kończy się kodem 1 w przypadku błędu analizy semantycznej (i wypisze błąd na STDERR) i kodem 0 w przypadku sukcesu. 
 ./latc_llvm tests/good/official/core001.lat
 # lub
 cargo run tests/good/official/core001.lat
