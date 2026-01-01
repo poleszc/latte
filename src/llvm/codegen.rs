@@ -505,7 +505,6 @@ impl<'a> LLVMGenerator<'a> {
 
         self.emit_null_check(&obj_val, &obj_type, block_id);
 
-        // TODO: Check for null ptr access.
         // Get the VTable pointer from the zeroth field.
         let vptr_ptr = format!("%vptr_ptr_vcall_{}", id);
         let vptr = format!("%vptr_vcall_{}", id);
