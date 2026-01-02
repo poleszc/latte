@@ -333,3 +333,192 @@ impl<'a> StatementChecker<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod stmt_semantic_tests {
+    use super::*;
+    use crate::semantics::analysis::context::SemanticContext;
+
+    fn setup_ctx_with_return(ret_kind: TypeKind) -> SemanticContext {
+        let mut ctx = SemanticContext::new();
+        ctx.current_return_type = Some(Type {
+            kind: ret_kind,
+            position: SourcePosition(0, 0),
+        });
+        ctx
+    }
+
+    #[test]
+    fn test_lvalue_validation() {
+        let mut ctx = SemanticContext::new();
+        {
+            let mut checker = StatementChecker::new(&mut ctx);
+
+            // 5 = 10;
+            let lit_expr = tast::TExpr {
+                kind: tast::TExprKind::LiteralInt(5),
+                typ: Type {
+                    kind: TypeKind::Int,
+                    position: SourcePosition(0, 0),
+                },
+                position: SourcePosition(0, 0),
+            };
+            checker.check_lvalue(&lit_expr);
+        }
+        assert!(!ctx.errors.is_empty());
+        assert!(matches!(ctx.errors[0], SemanticError::InvalidLValue { .. }));
+
+        // arr.length = 10;
+        ctx.errors.clear();
+        let mut checker = StatementChecker::new(&mut ctx);
+        let length_access = tast::TExpr {
+            kind: tast::TExprKind::FieldAccess {
+                object: Box::new(tast::TExpr {
+                    kind: tast::TExprKind::Var(Ident {
+                        name: "arr".into(),
+                        position: SourcePosition(0, 0),
+                    }),
+                    typ: Type {
+                        kind: TypeKind::Array(Box::new(Type {
+                            kind: TypeKind::Int,
+                            position: SourcePosition(0, 0),
+                        })),
+                        position: SourcePosition(0, 0),
+                    },
+                    position: SourcePosition(0, 0),
+                }),
+                field_name: Ident {
+                    name: "length".into(),
+                    position: SourcePosition(0, 0),
+                },
+            },
+            typ: Type {
+                kind: TypeKind::Int,
+                position: SourcePosition(0, 0),
+            },
+            position: SourcePosition(0, 0),
+        };
+        checker.check_lvalue(&length_access);
+        assert!(!ctx.errors.is_empty());
+    }
+
+    #[test]
+    fn test_scope_isolation() {
+        let mut ctx = SemanticContext::new();
+        {
+            let mut checker = StatementChecker::new(&mut ctx);
+
+            // { int x; }
+            // x = 5;
+            let block = Block {
+                stmts: vec![Stmt {
+                    kind: StmtKind::Decl(
+                        Type {
+                            kind: TypeKind::Int,
+                            position: SourcePosition(0, 0),
+                        },
+                        vec![Item {
+                            kind: ItemKind::NoInit(Ident {
+                                name: "x".into(),
+                                position: SourcePosition(0, 0),
+                            }),
+                            position: SourcePosition(0, 0),
+                        }],
+                    ),
+                    position: SourcePosition(0, 0),
+                }],
+                position: SourcePosition(0, 0),
+            };
+
+            checker.check_block(&block);
+        }
+        let ident_x = Ident {
+            name: "x".into(),
+            position: SourcePosition(0, 0),
+        };
+        assert!(ctx.symbol_table.lookup_variable(&ident_x).is_err());
+    }
+    #[test]
+    fn test_invalid_return_type() {
+        // return "string";
+        let mut ctx = setup_ctx_with_return(TypeKind::Int);
+        {
+            let mut checker = StatementChecker::new(&mut ctx);
+
+            let ret_stmt = Stmt {
+                kind: StmtKind::Return {
+                    expr: Some(Box::new(Expr {
+                        kind: ExprKind::LiteralString("not an int".into()),
+                        position: SourcePosition(0, 0),
+                    })),
+                },
+                position: SourcePosition(0, 0),
+            };
+
+            checker.check_stmt(&ret_stmt);
+        }
+        assert!(!ctx.errors.is_empty());
+        assert!(matches!(
+            ctx.errors[0],
+            SemanticError::InvalidReturnValue { .. }
+        ));
+    }
+
+    #[test]
+    fn test_for_each_type_mismatch() {
+        let mut ctx = SemanticContext::new();
+
+        ctx.symbol_table
+            .define_variable(VariableInfo {
+                ident: Ident {
+                    name: "intArray".into(),
+                    position: SourcePosition(0, 0),
+                },
+                typ: Type {
+                    kind: TypeKind::Array(Box::new(Type {
+                        kind: TypeKind::Int,
+                        position: SourcePosition(0, 0),
+                    })),
+                    position: SourcePosition(0, 0),
+                },
+            })
+            .unwrap();
+
+        {
+            let mut checker = StatementChecker::new(&mut ctx);
+
+            // for (string i: intArray)
+            let for_each = Stmt {
+                kind: StmtKind::ForEach {
+                    element_type: Type {
+                        kind: TypeKind::String,
+                        position: SourcePosition(0, 0),
+                    },
+                    item_name: Ident {
+                        name: "s".into(),
+                        position: SourcePosition(0, 0),
+                    },
+                    collection: Box::new(Expr {
+                        kind: ExprKind::Var(Ident {
+                            name: "intArray".into(),
+                            position: SourcePosition(0, 0),
+                        }),
+                        position: SourcePosition(0, 0),
+                    }),
+                    body: Box::new(Stmt {
+                        kind: StmtKind::Empty,
+                        position: SourcePosition(0, 0),
+                    }),
+                },
+                position: SourcePosition(0, 0),
+            };
+
+            checker.check_stmt(&for_each);
+        }
+        assert!(!ctx.errors.is_empty());
+        assert!(matches!(
+            ctx.errors[0],
+            SemanticError::ForEachTypeMismatch { .. }
+        ));
+    }
+}

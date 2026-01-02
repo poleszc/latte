@@ -599,8 +599,73 @@ impl<'a> ExpressionChecker<'a> {
 
 #[cfg(test)]
 mod expr_semantic_tests {
+    use std::collections::HashMap;
+
     use super::*;
-    use crate::semantics::analysis::context::SemanticContext;
+    use crate::semantics::{ClassInfo, analysis::context::SemanticContext};
+
+    fn setup_complex_ctx() -> SemanticContext {
+        let mut ctx = SemanticContext::new();
+
+        let base_name = StrID::from("A");
+        let derived_name = StrID::from("B");
+
+        ctx.define_class(ClassInfo {
+            ident: Ident {
+                name: base_name,
+                position: SourcePosition(0, 0),
+            },
+            parent: None,
+            fields: HashMap::new(),
+            methods: HashMap::new(),
+            field_order: vec![],
+            method_order: vec![],
+            position: SourcePosition(0, 0),
+        });
+
+        ctx.define_class(ClassInfo {
+            ident: Ident {
+                name: derived_name,
+                position: SourcePosition(0, 0),
+            },
+            parent: Some(Ident {
+                name: base_name,
+                position: SourcePosition(0, 0),
+            }),
+            fields: HashMap::new(),
+            methods: HashMap::new(),
+            field_order: vec![],
+            method_order: vec![],
+            position: SourcePosition(0, 0),
+        });
+
+        ctx.define_function(FunctionInfo {
+            ident: Ident {
+                name: StrID::from("foo"),
+                position: SourcePosition(0, 0),
+            },
+            return_type: Type {
+                kind: TypeKind::Void,
+                position: SourcePosition(0, 0),
+            },
+            params: vec![
+                Type {
+                    kind: TypeKind::Int,
+                    position: SourcePosition(0, 0),
+                },
+                Type {
+                    kind: TypeKind::Class(Ident {
+                        name: base_name,
+                        position: SourcePosition(0, 0),
+                    }),
+                    position: SourcePosition(0, 0),
+                },
+            ],
+            position: SourcePosition(0, 0),
+        });
+
+        ctx
+    }
 
     #[test]
     fn test_null_assignment() {
@@ -621,5 +686,159 @@ mod expr_semantic_tests {
             ctx.errors[0],
             SemanticError::InvalidNullCast { .. }
         ));
+    }
+    #[test]
+    fn test_binary_op_mismatch() {
+        let mut ctx = SemanticContext::new();
+        let mut checker = ExpressionChecker::new(&mut ctx);
+
+        // 5 + true (Int + Bool)
+        let expr = Expr {
+            kind: ExprKind::BinaryOp {
+                op: BinaryOp::Add,
+                lhs: Box::new(Expr {
+                    kind: ExprKind::LiteralInt(5),
+                    position: SourcePosition(0, 0),
+                }),
+                rhs: Box::new(Expr {
+                    kind: ExprKind::LiteralTrue,
+                    position: SourcePosition(0, 0),
+                }),
+            },
+            position: SourcePosition(0, 0),
+        };
+
+        checker.check(&expr);
+        assert!(!ctx.errors.is_empty());
+
+        let has_mismatch = ctx.errors.iter().any(|e| {
+            matches!(
+                e,
+                SemanticError::BinaryOpTypeMismatch { .. } | SemanticError::InvalidOperands { .. }
+            )
+        });
+        assert!(has_mismatch);
+    }
+
+    #[test]
+    fn test_string_concatenation_legal() {
+        let mut ctx = SemanticContext::new();
+        let mut checker = ExpressionChecker::new(&mut ctx);
+
+        // "hello" + "world"
+        let expr = Expr {
+            kind: ExprKind::BinaryOp {
+                op: BinaryOp::Add,
+                lhs: Box::new(Expr {
+                    kind: ExprKind::LiteralString("hello".into()),
+                    position: SourcePosition(0, 0),
+                }),
+                rhs: Box::new(Expr {
+                    kind: ExprKind::LiteralString("world".into()),
+                    position: SourcePosition(0, 0),
+                }),
+            },
+            position: SourcePosition(0, 0),
+        };
+
+        let typed_expr = checker.check(&expr);
+        assert!(ctx.errors.is_empty());
+        assert!(matches!(typed_expr.typ.kind, TypeKind::String));
+    }
+
+    #[test]
+    fn test_subtyping_in_function_arguments() {
+        let mut ctx = setup_complex_ctx();
+        let mut checker = ExpressionChecker::new(&mut ctx);
+
+        // testFunc(10, new Derived)
+        let expr = Expr {
+            kind: ExprKind::App {
+                callee: Box::new(Expr {
+                    kind: ExprKind::Var(Ident {
+                        name: "foo".into(),
+                        position: SourcePosition(0, 0),
+                    }),
+                    position: SourcePosition(0, 0),
+                }),
+                args: vec![
+                    Expr {
+                        kind: ExprKind::LiteralInt(10),
+                        position: SourcePosition(0, 0),
+                    },
+                    Expr {
+                        kind: ExprKind::NewObject(Type {
+                            kind: TypeKind::Class(Ident {
+                                name: "B".into(),
+                                position: SourcePosition(0, 0),
+                            }),
+                            position: SourcePosition(0, 0),
+                        }),
+                        position: SourcePosition(0, 0),
+                    },
+                ],
+            },
+            position: SourcePosition(0, 0),
+        };
+
+        checker.check(&expr);
+        assert!(
+            ctx.errors.is_empty(),
+            "B should be accepted where A is expected"
+        );
+    }
+
+    #[test]
+    fn test_builtin_length_field() {
+        let mut ctx = SemanticContext::new();
+        let mut checker = ExpressionChecker::new(&mut ctx);
+
+        // "test".length
+        let expr = Expr {
+            kind: ExprKind::FieldAccess {
+                object: Box::new(Expr {
+                    kind: ExprKind::LiteralString("test".into()),
+                    position: SourcePosition(0, 0),
+                }),
+                field_name: Ident {
+                    name: "length".into(),
+                    position: SourcePosition(0, 0),
+                },
+            },
+            position: SourcePosition(0, 0),
+        };
+
+        let typed_expr = checker.check(&expr);
+        assert!(ctx.errors.is_empty());
+        assert!(matches!(typed_expr.typ.kind, TypeKind::Int));
+    }
+
+    #[test]
+    fn test_invalid_field_access_on_primitive() {
+        let mut ctx = SemanticContext::new();
+        let mut checker = ExpressionChecker::new(&mut ctx);
+
+        // 5.fld
+        let expr = Expr {
+            kind: ExprKind::FieldAccess {
+                object: Box::new(Expr {
+                    kind: ExprKind::LiteralInt(5),
+                    position: SourcePosition(0, 0),
+                }),
+                field_name: Ident {
+                    name: "fld".into(),
+                    position: SourcePosition(0, 0),
+                },
+            },
+            position: SourcePosition(0, 0),
+        };
+
+        checker.check(&expr);
+        assert!(!ctx.errors.is_empty());
+        assert!(
+            ctx.errors
+                .iter()
+                .any(|e| matches!(e, SemanticError::InvalidOperands { .. }))
+        );
     }
 }
