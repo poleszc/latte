@@ -423,3 +423,48 @@ impl<'a> DefinitionChecker<'a> {
         }
     }
 }
+#[cfg(test)]
+mod cycle_tests {
+    use super::*;
+    use crate::semantics::analysis::context::SemanticContext;
+
+    #[test]
+    fn test_inheritance_cycle_detection() {
+        let mut ctx = SemanticContext::new();
+        let mut checker = DefinitionChecker::new(&mut ctx);
+
+        // A extends B, B extends A
+        let class_a = ClassDef {
+            name: Ident {
+                name: StrID::from("A"),
+                position: SourcePosition(1, 2),
+            },
+            extends: Some(Ident {
+                name: StrID::from("B"),
+                position: SourcePosition(3, 4),
+            }),
+            entries: vec![],
+            position: SourcePosition(0, 0),
+        };
+        let class_b = ClassDef {
+            name: Ident {
+                name: StrID::from("B"),
+                position: SourcePosition(5, 6),
+            },
+            extends: Some(Ident {
+                name: StrID::from("A"),
+                position: SourcePosition(7, 8),
+            }),
+            entries: vec![],
+            position: SourcePosition(0, 0),
+        };
+
+        checker.add_class(&class_a);
+        checker.add_class(&class_b);
+
+        let cycle = checker.detect_inheritance_cycle(StrID::from("A"));
+        assert!(cycle.is_some());
+        let path = cycle.unwrap();
+        assert_eq!(path.len(), 2);
+    }
+}

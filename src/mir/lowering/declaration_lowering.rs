@@ -137,3 +137,170 @@ impl MIRLoweringContext {
         self.current_function.take().unwrap().build()
     }
 }
+
+#[cfg(test)]
+mod declaration_tests {
+    use super::*;
+    use crate::parser::ast::*;
+    use crate::semantics::symbol_table::SymbolTable;
+    use crate::semantics::symbols::ClassInfo;
+    use crate::semantics::tast::*;
+    use std::collections::HashMap;
+
+    fn setup_ctx() -> MIRLoweringContext {
+        MIRLoweringContext::new(SymbolTable::new())
+    }
+
+    #[test]
+    fn test_method_lowering_injects_this() {
+        let mut ctx = setup_ctx();
+
+        let class_name = Ident {
+            name: StrID::from("A"),
+            position: SourcePosition(0, 0),
+        };
+        let class_def = TClassDef {
+            name: class_name,
+            extends: None,
+            entries: vec![],
+            position: SourcePosition(0, 0),
+        };
+
+        let method_def = TFuncDef {
+            name: Ident {
+                name: StrID::from("foo"),
+                position: SourcePosition(0, 0),
+            },
+            return_type: Type {
+                kind: TypeKind::Void,
+                position: SourcePosition(0, 0),
+            },
+            args: vec![Arg {
+                arg_type: Type {
+                    kind: TypeKind::Int,
+                    position: SourcePosition(0, 0),
+                },
+                name: Ident {
+                    name: StrID::from("amount"),
+                    position: SourcePosition(0, 0),
+                },
+                position: SourcePosition(0, 0),
+            }],
+            body: TBlock {
+                stmts: vec![],
+                position: SourcePosition(0, 0),
+            },
+            position: SourcePosition(0, 0),
+        };
+
+        let mir_func = ctx.lower_method(&class_def, &method_def);
+
+        // Test mangling.
+        assert_eq!(mir_func.name, StrID::from("A_foo"));
+
+        // Test if this is injected.
+        assert_eq!(mir_func.parameter_types.len(), 2);
+        assert!(matches!(
+            mir_func.parameter_types[0].kind,
+            TypeKind::Class(_)
+        ));
+        assert!(matches!(mir_func.parameter_types[1].kind, TypeKind::Int));
+        let this_local = mir_func
+            .locals
+            .iter()
+            .find(|l| l.name == Some(StrID::from("this")))
+            .expect("Missing this");
+        assert!(this_local.is_parameter);
+        assert_eq!(this_local.parameter_index, Some(0));
+    }
+
+    #[test]
+    fn test_void_function_implicit_return() {
+        let mut ctx = setup_ctx();
+
+        let func_def = TFuncDef {
+            name: Ident {
+                name: StrID::from("nothing"),
+                position: SourcePosition(0, 0),
+            },
+            return_type: Type {
+                kind: TypeKind::Void,
+                position: SourcePosition(0, 0),
+            },
+            args: vec![],
+            body: TBlock {
+                stmts: vec![],
+                position: SourcePosition(0, 0),
+            },
+            position: SourcePosition(0, 0),
+        };
+
+        let mir_func = ctx.lower_function(&func_def);
+        let entry_block = &mir_func.blocks[&mir_func.entry_block];
+
+        match &entry_block.terminator {
+            Some(MIRTerminator::Return { value: None, .. }) => {}
+            _ => panic!("Void function should have implicit ReturnVoid"),
+        }
+    }
+
+    #[test]
+    fn test_class_layout_lowering() {
+        let mut st = SymbolTable::new();
+
+        let class_info = ClassInfo {
+            ident: Ident {
+                name: StrID::from("Point"),
+                position: SourcePosition(0, 0),
+            },
+            parent: None,
+            fields: [
+                (
+                    StrID::from("x"),
+                    (
+                        Type {
+                            kind: TypeKind::Int,
+                            position: SourcePosition(0, 0),
+                        },
+                        SourcePosition(0, 0),
+                    ),
+                ),
+                (
+                    StrID::from("y"),
+                    (
+                        Type {
+                            kind: TypeKind::Int,
+                            position: SourcePosition(0, 0),
+                        },
+                        SourcePosition(0, 0),
+                    ),
+                ),
+            ]
+            .into(),
+            methods: HashMap::new(),
+            field_order: vec![StrID::from("x"), StrID::from("y")],
+            method_order: vec![],
+            position: SourcePosition(0, 0),
+        };
+        st.define_class(class_info).unwrap();
+
+        let mut ctx = MIRLoweringContext::new(st);
+        let t_class_def = TClassDef {
+            name: Ident {
+                name: StrID::from("Point"),
+                position: SourcePosition(0, 0),
+            },
+            extends: None,
+            entries: vec![],
+            position: SourcePosition(0, 0),
+        };
+
+        let mir_class = ctx.lower_class(&t_class_def);
+
+        assert_eq!(mir_class.fields.len(), 2);
+        assert_eq!(mir_class.fields[0].name, StrID::from("x"));
+        assert_eq!(mir_class.fields[0].index, 0);
+        assert_eq!(mir_class.fields[1].name, StrID::from("y"));
+        assert_eq!(mir_class.fields[1].index, 1);
+    }
+}

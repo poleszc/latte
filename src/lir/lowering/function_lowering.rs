@@ -429,3 +429,128 @@ impl LIRFunctionBuilder {
         }
     }
 }
+
+#[cfg(test)]
+mod ssa_tests {
+    use super::*;
+    use crate::SourcePosition;
+    use crate::mir::builders::MIRFunctionBuilder;
+    use crate::mir::*;
+    use crate::parser::ast::{Type, TypeKind};
+
+    fn setup_builder() -> MIRFunctionBuilder {
+        MIRFunctionBuilder::new(
+            StrID::from("test"),
+            Type {
+                kind: TypeKind::Void,
+                position: SourcePosition(0, 0),
+            },
+            vec![],
+            SourcePosition(0, 0),
+        )
+    }
+
+    #[test]
+    fn test_ssa_variable_renaming() {
+        // x = 1; x = x + 1; -> %r0 = 1; %r1 = %r0 + 1;
+        let mut mir_builder = setup_builder();
+        let ty_int = Type {
+            kind: TypeKind::Int,
+            position: SourcePosition(0, 0),
+        };
+        let x = mir_builder.create_local(Some(StrID::from("x")), ty_int.clone(), false, None);
+
+        // x = 1
+        mir_builder.emit_assign(
+            MIRPlace::Local(x),
+            MIRValue::IntConst(1),
+            SourcePosition(0, 0),
+        );
+        // x = x + 1
+        mir_builder.emit_binary(
+            MIROperation::IntAdd,
+            MIRPlace::Local(x),
+            MIRValue::Local(x),
+            MIRValue::IntConst(1),
+            SourcePosition(0, 0),
+        );
+        mir_builder.emit_return(None, SourcePosition(0, 0));
+
+        let mir_func = mir_builder.build();
+        let mut lir_builder = LIRFunctionBuilder::new();
+        let lir_func = lir_builder.lower(&mir_func);
+
+        let entry_block = &lir_func.blocks[&lir_func.entry_block];
+
+        // At least two instructions to two different registers should appear.
+        let dest_reg: Vec<_> = entry_block
+            .instructions
+            .iter()
+            .filter_map(|i| i.destination)
+            .collect();
+
+        assert!(dest_reg.len() >= 2);
+        assert_ne!(dest_reg[0], dest_reg[1], "Duplicate register usage");
+    }
+
+    #[test]
+    fn test_phi_insertion_in_diamond_cfg() {
+        // if (c) { x = 1 } else { x = 2 }; print(x)
+        // Phi with two args should appear
+        let mut mir_builder = setup_builder();
+        let ty_int = Type {
+            kind: TypeKind::Int,
+            position: SourcePosition(0, 0),
+        };
+        let x = mir_builder.create_local(Some(StrID::from("x")), ty_int.clone(), false, None);
+
+        let true_b = mir_builder.create_block();
+        let false_b = mir_builder.create_block();
+        let merge_b = mir_builder.create_block();
+
+        mir_builder.emit_branch(
+            MIRValue::BoolConst(true),
+            true_b,
+            false_b,
+            SourcePosition(0, 0),
+        );
+
+        mir_builder.set_current_block(true_b);
+        mir_builder.emit_assign(
+            MIRPlace::Local(x),
+            MIRValue::IntConst(1),
+            SourcePosition(0, 0),
+        );
+        mir_builder.emit_jump(merge_b, SourcePosition(0, 0));
+
+        mir_builder.set_current_block(false_b);
+        mir_builder.emit_assign(
+            MIRPlace::Local(x),
+            MIRValue::IntConst(2),
+            SourcePosition(0, 0),
+        );
+        mir_builder.emit_jump(merge_b, SourcePosition(0, 0));
+
+        mir_builder.set_current_block(merge_b);
+        mir_builder.emit_call(
+            None,
+            StrID::from("printInt"),
+            vec![MIRValue::Local(x)],
+            SourcePosition(0, 0),
+        );
+        mir_builder.emit_return(None, SourcePosition(0, 0));
+
+        let mir_func = mir_builder.build();
+        let mut lir_builder = LIRFunctionBuilder::new();
+        let lir_func = lir_builder.lower(&mir_func);
+
+        let merge_lir_id = LirBID(merge_b.0);
+        let merge_block = &lir_func.blocks[&merge_lir_id];
+
+        let has_phi = merge_block
+            .instructions
+            .iter()
+            .any(|i| i.operation == LIROperation::Phi);
+        assert!(has_phi, "Merge block should contain a phi instruction");
+    }
+}

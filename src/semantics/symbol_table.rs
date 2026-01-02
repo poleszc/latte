@@ -297,3 +297,213 @@ impl SymbolTable {
         }
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::ast::{Ident, SourcePosition, Type, TypeKind};
+
+    fn typ(kind: TypeKind) -> Type {
+        Type {
+            kind,
+            position: SourcePosition(0, 0),
+        }
+    }
+
+    fn ident(name: &str) -> Ident {
+        Ident {
+            name: StrID::from(name),
+            position: SourcePosition(0, 0),
+        }
+    }
+
+    #[test]
+    fn test_undefined_variable() {
+        let st = SymbolTable::new();
+        let var = ident("x");
+
+        let err = st.lookup_variable(&var).unwrap_err();
+        matches!(err, SemanticError::UndefinedVariable { .. });
+    }
+
+    #[test]
+    fn test_duplicate_class_definition() {
+        let mut st = SymbolTable::new();
+
+        let class = ClassInfo {
+            ident: ident("A"),
+            parent: None,
+            fields: HashMap::new(),
+            methods: HashMap::new(),
+            field_order: vec![],
+            method_order: vec![],
+            position: SourcePosition(0, 0),
+        };
+
+        st.define_class(class.clone()).unwrap();
+        assert!(st.define_class(class).is_err());
+    }
+
+    #[test]
+    fn test_scoping_and_duplicate_definitions() {
+        let mut st = SymbolTable::new();
+        let var_a = ident("a");
+
+        assert!(
+            st.define_variable(VariableInfo {
+                ident: var_a,
+                typ: typ(TypeKind::Int)
+            })
+            .is_ok()
+        );
+        assert!(
+            st.define_variable(VariableInfo {
+                ident: var_a,
+                typ: typ(TypeKind::Int)
+            })
+            .is_err()
+        );
+
+        st.enter_scope();
+        assert!(
+            st.define_variable(VariableInfo {
+                ident: var_a,
+                typ: typ(TypeKind::Bool)
+            })
+            .is_ok()
+        );
+        assert_eq!(st.lookup_variable(&var_a).unwrap().kind, TypeKind::Bool);
+        st.leave_scope();
+
+        assert_eq!(st.lookup_variable(&var_a).unwrap().kind, TypeKind::Int);
+    }
+
+    #[test]
+    fn test_class_field_inheritance_layout() {
+        let mut st = SymbolTable::new();
+
+        // Class A { int x; }
+        let class_a = ClassInfo {
+            ident: ident("A"),
+            parent: None,
+            fields: [(StrID::from("x"), (typ(TypeKind::Int), SourcePosition(0, 0)))].into(),
+            methods: HashMap::new(),
+            field_order: vec![StrID::from("x")],
+            method_order: vec![],
+            position: SourcePosition(0, 0),
+        };
+        st.define_class(class_a).unwrap();
+
+        // Class B extends A { int y; }
+        let class_b = ClassInfo {
+            ident: ident("B"),
+            parent: Some(ident("A")),
+            fields: [(StrID::from("y"), (typ(TypeKind::Int), SourcePosition(0, 0)))].into(),
+            methods: HashMap::new(),
+            field_order: vec![StrID::from("y")],
+            method_order: vec![],
+            position: SourcePosition(0, 0),
+        };
+        st.define_class(class_b).unwrap();
+
+        let layout = st.get_class_field_layout(StrID::from("B"));
+        assert_eq!(layout.len(), 2);
+        assert_eq!(layout[0].0, StrID::from("x"));
+        assert_eq!(layout[1].0, StrID::from("y"));
+    }
+
+    #[test]
+    fn test_vtable_override() {
+        let mut st = SymbolTable::new();
+
+        // A { int f(); }
+        let mut methods_a = HashMap::new();
+        methods_a.insert(
+            StrID::from("f"),
+            FunctionInfo {
+                ident: ident("f"),
+                return_type: typ(TypeKind::Int),
+                params: vec![],
+                position: SourcePosition(0, 0),
+            },
+        );
+
+        st.define_class(ClassInfo {
+            ident: ident("A"),
+            parent: None,
+            fields: HashMap::new(),
+            methods: methods_a,
+            field_order: vec![],
+            method_order: vec![StrID::from("f")],
+            position: SourcePosition(0, 0),
+        })
+        .unwrap();
+
+        // B extends A { bool f(); }
+        let mut methods_b = HashMap::new();
+        methods_b.insert(
+            StrID::from("f"),
+            FunctionInfo {
+                ident: ident("f"),
+                return_type: typ(TypeKind::Bool),
+                params: vec![],
+                position: SourcePosition(0, 0),
+            },
+        );
+
+        st.define_class(ClassInfo {
+            ident: ident("B"),
+            parent: Some(ident("A")),
+            fields: HashMap::new(),
+            methods: methods_b,
+            field_order: vec![],
+            method_order: vec![StrID::from("f")],
+            position: SourcePosition(0, 0),
+        })
+        .unwrap();
+
+        let vtable = st.get_class_vtable_layout(StrID::from("B"));
+        assert_eq!(vtable.len(), 1);
+        assert_eq!(vtable[0].return_type.kind, TypeKind::Bool);
+    }
+
+    #[test]
+    fn test_find_method_owner() {
+        let mut st = SymbolTable::new();
+
+        let mut methods = HashMap::new();
+        methods.insert(
+            StrID::from("foo"),
+            FunctionInfo {
+                ident: ident("foo"),
+                return_type: typ(TypeKind::Int),
+                params: vec![],
+                position: SourcePosition(0, 0),
+            },
+        );
+
+        st.define_class(ClassInfo {
+            ident: ident("A"),
+            parent: None,
+            fields: HashMap::new(),
+            methods,
+            field_order: vec![],
+            method_order: vec![StrID::from("foo")],
+            position: SourcePosition(0, 0),
+        })
+        .unwrap();
+
+        st.define_class(ClassInfo {
+            ident: ident("B"),
+            parent: Some(ident("A")),
+            fields: HashMap::new(),
+            methods: HashMap::new(),
+            field_order: vec![],
+            method_order: vec![],
+            position: SourcePosition(0, 0),
+        })
+        .unwrap();
+
+        let owner = st.find_method_owner(StrID::from("B"), StrID::from("foo"));
+        assert_eq!(owner, Some(StrID::from("A")));
+    }
+}

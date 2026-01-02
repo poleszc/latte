@@ -106,3 +106,173 @@ impl MIRLoweringContext {
         }
     }
 }
+#[cfg(test)]
+mod lvalue_tests {
+    use super::*;
+    use crate::mir::builders::MIRFunctionBuilder;
+    use crate::parser::ast::*;
+    use crate::semantics::symbol_table::SymbolTable;
+    use crate::semantics::tast::*;
+    use crate::utils::StrID;
+
+    fn setup_context() -> MIRLoweringContext {
+        let st = SymbolTable::new();
+        MIRLoweringContext::new(st)
+    }
+
+    #[test]
+    fn test_lower_local_variable_as_place() {
+        let mut ctx = setup_context();
+        let ty_int = Type {
+            kind: TypeKind::Int,
+            position: SourcePosition(0, 0),
+        };
+
+        let mut builder = MIRFunctionBuilder::new(
+            StrID::from("f"),
+            ty_int.clone(),
+            vec![],
+            SourcePosition(0, 0),
+        );
+        let local_id = builder.create_local(Some(StrID::from("x")), ty_int.clone(), false, None);
+        ctx.current_function = Some(builder);
+        ctx.variable_map.insert(StrID::from("x"), local_id);
+
+        let var_expr = TExpr {
+            kind: TExprKind::Var(Ident {
+                name: StrID::from("x"),
+                position: SourcePosition(0, 0),
+            }),
+            typ: ty_int,
+            position: SourcePosition(0, 0),
+        };
+
+        let place = ctx.lower_expr_as_place(&var_expr);
+
+        match place {
+            MIRPlace::Local(id) => assert_eq!(id, local_id),
+            _ => panic!("Expected MIRPlace::Local"),
+        }
+    }
+
+    #[test]
+    fn test_lower_implicit_field_access_as_place() {
+        let mut ctx = setup_context();
+        let ty_int = Type {
+            kind: TypeKind::Int,
+            position: SourcePosition(0, 0),
+        };
+        let class_ident = Ident {
+            name: StrID::from("klaz"),
+            position: SourcePosition(0, 0),
+        };
+        let ty_class = Type {
+            kind: TypeKind::Class(class_ident),
+            position: SourcePosition(0, 0),
+        };
+
+        let mut builder = MIRFunctionBuilder::new(
+            StrID::from("method"),
+            ty_int.clone(),
+            vec![],
+            SourcePosition(0, 0),
+        );
+        let this_id =
+            builder.create_local(Some(StrID::from("this")), ty_class.clone(), true, Some(0));
+        ctx.current_function = Some(builder);
+        ctx.variable_map.insert(StrID::from("this"), this_id);
+
+        ctx.current_class_fields
+            .insert(StrID::from("metod"), (0, ty_int.clone()));
+
+        let field_expr = TExpr {
+            kind: TExprKind::Var(Ident {
+                name: StrID::from("metod"),
+                position: SourcePosition(0, 0),
+            }),
+            typ: ty_int,
+            position: SourcePosition(0, 0),
+        };
+
+        let place = ctx.lower_expr_as_place(&field_expr);
+
+        match place {
+            MIRPlace::Field {
+                base,
+                field_name,
+                field_index,
+                ..
+            } => {
+                assert_eq!(field_name, StrID::from("metod"));
+                assert_eq!(field_index, 0);
+                match *base {
+                    MIRPlace::Local(id) => assert_eq!(id, this_id),
+                    _ => panic!("Base of implicit field access must be 'this' (Local)"),
+                }
+            }
+            _ => panic!("Expected MIRPlace::Field for implicit field access"),
+        }
+    }
+
+    #[test]
+    fn test_lower_array_access_as_place() {
+        let mut ctx = setup_context();
+        let ty_int = Type {
+            kind: TypeKind::Int,
+            position: SourcePosition(0, 0),
+        };
+        let ty_arr = Type {
+            kind: TypeKind::Array(Box::new(ty_int.clone())),
+            position: SourcePosition(0, 0),
+        };
+
+        let mut builder = MIRFunctionBuilder::new(
+            StrID::from("f"),
+            ty_int.clone(),
+            vec![],
+            SourcePosition(0, 0),
+        );
+        let arr_id = builder.create_local(Some(StrID::from("arr")), ty_arr.clone(), false, None);
+        ctx.current_function = Some(builder);
+        ctx.variable_map.insert(StrID::from("arr"), arr_id);
+
+        let arr_expr = Box::new(TExpr {
+            kind: TExprKind::Var(Ident {
+                name: StrID::from("arr"),
+                position: SourcePosition(0, 0),
+            }),
+            typ: ty_arr,
+            position: SourcePosition(0, 0),
+        });
+        let index_expr = Box::new(TExpr {
+            kind: TExprKind::LiteralInt(5),
+            typ: ty_int.clone(),
+            position: SourcePosition(0, 0),
+        });
+
+        let array_access_expr = TExpr {
+            kind: TExprKind::ArrayAccess {
+                array: arr_expr,
+                index: index_expr,
+            },
+            typ: ty_int,
+            position: SourcePosition(0, 0),
+        };
+
+        let place = ctx.lower_expr_as_place(&array_access_expr);
+
+        match place {
+            MIRPlace::Index { base, index } => {
+                match *base {
+                    MIRPlace::Local(id) => assert_eq!(id, arr_id),
+                    _ => panic!("Expected Local base for array"),
+                }
+                match *index {
+                    MIRValue::IntConst(v) => assert_eq!(v, 5),
+                    _ => panic!("Expected IntConst index"),
+                }
+            }
+            _ => panic!("Expected MIRPlace::Index"),
+        }
+    }
+}

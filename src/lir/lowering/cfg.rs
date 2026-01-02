@@ -218,3 +218,104 @@ fn build_dom_tree(idom: &ImmediateDominators) -> DominatorTree {
 
     tree
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SourcePosition;
+    use crate::mir::{BlockID as MirBID, MIRBlock, MIRFunction, MIRTerminator, MIRValue};
+    use crate::parser::ast::{Type, TypeKind};
+    use crate::utils::StrID;
+
+    fn create_mock_func(num_blocks: usize) -> MIRFunction {
+        MIRFunction {
+            name: StrID::from("test"),
+            return_type: Type {
+                kind: TypeKind::Void,
+                position: SourcePosition(0, 0),
+            },
+            parameter_types: vec![],
+            locals: vec![],
+            temps: vec![],
+            blocks: (0..num_blocks)
+                .map(|i| {
+                    (
+                        MirBID(i),
+                        MIRBlock {
+                            id: MirBID(i),
+                            instructions: vec![],
+                            terminator: None,
+                        },
+                    )
+                })
+                .collect(),
+            block_order: (0..num_blocks).map(MirBID).collect(),
+            entry_block: MirBID(0),
+            source_position: SourcePosition(0, 0),
+        }
+    }
+
+    #[test]
+    fn test_cfg_analysis_diamond() {
+        // 0 -> 1, 2; 1 -> 3; 2 -> 3
+        let mut func = create_mock_func(4);
+        func.blocks.get_mut(&MirBID(0)).unwrap().terminator = Some(MIRTerminator::Branch {
+            condition: crate::mir::MIRValue::BoolConst(true),
+            if_true: MirBID(1),
+            if_false: MirBID(2),
+            position: SourcePosition(0, 0),
+        });
+        func.blocks.get_mut(&MirBID(1)).unwrap().terminator = Some(MIRTerminator::Jump {
+            target: MirBID(3),
+            position: SourcePosition(0, 0),
+        });
+        func.blocks.get_mut(&MirBID(2)).unwrap().terminator = Some(MIRTerminator::Jump {
+            target: MirBID(3),
+            position: SourcePosition(0, 0),
+        });
+
+        let analysis = GraphAnalysis::analyze(&func);
+
+        assert_eq!(analysis.predecessors[&MirBID(3)].len(), 2);
+        assert!(analysis.dominance_frontier[&MirBID(1)].contains(&MirBID(3)));
+        assert!(analysis.dominance_frontier[&MirBID(2)].contains(&MirBID(3)));
+    }
+
+    #[test]
+    fn test_dominance_frontier_while() {
+        // 0 (entry) -> 1 (header);
+        // 1 -> 2 (body), 3 (exit);
+        // 2 -> 1 (back-edge)
+        let mut func = crate::lir::lowering::cfg::tests::create_mock_func(4);
+
+        // 0 -> 1
+        func.blocks.get_mut(&MirBID(0)).unwrap().terminator = Some(MIRTerminator::Jump {
+            target: MirBID(1),
+            position: SourcePosition(0, 0),
+        });
+
+        // 1 -> 2, 3
+        func.blocks.get_mut(&MirBID(1)).unwrap().terminator = Some(MIRTerminator::Branch {
+            condition: MIRValue::BoolConst(true),
+            if_true: MirBID(2),
+            if_false: MirBID(3),
+            position: SourcePosition(0, 0),
+        });
+
+        // 2 -> 1
+        func.blocks.get_mut(&MirBID(2)).unwrap().terminator = Some(MIRTerminator::Jump {
+            target: MirBID(1),
+            position: SourcePosition(0, 0),
+        });
+
+        let analysis = GraphAnalysis::analyze(&func);
+
+        // 1 should dominate over 2.
+        // Dominance frontier of 2 should be 1.
+        assert!(analysis.dominance_frontier[&MirBID(2)].contains(&MirBID(1)));
+
+        // Dominance frontier of 1 should be 1
+        assert!(analysis.dominance_frontier[&MirBID(1)].contains(&MirBID(1)));
+        assert_eq!(analysis.dominance_frontier[&MirBID(1)].len(), 1);
+    }
+}

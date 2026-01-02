@@ -80,3 +80,63 @@ impl ReturnChecker {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::ast::*;
+
+    #[test]
+    fn test_complex_return_checking() {
+        // if (cond) return 1; else { if (cond2) return 2; else return 3; } -> true
+        let mock_expr = Box::new(Expr {
+            kind: ExprKind::LiteralTrue,
+            position: SourcePosition(0, 0),
+        });
+        let ret_stmt = Stmt {
+            kind: StmtKind::Return {
+                expr: Some(mock_expr.clone()),
+            },
+            position: SourcePosition(0, 0),
+        };
+
+        let nested_if = Stmt {
+            kind: StmtKind::If {
+                cond: mock_expr.clone(),
+                if_true: Box::new(ret_stmt.clone()),
+                if_false: Some(Box::new(ret_stmt.clone())),
+            },
+            position: SourcePosition(0, 0),
+        };
+
+        let root_if = Stmt {
+            kind: StmtKind::If {
+                cond: mock_expr.clone(),
+                if_true: Box::new(ret_stmt.clone()),
+                if_false: Some(Box::new(nested_if)),
+            },
+            position: SourcePosition(0, 0),
+        };
+
+        assert!(ReturnChecker::stmt_guarantees_return(&root_if));
+    }
+
+    #[test]
+    fn test_while_true_return() {
+        let mock_expr_true = Box::new(Expr {
+            kind: ExprKind::LiteralTrue,
+            position: SourcePosition(0, 0),
+        });
+        let loop_stmt = Stmt {
+            kind: StmtKind::While {
+                cond: mock_expr_true,
+                body: Box::new(Stmt {
+                    kind: StmtKind::Empty,
+                    position: SourcePosition(0, 0),
+                }),
+            },
+            position: SourcePosition(0, 0),
+        };
+        assert!(ReturnChecker::stmt_guarantees_return(&loop_stmt));
+    }
+}
