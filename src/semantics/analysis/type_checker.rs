@@ -271,3 +271,195 @@ impl<'a> TypeChecker<'a> {
         }
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::ast::{Ident, SourcePosition, Type, TypeKind};
+    use crate::semantics::symbols::ClassInfo;
+    use std::collections::HashMap;
+
+    fn setup_hierarchy() -> SymbolTable {
+        let mut st = SymbolTable::new();
+        let class_a = ClassInfo {
+            ident: Ident {
+                name: StrID::from("A"),
+                position: SourcePosition(0, 0),
+            },
+            parent: None,
+            fields: HashMap::new(),
+            methods: HashMap::new(),
+            field_order: vec![],
+            method_order: vec![],
+            position: SourcePosition(0, 0),
+        };
+        let class_b = ClassInfo {
+            ident: Ident {
+                name: StrID::from("B"),
+                position: SourcePosition(0, 0),
+            },
+            parent: Some(Ident {
+                name: StrID::from("A"),
+                position: SourcePosition(0, 0),
+            }),
+            fields: HashMap::new(),
+            methods: HashMap::new(),
+            field_order: vec![],
+            method_order: vec![],
+            position: SourcePosition(0, 0),
+        };
+        st.define_class(class_a).unwrap();
+        st.define_class(class_b).unwrap();
+        st
+    }
+
+    #[test]
+    fn test_types_equal() {
+        let int1 = Type {
+            kind: TypeKind::Int,
+            position: SourcePosition(0, 0),
+        };
+        let int2 = Type {
+            kind: TypeKind::Int,
+            position: SourcePosition(0, 0),
+        };
+        let bool_t = Type {
+            kind: TypeKind::Bool,
+            position: SourcePosition(0, 0),
+        };
+        let err = Type {
+            kind: TypeKind::Error,
+            position: SourcePosition(0, 0),
+        };
+
+        assert!(TypeChecker::types_equal(&int1, &int2));
+        assert!(!TypeChecker::types_equal(&int1, &bool_t));
+        assert!(TypeChecker::types_equal(&err, &int1));
+        assert!(TypeChecker::types_equal(&int1, &err));
+    }
+
+    #[test]
+    fn test_array_type_equality() {
+        let t1 = Type {
+            kind: TypeKind::Array(Box::new(Type {
+                kind: TypeKind::Int,
+                position: SourcePosition(0, 0),
+            })),
+            position: SourcePosition(0, 0),
+        };
+
+        let t2 = Type {
+            kind: TypeKind::Array(Box::new(Type {
+                kind: TypeKind::Int,
+                position: SourcePosition(0, 0),
+            })),
+            position: SourcePosition(0, 0),
+        };
+
+        let t3 = Type {
+            kind: TypeKind::Array(Box::new(Type {
+                kind: TypeKind::Bool,
+                position: SourcePosition(0, 0),
+            })),
+            position: SourcePosition(0, 0),
+        };
+
+        assert!(TypeChecker::types_equal(&t1, &t2));
+        assert!(!TypeChecker::types_equal(&t1, &t3));
+    }
+
+    #[test]
+    fn test_unary_op_legal_types() {
+        use crate::parser::ast::UnaryOp;
+
+        let st = setup_hierarchy();
+        let tc = TypeChecker::new(&st);
+
+        let int_t = Type {
+            kind: TypeKind::Int,
+            position: SourcePosition(0, 0),
+        };
+        let bool_t = Type {
+            kind: TypeKind::Bool,
+            position: SourcePosition(0, 0),
+        };
+
+        assert!(tc.type_legal_for_unary_op(&UnaryOp::Neg, &int_t));
+        assert!(!tc.type_legal_for_unary_op(&UnaryOp::Neg, &bool_t));
+
+        assert!(tc.type_legal_for_unary_op(&UnaryOp::Not, &bool_t));
+        assert!(!tc.type_legal_for_unary_op(&UnaryOp::Not, &int_t));
+    }
+
+    #[test]
+    fn test_operator_result_types() {
+        use crate::parser::ast::{BinaryOp, UnaryOp};
+
+        let st = setup_hierarchy();
+        let tc = TypeChecker::new(&st);
+
+        let int_t = Type {
+            kind: TypeKind::Int,
+            position: SourcePosition(0, 0),
+        };
+
+        let res = tc.binary_op_result_type(&BinaryOp::Add, &int_t, SourcePosition(1, 1));
+        assert!(matches!(res.kind, TypeKind::Int));
+
+        let res = tc.binary_op_result_type(&BinaryOp::Eq, &int_t, SourcePosition(1, 1));
+        assert!(matches!(res.kind, TypeKind::Bool));
+
+        let res = tc.unary_op_result_type(&UnaryOp::Not, SourcePosition(1, 1));
+        assert!(matches!(res.kind, TypeKind::Bool));
+    }
+
+    #[test]
+    fn test_validate_undefined_class_type() {
+        let st = SymbolTable::new();
+        let tc = TypeChecker::new(&st);
+
+        let bad_class = Type {
+            kind: TypeKind::Class(Ident {
+                name: StrID::from("noclass"),
+                position: SourcePosition(0, 0),
+            }),
+            position: SourcePosition(0, 0),
+        };
+
+        assert!(tc.validate_variable_type(&bad_class).is_err());
+    }
+
+    #[test]
+    fn test_subtyping() {
+        let st = setup_hierarchy();
+        let tc = TypeChecker::new(&st);
+
+        let type_a = Type {
+            kind: TypeKind::Class(Ident {
+                name: StrID::from("A"),
+                position: SourcePosition(0, 0),
+            }),
+            position: SourcePosition(0, 0),
+        };
+        let type_b = Type {
+            kind: TypeKind::Class(Ident {
+                name: StrID::from("B"),
+                position: SourcePosition(0, 0),
+            }),
+            position: SourcePosition(0, 0),
+        };
+        let type_null = Type {
+            kind: TypeKind::Null,
+            position: SourcePosition(0, 0),
+        };
+        let type_int = Type {
+            kind: TypeKind::Int,
+            position: SourcePosition(0, 0),
+        };
+
+        assert!(tc.is_subtype(&type_b, &type_a));
+        assert!(!tc.is_subtype(&type_a, &type_b));
+        assert!(tc.is_subtype(&type_null, &type_a));
+        assert!(tc.is_subtype(&type_null, &type_b));
+        assert!(!tc.is_subtype(&type_int, &type_a));
+    }
+}

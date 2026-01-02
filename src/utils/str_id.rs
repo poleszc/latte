@@ -56,3 +56,19 @@ impl Serialize for StrID {
         serializer.serialize_str(self.as_str())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_interning() {
+        let s1 = StrID::from("hello");
+        let s2 = StrID::from("hello");
+        let s3 = StrID::from("world");
+
+        assert_eq!(s1, s2);
+        assert_ne!(s1, s3);
+        assert_eq!(s1.as_str().as_ptr(), s2.as_str().as_ptr());
+    }
+}

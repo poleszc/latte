@@ -390,3 +390,47 @@ impl MIRFunctionBuilder {
         self.set_terminator(MIRTerminator::Unreachable { position });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::ast::{Type, TypeKind};
+
+    #[test]
+    fn test_builder_emits_instructions() {
+        let mut builder = MIRFunctionBuilder::new(
+            StrID::from("main"),
+            Type {
+                kind: TypeKind::Int,
+                position: SourcePosition(0, 0),
+            },
+            vec![],
+            SourcePosition(0, 0),
+        );
+
+        let local_x = builder.create_local(
+            Some(StrID::from("x")),
+            Type {
+                kind: TypeKind::Int,
+                position: SourcePosition(0, 0),
+            },
+            false,
+            None,
+        );
+
+        builder.emit_assign(
+            MIRPlace::Local(local_x),
+            MIRValue::IntConst(42),
+            SourcePosition(0, 0),
+        );
+
+        let func = builder.build();
+        let entry_block = &func.blocks[&func.entry_block];
+
+        assert_eq!(entry_block.instructions.len(), 1);
+        assert!(matches!(
+            entry_block.instructions[0].operation,
+            MIROperation::Assign
+        ));
+    }
+}
