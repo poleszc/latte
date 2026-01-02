@@ -921,3 +921,46 @@ impl<'a> LLVMGenerator<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod llvm_format_tests {
+    use crate::{SourcePosition, parser::Ident, utils::StrID};
+
+    use super::*;
+
+    #[test]
+    fn test_llvm_string_constant_escaping() {
+        let mut generator = LLVMGenerator::new();
+        let val = LIRValue::StringConst("Hello \"World\"\n".to_string());
+        let formatted = generator.format_value(&val);
+
+        assert_eq!(generator.string_constants.len(), 1);
+        let (_, internal_name) = generator.string_constants.iter().next().unwrap();
+
+        assert!(formatted.contains(&format!("@{}", internal_name)));
+    }
+
+    #[test]
+    fn test_type_mapping() {
+        let generator = LLVMGenerator::new();
+        let ty_int = Type {
+            kind: TypeKind::Int,
+            position: SourcePosition(0, 0),
+        };
+        let ty_arr = Type {
+            kind: TypeKind::Array(Box::new(ty_int.clone())),
+            position: SourcePosition(0, 0),
+        };
+        let ty_class = Type {
+            kind: TypeKind::Class(Ident {
+                name: StrID::from("klas"),
+                position: SourcePosition(0, 0),
+            }),
+            position: SourcePosition(0, 0),
+        };
+
+        assert_eq!(generator.llvm_type(&ty_int), "i32");
+        assert_eq!(generator.llvm_type(&ty_arr), "i8*");
+        assert_eq!(generator.llvm_type(&ty_class), "%class.klas*");
+    }
+}

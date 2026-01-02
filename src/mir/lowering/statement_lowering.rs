@@ -398,3 +398,51 @@ impl MIRLoweringContext {
         self.variable_map = old_variable_map;
     }
 }
+
+#[cfg(test)]
+mod statement_tests {
+    use super::*;
+    use crate::mir::builders::MIRFunctionBuilder;
+    use crate::parser::ast::{Ident, SourcePosition, Type, TypeKind};
+    use crate::semantics::symbol_table::SymbolTable;
+    use crate::semantics::tast::*;
+
+    #[test]
+    fn test_lower_increment() {
+        // i++ -> i = i + 1
+        let mut ctx = MIRLoweringContext::new(SymbolTable::new());
+        let ty_int = Type {
+            kind: TypeKind::Int,
+            position: SourcePosition(0, 0),
+        };
+
+        let mut builder = MIRFunctionBuilder::new(
+            StrID::from("f"),
+            ty_int.clone(),
+            vec![],
+            SourcePosition(0, 0),
+        );
+        let i_local = builder.create_local(Some(StrID::from("i")), ty_int.clone(), false, None);
+        ctx.current_function = Some(builder);
+        ctx.variable_map.insert(StrID::from("i"), i_local);
+
+        let i_expr = TExpr {
+            kind: TExprKind::Var(Ident {
+                name: StrID::from("i"),
+                position: SourcePosition(0, 0),
+            }),
+            typ: ty_int.clone(),
+            position: SourcePosition(0, 0),
+        };
+
+        ctx.lower_increment(&i_expr, SourcePosition(0, 0));
+
+        let mir_func = ctx.current_function.unwrap().build();
+        let instr = &mir_func.blocks[&mir_func.entry_block].instructions;
+
+        // temp = i + 1; i = temp;
+        assert_eq!(instr.len(), 2);
+        assert_eq!(instr[0].operation, MIROperation::IntAdd);
+        assert_eq!(instr[1].operation, MIROperation::Assign);
+    }
+}

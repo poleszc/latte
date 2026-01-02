@@ -596,3 +596,30 @@ impl<'a> ExpressionChecker<'a> {
         (kind, result_type)
     }
 }
+
+#[cfg(test)]
+mod expr_semantic_tests {
+    use super::*;
+    use crate::semantics::analysis::context::SemanticContext;
+
+    #[test]
+    fn test_null_assignment() {
+        let mut ctx = SemanticContext::new();
+        let mut checker = ExpressionChecker::new(&mut ctx);
+
+        // (int)null
+        let bad_cast = Expr {
+            kind: ExprKind::TypedNull(Type {
+                kind: TypeKind::Int,
+                position: SourcePosition(0, 0),
+            }),
+            position: SourcePosition(0, 0),
+        };
+        checker.check(&bad_cast);
+        assert!(!ctx.errors.is_empty());
+        assert!(matches!(
+            ctx.errors[0],
+            SemanticError::InvalidNullCast { .. }
+        ));
+    }
+}

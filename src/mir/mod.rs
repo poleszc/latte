@@ -1,6 +1,6 @@
 use crate::semantics::{symbol_table::SymbolTable, tast::TProgram};
 
-mod builders;
+pub mod builders;
 mod lowering;
 mod mir_display;
 pub mod mir_structure;

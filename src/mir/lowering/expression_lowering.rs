@@ -349,3 +349,54 @@ impl MIRLoweringContext {
         MIRValue::Temp(temp)
     }
 }
+
+#[cfg(test)]
+mod expr_logic_tests {
+    use super::*;
+    use crate::mir::builders::MIRFunctionBuilder;
+    use crate::parser::ast::{BinaryOp, SourcePosition, Type, TypeKind};
+    use crate::semantics::symbol_table::SymbolTable;
+    use crate::semantics::tast::*;
+
+    #[test]
+    fn test_short_circuit() {
+        // a && b
+        let mut ctx = MIRLoweringContext::new(SymbolTable::new());
+        let ty_bool = Type {
+            kind: TypeKind::Bool,
+            position: SourcePosition(0, 0),
+        };
+
+        ctx.current_function = Some(MIRFunctionBuilder::new(
+            StrID::from("f"),
+            ty_bool.clone(),
+            vec![],
+            SourcePosition(0, 0),
+        ));
+
+        let expr_a = TExpr {
+            kind: TExprKind::LiteralTrue,
+            typ: ty_bool.clone(),
+            position: SourcePosition(0, 0),
+        };
+        let expr_b = TExpr {
+            kind: TExprKind::LiteralFalse,
+            typ: ty_bool.clone(),
+            position: SourcePosition(0, 0),
+        };
+
+        ctx.lower_logic_op(&BinaryOp::And, &expr_a, &expr_b);
+
+        let mir_func = ctx.current_function.unwrap().build();
+        assert!(
+            mir_func.blocks.len() >= 3,
+            "Simple boolean op should short circuit and create 3 blocks"
+        );
+
+        let entry_block = &mir_func.blocks[&mir_func.entry_block];
+        assert!(
+            matches!(entry_block.terminator, Some(MIRTerminator::Branch { .. })),
+            "First block should end with a branch"
+        );
+    }
+}

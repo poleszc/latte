@@ -87,7 +87,7 @@ mod tests {
     use crate::parser::ast::*;
 
     #[test]
-    fn test_complex_return_coverage() {
+    fn test_complex_return_checking() {
         // if (cond) return 1; else { if (cond2) return 2; else return 3; } -> true
         let mock_expr = Box::new(Expr {
             kind: ExprKind::LiteralTrue,
