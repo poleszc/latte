@@ -1,7 +1,8 @@
-use crate::lir::LIRProgram;
+use crate::{lir::LIRProgram, opts::{dead_block_elimination::DeadBlockElimination, dead_code_elimination::DeadCodeElimination}};
 mod branch_folding;
 mod constant_propagation;
 mod dead_code_elimination;
+mod dead_block_elimination;
 mod pass;
 
 pub use branch_folding::BranchFolding;
@@ -56,6 +57,7 @@ impl Optimizer {
     fn configure_opts(&mut self) {
         self.add_pass(Box::new(ConstantFoldingAndPropagation::new()));
         self.add_pass(Box::new(BranchFolding::new()));
+        self.add_pass(Box::new(DeadBlockElimination::new()));
         self.add_pass(Box::new(DeadCodeElimination::new()));
     }
 
