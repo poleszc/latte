@@ -9,6 +9,7 @@ pub mod errors;
 pub mod lir;
 pub mod llvm;
 pub mod mir;
+pub mod opts;
 pub mod parser;
 pub mod semantics;
 pub mod utils;
