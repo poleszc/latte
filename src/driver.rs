@@ -8,6 +8,7 @@ use crate::{
     errors::CompilerError,
     lir::{self, *},
     mir::{self, *},
+    opts::optimize_program,
     parser::{self, ast::Program},
     report_compiler_error,
     semantics::{SemanticChecker, tast::TProgram},
@@ -85,17 +86,21 @@ pub fn run_compiler<
 
     // ============= LIR LOWERING ===============
     println!("[LATTE]: Lowering to LIR...");
-    let lir_program = lir::lower_to_lir(mir_program);
+    let mut lir_program = lir::lower_to_lir(mir_program);
     if args.emit_lir || args.emit_all {
-        dump_lir(&output_dir, file_stem, &lir_program)?;
+        dump_lir(&output_dir, file_stem, &lir_program, false)?;
+    }
+
+    // ============= LIR OPTIMIZATIONS ===============
+    println!("[LATTE]: Optimizing LIR...");
+    optimize_program(&mut lir_program, &args);
+    if args.emit_lir_opt || args.emit_all {
+        dump_lir(&output_dir, file_stem, &lir_program, true)?;
     }
 
     // ============= LLVM BACKEND ===============
     println!("[LATTE]: Generating LLVM...");
     backend_driver(&lir_program, &output_dir, file_stem, args)?;
-
-    // TODO:
-    // - LIR opts
 
     Ok(())
 }
@@ -152,12 +157,15 @@ fn dump_lir(
     output_dir: &PathBuf,
     file_stem: &str,
     lir_program: &LIRProgram,
+    optimized: bool,
 ) -> Result<(), CompilerError> {
     println!("[LIR]: Dumping LIR to file");
-    lir_program.dump_to_file(
-        PathBuf::from(&output_dir)
-            .join(format!("{}.lir", file_stem))
-            .as_path(),
-    )?;
+    let file_name = if optimized {
+        format!("{}.opt.lir", file_stem)
+    } else {
+        format!("{}.lir", file_stem)
+    };
+
+    lir_program.dump_to_file(PathBuf::from(&output_dir).join(file_name).as_path())?;
     Ok(())
 }

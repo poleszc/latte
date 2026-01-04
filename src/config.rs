@@ -5,6 +5,7 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct LatteArgs {
+    /// ========== GENERAL ==========
     /// Input file for the compiler.
     pub input_file: PathBuf,
     /// Run the program after successful compilation.
@@ -18,22 +19,47 @@ pub struct LatteArgs {
     /// If not specified, produces the output files in the same directory as the source code.
     #[arg(long, value_name = "DIR")]
     pub output_dir: Option<PathBuf>,
-    // Path to the LLVM runtime library.
+    /// Path to the LLVM runtime library.
     #[arg(long, value_name = "PATH", default_value = "lib/runtime.ll")]
     pub runtime_path: PathBuf,
-    // Emits the AST to a .json file.
+
+    /// ========== IR ==========
+    /// Emits the AST to a .json file.
     #[arg(long)]
     pub emit_ast: bool,
-    // Emits the TAST to a .json file.
+    /// Emits the TAST to a .json file.
     #[arg(long)]
     pub emit_tast: bool,
-    // Emits the Mid Intermediate Representation to a .mir text file.
+    /// Emits the Mid Intermediate Representation to a .mir text file.
     #[arg(long)]
     pub emit_mir: bool,
-    // Emits the Low Intermediate Representation to a .lir text file.
+    /// Emits the Low Intermediate Representation to a .lir text file.
     #[arg(long)]
     pub emit_lir: bool,
-    // Emits all the intermediate representations.
+    /// Emit the Low Intermediate Representation after optimizations to .opt.lit text file.
+    #[arg(long)]
+    pub emit_lir_opt: bool,
+    /// Emits all the intermediate representations.
     #[arg(long)]
     pub emit_all: bool,
+
+    /// ========== OPTS ==========
+    /// Enable all optimizations.
+    #[arg(short = 'O', long)]
+    pub optimize: bool,
+    /// Enable constant propagation and constant folding.
+    #[arg(long)]
+    pub opt_cpf: bool,
+    /// Enable branch folding
+    #[arg(long)]
+    pub opt_bf: bool,
+    /// Enable Dead Block Elimination.
+    #[arg(long)]
+    pub opt_dbe: bool,
+    /// Enable Dead Code Elimination.
+    #[arg(long)]
+    pub opt_dce: bool,
+    /// Maximum iterations for the optimizer.
+    #[arg(long, default_value_t = 10)]
+    pub opt_max_iterations: usize,
 }
