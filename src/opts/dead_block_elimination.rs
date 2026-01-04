@@ -26,20 +26,20 @@ impl DeadBlockElimination {
                 continue;
             }
 
-            if let Some(block) = function.blocks.get(&block_id) {
-                if let Some(term) = &block.terminator {
-                    match term {
-                        LIRTerminator::Jump { target, .. } => {
-                            worklist.push(*target);
-                        }
-                        LIRTerminator::Branch {
-                            if_true, if_false, ..
-                        } => {
-                            worklist.push(*if_true);
-                            worklist.push(*if_false);
-                        }
-                        LIRTerminator::Return { .. } | LIRTerminator::Unreachable { .. } => {}
+            if let Some(block) = function.blocks.get(&block_id)
+                && let Some(term) = &block.terminator
+            {
+                match term {
+                    LIRTerminator::Jump { target, .. } => {
+                        worklist.push(*target);
                     }
+                    LIRTerminator::Branch {
+                        if_true, if_false, ..
+                    } => {
+                        worklist.push(*if_true);
+                        worklist.push(*if_false);
+                    }
+                    LIRTerminator::Return { .. } | LIRTerminator::Unreachable { .. } => {}
                 }
             }
         }

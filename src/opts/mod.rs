@@ -1,8 +1,13 @@
-use crate::{lir::LIRProgram, opts::{dead_block_elimination::DeadBlockElimination, dead_code_elimination::DeadCodeElimination}};
+use crate::{
+    lir::LIRProgram,
+    opts::{
+        dead_block_elimination::DeadBlockElimination, dead_code_elimination::DeadCodeElimination,
+    },
+};
 mod branch_folding;
 mod constant_propagation;
-mod dead_code_elimination;
 mod dead_block_elimination;
+mod dead_code_elimination;
 mod pass;
 
 pub use branch_folding::BranchFolding;
@@ -87,10 +92,10 @@ impl Optimizer {
                 }
 
                 for func_name in &program.function_order.clone() {
-                    if let Some(function) = program.functions.get_mut(func_name) {
-                        if pass.run_on_function(function) {
-                            pass_changed = true;
-                        }
+                    if let Some(function) = program.functions.get_mut(func_name)
+                        && pass.run_on_function(function)
+                    {
+                        pass_changed = true;
                     }
                 }
 

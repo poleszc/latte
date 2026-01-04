@@ -80,19 +80,19 @@ impl DeadCodeElimination {
                 self.mark_terminator_live(term);
                 // Add the instruction defining the terminator arguments to worklist.
                 match term {
-                    LIRTerminator::Branch { condition, .. } => {
-                        if let LIRValue::Register(reg_id) = condition {
-                            let def_loc = self.definition_map.get(reg_id).unwrap();
-                            worklist.push(*def_loc);
-                        }
+                    LIRTerminator::Branch {
+                        condition: LIRValue::Register(reg_id),
+                        ..
+                    } => {
+                        let def_loc = self.definition_map.get(reg_id).unwrap();
+                        worklist.push(*def_loc);
                     }
                     LIRTerminator::Return {
-                        value: Some(val), ..
+                        value: Some(LIRValue::Register(reg_id)),
+                        ..
                     } => {
-                        if let LIRValue::Register(reg_id) = val {
-                            let def_loc = self.definition_map.get(reg_id).unwrap();
-                            worklist.push(*def_loc);
-                        }
+                        let def_loc = self.definition_map.get(reg_id).unwrap();
+                        worklist.push(*def_loc);
                     }
                     _ => {}
                 }
@@ -104,10 +104,10 @@ impl DeadCodeElimination {
                     for operand in &instr.operands {
                         // Mark the operand as live and push the instruction which defines it to the worklist.
                         self.mark_value_live(operand);
-                        if let LIRValue::Register(reg_id) = operand {
-                            if let Some(&def_loc) = self.definition_map.get(reg_id) {
-                                worklist.push(def_loc);
-                            }
+                        if let LIRValue::Register(reg_id) = operand
+                            && let Some(&def_loc) = self.definition_map.get(reg_id)
+                        {
+                            worklist.push(def_loc);
                         }
                     }
                 }
@@ -149,10 +149,10 @@ impl DeadCodeElimination {
                         return true;
                     }
 
-                    if let Some(dest) = instr.destination {
-                        if self.live_registers.contains(&dest) {
-                            return true;
-                        }
+                    if let Some(dest) = instr.destination
+                        && self.live_registers.contains(&dest)
+                    {
+                        return true;
                     }
                     false
                 });

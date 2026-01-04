@@ -45,12 +45,11 @@ impl OptimizationPass for BranchFolding {
         let mut changed = false;
 
         for block_id in &function.block_order {
-            if let Some(block) = function.blocks.get_mut(block_id) {
-                if let Some(term) = &mut block.terminator {
-                    if Self::fold_branch(term) {
-                        changed = true;
-                    }
-                }
+            if let Some(block) = function.blocks.get_mut(block_id)
+                && let Some(term) = &mut block.terminator
+                && Self::fold_branch(term)
+            {
+                changed = true;
             }
         }
 

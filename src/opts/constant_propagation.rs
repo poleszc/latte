@@ -214,19 +214,19 @@ impl ConstantFoldingAndPropagation {
     fn propagate_constants_in_instructions(&self, instr: &mut LIRInstruction) -> bool {
         let mut changed = false;
         for operand in &mut instr.operands {
-            if let LIRValue::Register(reg_id) = operand {
-                if let Some(const_val) = self.constants.get(reg_id) {
-                    let new_value = match const_val {
-                        ConstantValue::Int(n) => Some(LIRValue::IntConst(*n)),
-                        ConstantValue::Bool(b) => Some(LIRValue::BoolConst(*b)),
-                        ConstantValue::String(s) => Some(LIRValue::StringConst(s.clone())),
-                        ConstantValue::Null => Some(LIRValue::Null),
-                        _ => None,
-                    };
-                    if let Some(new_val) = new_value {
-                        *operand = new_val;
-                        changed = true;
-                    }
+            if let LIRValue::Register(reg_id) = operand
+                && let Some(const_val) = self.constants.get(reg_id)
+            {
+                let new_value = match const_val {
+                    ConstantValue::Int(n) => Some(LIRValue::IntConst(*n)),
+                    ConstantValue::Bool(b) => Some(LIRValue::BoolConst(*b)),
+                    ConstantValue::String(s) => Some(LIRValue::StringConst(s.clone())),
+                    ConstantValue::Null => Some(LIRValue::Null),
+                    _ => None,
+                };
+                if let Some(new_val) = new_value {
+                    *operand = new_val;
+                    changed = true;
                 }
             }
         }
@@ -237,30 +237,30 @@ impl ConstantFoldingAndPropagation {
     fn propagate_constants_in_terminator(&self, term: &mut LIRTerminator) -> bool {
         match term {
             LIRTerminator::Branch { condition, .. } => {
-                if let LIRValue::Register(reg_id) = condition {
-                    if let Some(ConstantValue::Bool(b)) = self.constants.get(reg_id) {
-                        *condition = LIRValue::BoolConst(*b);
-                        return true;
-                    }
+                if let LIRValue::Register(reg_id) = condition
+                    && let Some(ConstantValue::Bool(b)) = self.constants.get(reg_id)
+                {
+                    *condition = LIRValue::BoolConst(*b);
+                    return true;
                 }
             }
             LIRTerminator::Return {
                 value: Some(val), ..
             } => {
-                if let LIRValue::Register(reg_id) = val {
-                    if let Some(const_val) = self.constants.get(reg_id) {
-                        let new_value = match const_val {
-                            ConstantValue::Int(n) => Some(LIRValue::IntConst(*n)),
-                            ConstantValue::Bool(b) => Some(LIRValue::BoolConst(*b)),
-                            ConstantValue::String(s) => Some(LIRValue::StringConst(s.clone())),
-                            ConstantValue::Null => Some(LIRValue::Null),
-                            _ => None,
-                        };
+                if let LIRValue::Register(reg_id) = val
+                    && let Some(const_val) = self.constants.get(reg_id)
+                {
+                    let new_value = match const_val {
+                        ConstantValue::Int(n) => Some(LIRValue::IntConst(*n)),
+                        ConstantValue::Bool(b) => Some(LIRValue::BoolConst(*b)),
+                        ConstantValue::String(s) => Some(LIRValue::StringConst(s.clone())),
+                        ConstantValue::Null => Some(LIRValue::Null),
+                        _ => None,
+                    };
 
-                        if let Some(new_val) = new_value {
-                            *val = new_val;
-                            return true;
-                        }
+                    if let Some(new_val) = new_value {
+                        *val = new_val;
+                        return true;
                     }
                 }
             }
@@ -297,10 +297,10 @@ impl OptimizationPass for ConstantFoldingAndPropagation {
                     }
                 }
 
-                if let Some(term) = &mut block.terminator {
-                    if self.propagate_constants_in_terminator(term) {
-                        changed = true;
-                    }
+                if let Some(term) = &mut block.terminator
+                    && self.propagate_constants_in_terminator(term)
+                {
+                    changed = true;
                 }
             }
         }
