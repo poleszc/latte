@@ -1,6 +1,7 @@
 /// Branch folding:
 /// If a branch instruction depending on a constant value exists in
-/// the program, we change it to a jump.
+/// the program, we change it to a jump making one block unreachable.
+/// This block is then removed by DeadBlockElimination.
 use crate::{lir::*, opts::OptimizationPass};
 
 pub struct BranchFolding;

@@ -1,6 +1,6 @@
 /// Dead Block elimination:
 /// Eliminates unreachable blocks and fixes up the phi functions after elimination.
-/// Unreachable block might have occured when performing branch folding.
+/// Unreachable block might have occurred when performing branch folding.
 use crate::{lir::*, opts::OptimizationPass};
 use std::collections::HashSet;
 
