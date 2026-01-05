@@ -19,6 +19,7 @@ pub enum CompilerError {
     Parsing(ParseError),
     Semantic(SemanticError),
     Other(String),
+    Silent,
 }
 
 impl From<std::io::Error> for CompilerError {
@@ -58,5 +59,6 @@ pub fn report_compiler_error(file_path: &str, source: &str, error: &CompilerErro
         }
         CompilerError::Io(e) => eprintln!("I/O Error: {}", e),
         CompilerError::Other(msg) => eprintln!("Error: {}", msg),
+        CompilerError::Silent => {}
     }
 }
