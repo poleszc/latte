@@ -268,7 +268,6 @@ impl<'a> LLVMGenerator<'a> {
 impl<'a> LLVMGenerator<'a> {
     fn emit_instruction(&mut self, instr: &LIRInstruction, block_id: BlockID) {
         match instr.operation {
-            // TODO: Remove that in the future.
             LIROperation::Assign => {
                 let dest = instr.destination.unwrap();
                 let val = self.format_value(&instr.operands[0]);
