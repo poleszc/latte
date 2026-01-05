@@ -23,10 +23,11 @@ impl DeadCodeElimination {
     fn build_definition_map(&mut self, function: &LIRFunction) {
         self.definition_map.clear();
         for block_id in &function.block_order {
-            let block = function.blocks.get(block_id).unwrap();
-            for (idx, instr) in block.instructions.iter().enumerate() {
-                if let Some(dest) = instr.destination {
-                    self.definition_map.insert(dest, (*block_id, idx));
+            if let Some(block) = function.blocks.get(block_id) {
+                for (idx, instr) in block.instructions.iter().enumerate() {
+                    if let Some(dest) = instr.destination {
+                        self.definition_map.insert(dest, (*block_id, idx));
+                    }
                 }
             }
         }
@@ -40,8 +41,6 @@ impl DeadCodeElimination {
                 | LIROperation::VCall
                 | LIROperation::ArraySet
                 | LIROperation::FieldSet
-                | LIROperation::NewObject
-                | LIROperation::NewArray // TODO: Any more?
         )
     }
 
@@ -71,43 +70,51 @@ impl DeadCodeElimination {
         self.live_registers.clear();
         let mut worklist: Vec<(BlockID, usize)> = Vec::new();
 
+        // Mark parameters as live.
+        for param_reg in &function.parameter_registers {
+            self.live_registers.insert(*param_reg);
+        }
+
         // Start from marking the "for sure used statements" like prints,
         // array sets, field sets etc. and values used in terminators.
         for block_id in &function.block_order {
-            let block = function.blocks.get(block_id).unwrap();
-            // All values in terminators are live.
-            if let Some(term) = &block.terminator {
-                self.mark_terminator_live(term);
-                // Add the instruction defining the terminator arguments to worklist.
-                match term {
-                    LIRTerminator::Branch {
-                        condition: LIRValue::Register(reg_id),
-                        ..
-                    } => {
-                        let def_loc = self.definition_map.get(reg_id).unwrap();
-                        worklist.push(*def_loc);
+            if let Some(block) = function.blocks.get(block_id) {
+                // All values in terminators are live.
+                if let Some(term) = &block.terminator {
+                    self.mark_terminator_live(term);
+                    // Add the instruction defining the terminator arguments to worklist.
+                    match term {
+                        LIRTerminator::Branch {
+                            condition: LIRValue::Register(reg_id),
+                            ..
+                        } => {
+                            if let Some(def_loc) = self.definition_map.get(reg_id) {
+                                worklist.push(*def_loc);
+                            }
+                        }
+                        LIRTerminator::Return {
+                            value: Some(LIRValue::Register(reg_id)),
+                            ..
+                        } => {
+                            if let Some(def_loc) = self.definition_map.get(reg_id) {
+                                worklist.push(*def_loc);
+                            }
+                        }
+                        _ => {}
                     }
-                    LIRTerminator::Return {
-                        value: Some(LIRValue::Register(reg_id)),
-                        ..
-                    } => {
-                        let def_loc = self.definition_map.get(reg_id).unwrap();
-                        worklist.push(*def_loc);
-                    }
-                    _ => {}
                 }
-            }
 
-            // All instructions with side effects are live.
-            for instr in &block.instructions {
-                if Self::has_side_effects(&instr.operation) {
-                    for operand in &instr.operands {
-                        // Mark the operand as live and push the instruction which defines it to the worklist.
-                        self.mark_value_live(operand);
-                        if let LIRValue::Register(reg_id) = operand
-                            && let Some(&def_loc) = self.definition_map.get(reg_id)
-                        {
-                            worklist.push(def_loc);
+                // All instructions with side effects are live.
+                for instr in &block.instructions {
+                    if Self::has_side_effects(&instr.operation) {
+                        for operand in &instr.operands {
+                            // Mark the operand as live and push the instruction which defines it to the worklist.
+                            self.mark_value_live(operand);
+                            if let LIRValue::Register(reg_id) = operand
+                                && let Some(&def_loc) = self.definition_map.get(reg_id)
+                            {
+                                worklist.push(def_loc);
+                            }
                         }
                     }
                 }
@@ -123,8 +130,9 @@ impl DeadCodeElimination {
                 if let LIRValue::Register(reg_id) = operand {
                     // If it wasn't marked as live before, insert it's definition to the map.
                     if self.live_registers.insert(*reg_id) {
-                        let def_loc = self.definition_map[reg_id];
-                        worklist.push(def_loc);
+                        if let Some(&def_loc) = self.definition_map.get(reg_id) {
+                            worklist.push(def_loc);
+                        }
                     }
                 }
             }
