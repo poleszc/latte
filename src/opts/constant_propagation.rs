@@ -136,8 +136,6 @@ impl ConstantFoldingAndPropagation {
             self.evaluate_value(&operands[0]),
             self.evaluate_value(&operands[1]),
         ) {
-            // TODO: Isn't this to much? What with opts with side effects
-            // false && something() => false
             (ConstantValue::Bool(false), _) | (_, ConstantValue::Bool(false)) => {
                 ConstantValue::Bool(false)
             }
@@ -152,8 +150,6 @@ impl ConstantFoldingAndPropagation {
             self.evaluate_value(&operands[0]),
             self.evaluate_value(&operands[1]),
         ) {
-            // TODO: Isn't this to much? What with opts with side effects
-            // true || something() => true
             (ConstantValue::Bool(true), _) | (_, ConstantValue::Bool(true)) => {
                 ConstantValue::Bool(true)
             }
@@ -322,8 +318,6 @@ mod tests {
     use crate::utils::StrID;
     use std::collections::HashMap;
 
-    // Helper to create a basic LIRFunction for testing.
-    // Zakładam, że LIRBlock::new istnieje i przyjmuje BlockID. Jeśli używasz `with_id`, zmień `new` na `with_id`.
     fn create_test_function() -> LIRFunction {
         LIRFunction {
             name: StrID::from("test"),
