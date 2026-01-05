@@ -18,13 +18,14 @@ impl BlockID {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LIRValue {
     Register(RegisterID),
     IntConst(i32),
     BoolConst(bool),
     StringConst(String),
     Null,
+    Undefined, // For variables undefined on the CFG path. Look at the `weird_if` test.
     Function(StrID),
     Class(StrID),
     Block(BlockID),
@@ -119,6 +120,16 @@ pub struct LIRBlock {
     pub instructions: Vec<LIRInstruction>,
     pub terminator: Option<LIRTerminator>,
     pub predecessors: Vec<BlockID>, // Direct predecessors
+}
+impl LIRBlock {
+    pub fn with_id(id: BlockID) -> Self {
+        Self {
+            id,
+            instructions: Vec::new(),
+            terminator: None,
+            predecessors: Vec::new(),
+        }
+    }
 }
 
 /// Single function representation in MIR.

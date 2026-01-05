@@ -1,0 +1,15 @@
+int main() {
+    int result;
+    if (true) {
+        if (false) {
+            result = 1;
+        } else {
+            result = 2;
+        }
+    } else {
+        result = 3;
+    }
+
+    printInt(result);
+    return 0;
+}

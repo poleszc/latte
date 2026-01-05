@@ -24,6 +24,7 @@ impl fmt::Display for LIRValue {
             LIRValue::Function(name) => write!(f, "@{}", name),
             LIRValue::Class(name) => write!(f, "class.{}", name),
             LIRValue::Block(block_id) => write!(f, "{}", block_id),
+            LIRValue::Undefined => write!(f, "undefined"),
         }
     }
 }
@@ -230,11 +231,6 @@ impl fmt::Display for LIRClass {
 
 impl fmt::Display for LIRProgram {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "╭───────────────────────────────╮")?;
-        writeln!(f, "│          LIR Program          │")?;
-        writeln!(f, "╰───────────────────────────────╯")?;
-        writeln!(f)?;
-
         if !self.classes.is_empty() {
             writeln!(f, "; ========== Classes ==========")?;
             writeln!(f)?;

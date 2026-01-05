@@ -1,0 +1,11 @@
+int main() {
+    int x;
+    if (true) {
+        x = 10;
+    } else {
+        x = 20;
+        printInt(999);
+    }
+    printInt(x);
+    return 0;
+}

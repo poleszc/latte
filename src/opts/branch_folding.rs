@@ -1,0 +1,120 @@
+/// Branch folding:
+/// If a branch instruction depending on a constant value exists in
+/// the program, we change it to a jump making one block unreachable.
+/// This block is then removed by DeadBlockElimination.
+/// Note:   This opt has to be used in pair with DeadBlockElimination.
+///         Otherwise the LLVM verification will not pass.
+use crate::{lir::*, opts::OptimizationPass};
+
+pub struct BranchFolding;
+
+impl BranchFolding {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn fold_branch(term: &mut LIRTerminator) -> bool {
+        if let LIRTerminator::Branch {
+            condition: LIRValue::BoolConst(b),
+            if_true,
+            if_false,
+            position,
+        } = term
+        {
+            let target = if *b { *if_true } else { *if_false };
+            *term = LIRTerminator::Jump {
+                target,
+                position: *position,
+            };
+            return true;
+        }
+        false
+    }
+}
+impl OptimizationPass for BranchFolding {
+    fn name(&self) -> String {
+        String::from("Branch Folding")
+    }
+
+    fn run_on_function(&mut self, function: &mut LIRFunction) -> bool {
+        let mut changed = false;
+
+        for block_id in &function.block_order {
+            if let Some(block) = function.blocks.get_mut(block_id)
+                && let Some(term) = &mut block.terminator
+                && Self::fold_branch(term)
+            {
+                changed = true;
+            }
+        }
+
+        changed
+    }
+}
+
+impl Default for BranchFolding {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SourcePosition;
+
+    #[test]
+    fn test_branch_folding_true() {
+        let mut term = LIRTerminator::Branch {
+            condition: LIRValue::BoolConst(true),
+            if_true: BlockID(1),
+            if_false: BlockID(2),
+            position: SourcePosition(0, 0),
+        };
+
+        let changed = BranchFolding::fold_branch(&mut term);
+
+        assert!(changed);
+        match term {
+            LIRTerminator::Jump { target, .. } => {
+                assert_eq!(target, BlockID(1));
+            }
+            _ => panic!("Expected Jump terminator"),
+        }
+    }
+
+    #[test]
+    fn test_branch_folding_false() {
+        let mut term = LIRTerminator::Branch {
+            condition: LIRValue::BoolConst(false),
+            if_true: BlockID(1),
+            if_false: BlockID(2),
+            position: SourcePosition(0, 0),
+        };
+
+        let changed = BranchFolding::fold_branch(&mut term);
+
+        assert!(changed);
+        match term {
+            LIRTerminator::Jump { target, .. } => {
+                assert_eq!(target, BlockID(2));
+            }
+            _ => panic!("Expected Jump terminator"),
+        }
+    }
+
+    #[test]
+    fn test_branch_folding_no_constant() {
+        let mut term = LIRTerminator::Branch {
+            condition: LIRValue::Register(RegisterID(0)),
+            if_true: BlockID(1),
+            if_false: BlockID(2),
+            position: SourcePosition(0, 0),
+        };
+
+        let changed = BranchFolding::fold_branch(&mut term);
+
+        assert!(!changed);
+        assert!(matches!(term, LIRTerminator::Branch { .. }));
+    }
+}

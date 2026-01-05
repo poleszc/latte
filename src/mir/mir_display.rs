@@ -243,11 +243,6 @@ impl fmt::Display for MIRClass {
 
 impl fmt::Display for MIRProgram {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "╭───────────────────────────────╮")?;
-        writeln!(f, "│          MIR Program          │")?;
-        writeln!(f, "╰───────────────────────────────╯")?;
-        writeln!(f)?;
-
         if !self.classes.is_empty() {
             writeln!(f, "-------------------------------------------")?;
             writeln!(f, "                 CLASSES                   ")?;

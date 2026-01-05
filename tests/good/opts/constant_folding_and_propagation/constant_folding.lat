@@ -1,0 +1,49 @@
+int main() {
+    printString("--- Integer ---");
+    int a = 10 + 5;
+    int b = (100 - 20) / 4;
+    int c = a * b;
+    int d = -c;
+
+    printInt(a);
+    printInt(b);
+    printInt(c);
+    printInt(d);
+
+    printString("\n--- Boolean Folding ---");
+
+    if (true) {
+        printString("Alive");
+    } else {
+        printString("Dead");
+    }
+
+    boolean isGreater = (a > c);
+    if (isGreater) {
+        printString("Dead");
+    } else {
+        printString("Alive");
+    }
+
+    boolean complexLogic = (5 < 10 && a == 16) || true;
+    if (complexLogic) {
+        printString("Alive");
+    } else {
+        printString("Dead");
+    }
+
+
+    printString("\n--- String Folding ---");
+    string s1 = "mr";
+    string s2 = "j";
+    string s3 = "p";
+    string mrjp = s1 + s2 + s3;
+
+    printString(mrjp);
+
+    int len = mrjp.length;
+    printString("Len:");
+    printInt(len);
+
+    return 0;
+}

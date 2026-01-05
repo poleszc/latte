@@ -162,10 +162,15 @@ impl MIRLoweringContext {
     }
 
     fn lower_logic_op(&mut self, op: &BinaryOp, lhs: &TExpr, rhs: &TExpr) -> MIRValue {
-        let res_temp = self.builder().create_temp(Type {
-            kind: TypeKind::Bool,
-            position: lhs.position,
-        });
+        let res_local = self.builder().create_local(
+            Some(StrID::from("log_tmp")),
+            Type {
+                kind: TypeKind::Bool,
+                position: lhs.position,
+            },
+            false,
+            None,
+        );
 
         // Lower the left side.
         let lhs_val = self.lower_expr(lhs);
@@ -177,7 +182,7 @@ impl MIRLoweringContext {
             BinaryOp::And => {
                 // Emit the default value for short-circuit AND.
                 self.builder().emit_assign(
-                    MIRPlace::Temp(res_temp),
+                    MIRPlace::Local(res_local),
                     MIRValue::BoolConst(false),
                     lhs.position,
                 );
@@ -189,7 +194,7 @@ impl MIRLoweringContext {
             BinaryOp::Or => {
                 // Emit the default value for short-circuit OR.
                 self.builder().emit_assign(
-                    MIRPlace::Temp(res_temp),
+                    MIRPlace::Local(res_local),
                     MIRValue::BoolConst(true),
                     lhs.position,
                 );
@@ -204,10 +209,10 @@ impl MIRLoweringContext {
         self.builder().set_current_block(eval_rhs_block);
         let rhs_val = self.lower_expr(rhs);
         self.builder()
-            .emit_assign(MIRPlace::Temp(res_temp), rhs_val, rhs.position);
+            .emit_assign(MIRPlace::Local(res_local), rhs_val, rhs.position);
         self.builder().emit_jump(end_block, rhs.position);
         self.builder().set_current_block(end_block);
-        MIRValue::Temp(res_temp)
+        MIRValue::Local(res_local)
     }
 
     fn lower_binary_op(&mut self, op: &BinaryOp, lhs: &TExpr, rhs: &TExpr) -> MIRValue {
