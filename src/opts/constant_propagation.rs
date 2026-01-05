@@ -40,14 +40,22 @@ impl ConstantFoldingAndPropagation {
                 LIROperation::IntAdd => self.fold_binary_int(&instr.operands, |a, b| a + b),
                 LIROperation::IntSub => self.fold_binary_int(&instr.operands, |a, b| a - b),
                 LIROperation::IntMul => self.fold_binary_int(&instr.operands, |a, b| a * b),
-                LIROperation::IntDiv => self.fold_binary_int(&instr.operands, |a, b| {
-                    assert!(b != 0, "Zero division in constant folding");
-                    a / b
-                }),
-                LIROperation::IntMod => self.fold_binary_int(&instr.operands, |a, b| {
-                    assert!(b != 0, "Zero mod in constant folding");
-                    a % b
-                }),
+                LIROperation::IntDiv => {
+                    let right = self.evaluate_value(&instr.operands[1]);
+                    if let ConstantValue::Int(0) = right {
+                        ConstantValue::Unknown
+                    } else {
+                        self.fold_binary_int(&instr.operands, |a, b| a / b)
+                    }
+                }
+                LIROperation::IntMod => {
+                    let right = self.evaluate_value(&instr.operands[1]);
+                    if let ConstantValue::Int(0) = right {
+                        ConstantValue::Unknown
+                    } else {
+                        self.fold_binary_int(&instr.operands, |a, b| a % b)
+                    }
+                }
                 LIROperation::IntNeg => self.fold_unary_int(&instr.operands, |n| -n),
                 LIROperation::IntLt => self.fold_comparison(&instr.operands, |a, b| a < b),
                 LIROperation::IntLe => self.fold_comparison(&instr.operands, |a, b| a <= b),

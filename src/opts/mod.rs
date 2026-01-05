@@ -78,24 +78,9 @@ impl Optimizer {
             println!("[OPT] ======= Iteration {} =======", iteration);
 
             for pass in &mut self.passes {
-                let pass_name = pass.name();
-                let mut pass_changed = false;
-
                 if pass.run_on_program(program) {
-                    pass_changed = true;
-                }
-
-                for func_name in &program.function_order.clone() {
-                    if let Some(function) = program.functions.get_mut(func_name)
-                        && pass.run_on_function(function)
-                    {
-                        pass_changed = true;
-                    }
-                }
-
-                if pass_changed {
+                    println!("[OPT] {} made changes", pass.name());
                     program_changed = true;
-                    println!("[OPT] {} made changes", pass_name);
                 }
             }
 
