@@ -127,13 +127,12 @@ impl DeadCodeElimination {
             let instr = &block.instructions[instr_idx];
             // Mark the operands as live and insert their definitions to the worklist.
             for operand in &instr.operands {
-                if let LIRValue::Register(reg_id) = operand {
-                    // If it wasn't marked as live before, insert it's definition to the map.
-                    if self.live_registers.insert(*reg_id) {
-                        if let Some(&def_loc) = self.definition_map.get(reg_id) {
-                            worklist.push(def_loc);
-                        }
-                    }
+                // If it wasn't marked as live before, insert it's definition to the map.
+                if let LIRValue::Register(reg_id) = operand
+                    && self.live_registers.insert(*reg_id)
+                    && let Some(&def_loc) = self.definition_map.get(reg_id)
+                {
+                    worklist.push(def_loc);
                 }
             }
         }

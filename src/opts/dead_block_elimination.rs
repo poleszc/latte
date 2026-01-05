@@ -92,7 +92,7 @@ impl DeadBlockElimination {
                 let old_pred_len = block.predecessors.len();
                 block.predecessors.retain(|p| {
                     // Predecessor must be reachable and must contain an edge to 'this" block.
-                    actual_preds.map_or(false, |set| set.contains(p))
+                    actual_preds.is_some_and(|set| set.contains(p))
                 });
                 if block.predecessors.len() != old_pred_len {
                     changed = true;

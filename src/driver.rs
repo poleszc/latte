@@ -93,8 +93,8 @@ pub fn run_compiler<
 
     // ============= LIR OPTIMIZATIONS ===============
     println!("[LATTE]: Optimizing LIR...");
-    optimize_program(&mut lir_program, &args);
-    if args.emit_lir_opt || (args.emit_all && are_opts_on(&args)) {
+    optimize_program(&mut lir_program, args);
+    if args.emit_lir_opt || (args.emit_all && are_opts_on(args)) {
         dump_lir(&output_dir, file_stem, &lir_program, true)?;
     }
 
