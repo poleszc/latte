@@ -156,7 +156,7 @@ impl LIRFunctionBuilder {
                 if let Some(dest) = &instr.destination {
                     let ssa_id = match dest {
                         MIRPlace::Local(id) => SSAId::Local(*id),
-                        MIRPlace::Temp(id) => continue,
+                        MIRPlace::Temp(_) => continue,
                         _ => unreachable!(),
                     };
                     local_defs.entry(ssa_id).or_default().insert(block.id);
@@ -288,17 +288,7 @@ impl LIRFunctionBuilder {
                     for (&ssa_id, &phi_reg) in phis_in_succ {
                         let current_val = match self.ssa_stack.get(&ssa_id).and_then(|s| s.last()) {
                             Some(&reg) => LIRValue::Register(reg),
-                            None => {
-                                // TODO: Bug
-                                // panic!("Value with no predecessor!");
-
-                                let (typ, _) = &self.locals_cache[&ssa_id];
-                                match typ.kind {
-                                    TypeKind::Int => LIRValue::IntConst(0),
-                                    TypeKind::Bool => LIRValue::BoolConst(false),
-                                    _ => LIRValue::Null,
-                                }
-                            }
+                            None => LIRValue::Undefined,
                         };
 
                         self.phi_incoming

@@ -903,6 +903,7 @@ impl<'a> LLVMGenerator<'a> {
                 )
             }
             LIRValue::Null => "null".to_string(),
+            LIRValue::Undefined => "undef".to_string(),
             _ => panic!("Unhandled value: {:?}", val),
         }
     }

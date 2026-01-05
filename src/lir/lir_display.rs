@@ -24,6 +24,7 @@ impl fmt::Display for LIRValue {
             LIRValue::Function(name) => write!(f, "@{}", name),
             LIRValue::Class(name) => write!(f, "class.{}", name),
             LIRValue::Block(block_id) => write!(f, "{}", block_id),
+            LIRValue::Undefined => write!(f, "undefined"),
         }
     }
 }

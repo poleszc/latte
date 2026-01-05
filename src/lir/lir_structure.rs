@@ -29,6 +29,7 @@ pub enum LIRValue {
     BoolConst(bool),
     StringConst(String),
     Null,
+    Undefined, // For variables undefined on the CFG path. Look at the `weird_if` test.
     Function(StrID),
     Class(StrID),
     Block(BlockID),
