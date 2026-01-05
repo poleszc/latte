@@ -85,6 +85,7 @@ clean:
 	rm -rf tests/bad/runtime/*.ll
 	rm -rf tests/bad/semantic/basic/*.ll
 
+	rm -rf lib/runtime.bc 
 	rm -rf tests/good/extra/*.bc
 	rm -rf tests/good/official/*.bc
 	rm -rf tests/good/extensions/arrays/*.bc
