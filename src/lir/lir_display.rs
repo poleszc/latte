@@ -230,11 +230,6 @@ impl fmt::Display for LIRClass {
 
 impl fmt::Display for LIRProgram {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "╭───────────────────────────────╮")?;
-        writeln!(f, "│          LIR Program          │")?;
-        writeln!(f, "╰───────────────────────────────╯")?;
-        writeln!(f)?;
-
         if !self.classes.is_empty() {
             writeln!(f, "; ========== Classes ==========")?;
             writeln!(f)?;

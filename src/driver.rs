@@ -94,7 +94,7 @@ pub fn run_compiler<
     // ============= LIR OPTIMIZATIONS ===============
     println!("[LATTE]: Optimizing LIR...");
     optimize_program(&mut lir_program, &args);
-    if args.emit_lir_opt || args.emit_all {
+    if args.emit_lir_opt || (args.emit_all && are_opts_on(&args)) {
         dump_lir(&output_dir, file_stem, &lir_program, true)?;
     }
 
@@ -103,6 +103,10 @@ pub fn run_compiler<
     backend_driver(&lir_program, &output_dir, file_stem, args)?;
 
     Ok(())
+}
+
+fn are_opts_on(args: &LatteArgs) -> bool {
+    args.opt_branch_fold || args.opt_const_prop || args.opt_dbe || args.opt_dce || args.optimize
 }
 
 /// Dumps the AST to a JSON file in a specified output_dir and a given file name.

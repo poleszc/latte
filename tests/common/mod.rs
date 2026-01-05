@@ -6,10 +6,7 @@ use latte::{
     semantics::SemanticChecker,
 };
 use std::{
-    fs,
-    io::Write,
-    path::PathBuf,
-    process::{Command, Stdio},
+    env::args, fs, io::Write, path::PathBuf, process::{Command, Stdio}
 };
 use tempfile::tempdir;
 
@@ -154,7 +151,7 @@ pub fn assert_compilation_fails(input_path: &str) {
     );
 }
 
-pub fn run_integration_test(input_path: &str) {
+pub fn run_integration_test_with_opts(input_path: &str, opts: &[&str]) {
     let input_path_buf = PathBuf::from(input_path);
     let stem = input_path_buf.file_stem().unwrap().to_str().unwrap();
     let expected_output_path = input_path_buf.with_extension("output");
@@ -174,10 +171,14 @@ pub fn run_integration_test(input_path: &str) {
     });
 
     // Compile the program.
-    let compile_output = Command::new(LLVM_COMPILER_BIN)
+    let mut command = Command::new(LLVM_COMPILER_BIN);
+    command
         .arg(input_path)
         .arg("--output-dir")
         .arg(temp_dir.path())
+        .args(opts);
+
+    let compile_output = command
         .output()
         .expect("Failed to execute the compiler binary");
 
@@ -272,4 +273,34 @@ pub fn assert_runtime_error(input_path: &str) {
         stdout,
         stderr
     );
+}
+
+/// Runs an integration test without any opts.
+pub fn run_integration_test(input_path: &str) {
+    run_integration_test_with_opts(input_path, &[]);
+}
+
+/// Runs an integration test with all opts.
+pub fn run_integration_test_with_all_opts(input_path: &str) {
+    run_integration_test_with_opts(input_path, &["-O"]);
+}
+
+/// Runs an integration test with Constant Folding and Propagation.
+pub fn run_integration_test_with_const_prop(input_path: &str) {
+    run_integration_test_with_opts(input_path, &["--opt-const-prop"]);
+}
+
+/// Runs an integration test with only Branch Folding.
+pub fn run_integration_test_with_branch_fold(input_path: &str) {
+    run_integration_test_with_opts(input_path, &["--opt-branch-fold"]);
+}
+
+/// Runs an integration test with only Dead Block Elimination.
+pub fn run_integration_test_with_dbe(input_path: &str) {
+    run_integration_test_with_opts(input_path, &["--opt-dbe"]);
+}
+
+/// Runs an integration test with only Dead Code Elimination.
+pub fn run_integration_test_with_dce(input_path: &str) {
+    run_integration_test_with_opts(input_path, &["--opt-dce"]);
 }

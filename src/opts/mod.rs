@@ -50,10 +50,10 @@ impl Optimizer {
     }
 
     fn configure_opts(&mut self, args: &LatteArgs) {
-        if args.optimize || args.opt_cpf {
+        if args.optimize || args.opt_const_prop {
             self.add_pass(Box::new(ConstantFoldingAndPropagation::new()));
         }
-        if args.optimize || args.opt_bf {
+        if args.optimize || args.opt_branch_fold {
             self.add_pass(Box::new(BranchFolding::new()));
         }
         if args.optimize || args.opt_dbe {

@@ -74,6 +74,10 @@ impl DeadBlockElimination {
 
                     let old_len = instr.operands.len();
                     let mut new_operands = Vec::new();
+                    
+                    dbg!(&instr.operands);
+
+
 
                     for chunk in instr.operands.chunks(2) {
                         assert!(chunk.len() == 2);

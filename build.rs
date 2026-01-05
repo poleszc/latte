@@ -186,6 +186,82 @@ fn main() {
         "integration_pass",
     )
     .expect("Failed to generate integration tests for good cases");
+
+    // =============== OPTIMIZATIONS ================
+    // generate_test_suite(
+    //     "integration_opts_all.rs",
+    //     &[
+    //         "tests/good/official",
+    //         "tests/good/extra",
+    //         "tests/good/extensions/arrays",
+    //         "tests/good/extensions/struct",
+    //         "tests/good/extensions/objects",
+    //         "tests/good/extensions/virtual",
+    //     ],
+    //     "run_integration_test_with_all_opts",
+    //     "integration_pass_all_opts",
+    // )
+    // .expect("Failed to generate integration tests with all optimizations");
+
+    // generate_test_suite(
+    //     "integration_opts_const_prop.rs",
+    //     &[
+    //         "tests/good/official",
+    //         "tests/good/extra",
+    //         "tests/good/extensions/arrays",
+    //         "tests/good/extensions/struct",
+    //         "tests/good/extensions/objects",
+    //         "tests/good/extensions/virtual",
+    //     ],
+    //     "run_integration_test_with_const_prop",
+    //     "integration_pass_const_prop",
+    // )
+    // .expect("Failed to generate const propagation integration tests");
+
+    // generate_test_suite(
+    //     "integration_opts_branch_fold.rs",
+    //     &[
+    //         "tests/good/official",
+    //         "tests/good/extra",
+    //         "tests/good/extensions/arrays",
+    //         "tests/good/extensions/struct",
+    //         "tests/good/extensions/objects",
+    //         "tests/good/extensions/virtual",
+    //     ],
+    //     "run_integration_test_with_branch_fold",
+    //     "integration_pass_branch_fold",
+    // )
+    // .expect("Failed to generate branch folding integration tests");
+
+    // generate_test_suite(
+    //     "integration_opts_dbe.rs",
+    //     &[
+    //         "tests/good/official",
+    //         "tests/good/extra",
+    //         "tests/good/extensions/arrays",
+    //         "tests/good/extensions/struct",
+    //         "tests/good/extensions/objects",
+    //         "tests/good/extensions/virtual",
+    //     ],
+    //     "run_integration_test_with_dbe",
+    //     "integration_pass_dbe",
+    // )
+    // .expect("Failed to generate dead block elimination integration tests");
+
+    // generate_test_suite(
+    //     "integration_opts_dce.rs",
+    //     &[
+    //         "tests/good/official",
+    //         "tests/good/extra",
+    //         "tests/good/extensions/arrays",
+    //         "tests/good/extensions/struct",
+    //         "tests/good/extensions/objects",
+    //         "tests/good/extensions/virtual",
+    //     ],
+    //     "run_integration_test_with_dce",
+    //     "integration_pass_dce",
+    // )
+    // .expect("Failed to generate dead code elimination integration tests");
 }
 
 /// Recursively collects all files starting from a giver directory.

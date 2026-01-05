@@ -49,10 +49,10 @@ pub struct LatteArgs {
     pub optimize: bool,
     /// Enable constant propagation and constant folding.
     #[arg(long)]
-    pub opt_cpf: bool,
+    pub opt_const_prop: bool,
     /// Enable branch folding
     #[arg(long)]
-    pub opt_bf: bool,
+    pub opt_branch_fold: bool,
     /// Enable Dead Block Elimination.
     #[arg(long)]
     pub opt_dbe: bool,

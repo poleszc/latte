@@ -289,6 +289,9 @@ impl LIRFunctionBuilder {
                         let current_val = match self.ssa_stack.get(&ssa_id).and_then(|s| s.last()) {
                             Some(&reg) => LIRValue::Register(reg),
                             None => {
+                                // TODO: Bug
+                                // panic!("Value with no predecessor!");
+                    
                                 let (typ, _) = &self.locals_cache[&ssa_id];
                                 match typ.kind {
                                     TypeKind::Int => LIRValue::IntConst(0),
