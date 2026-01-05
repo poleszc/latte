@@ -2,7 +2,7 @@
 /// Eliminates unreachable blocks and fixes up the phi functions after elimination.
 /// Unreachable block might have occurred when performing branch folding.
 use crate::{lir::*, opts::OptimizationPass};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub struct DeadBlockElimination {
     reachable: HashSet<BlockID>,
@@ -60,63 +60,71 @@ impl DeadBlockElimination {
         old_block_count != function.blocks.len()
     }
 
-    /// Fixes phi functions after blocks have been removed. Removes the arguments coming from the deleted blocks.
+    /// Fixes the predecessor list and phi functions by checking actual CFG edges.
     /// Returns true if changes where made, false otherwise.
-    fn fix_phi_functions(&self, function: &mut LIRFunction) -> bool {
+    fn fix_cfg(&self, function: &mut LIRFunction) -> bool {
         let mut changed = false;
 
+        // Build the edge map after some edges have been removed, after changing branches to jumps.
+        let mut actual_edges: HashMap<BlockID, HashSet<BlockID>> = HashMap::new();
+        for (bid, block) in &function.blocks {
+            if let Some(term) = &block.terminator {
+                match term {
+                    LIRTerminator::Jump { target, .. } => {
+                        actual_edges.entry(*target).or_default().insert(*bid);
+                    }
+                    LIRTerminator::Branch {
+                        if_true, if_false, ..
+                    } => {
+                        actual_edges.entry(*if_true).or_default().insert(*bid);
+                        actual_edges.entry(*if_false).or_default().insert(*bid);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // For each block, fix the predecessor list and phi functions for them to not include removed blocks.
         for block_id in &function.block_order.clone() {
+            let actual_preds = actual_edges.get(block_id);
+
             if let Some(block) = function.blocks.get_mut(block_id) {
+                let old_pred_len = block.predecessors.len();
+                block.predecessors.retain(|p| {
+                    // Predecessor must be reachable and must contain an edge to 'this" block.
+                    actual_preds.map_or(false, |set| set.contains(p))
+                });
+                if block.predecessors.len() != old_pred_len {
+                    changed = true;
+                }
+
+                // Remove removed blocks from phi arguments.
+                let current_preds: HashSet<BlockID> = block.predecessors.iter().cloned().collect();
                 for instr in &mut block.instructions {
                     if instr.operation != LIROperation::Phi {
                         continue;
                     }
 
-                    let old_len = instr.operands.len();
-                    let mut new_operands = Vec::new();
-                    
-                    dbg!(&instr.operands);
-
-
+                    let old_phi_len = instr.operands.len();
+                    let mut new_ops = Vec::new();
 
                     for chunk in instr.operands.chunks(2) {
-                        assert!(chunk.len() == 2);
                         if let LIRValue::Block(pred_id) = chunk[1] {
-                            // Keep only the arguments from reachable blocks.
-                            if self.reachable.contains(&pred_id) {
-                                new_operands.push(chunk[0].clone());
-                                new_operands.push(chunk[1].clone());
+                            // Leave the argument if the block is an actual predecessor.
+                            if current_preds.contains(&pred_id) {
+                                new_ops.push(chunk[0].clone());
+                                new_ops.push(chunk[1].clone());
                             }
                         }
                     }
 
-                    if new_operands.len() != old_len {
-                        instr.operands = new_operands;
+                    if new_ops.len() != old_phi_len {
+                        instr.operands = new_ops;
                         changed = true;
                     }
                 }
             }
         }
-        changed
-    }
-
-    /// Fixes the predecessor list after blocks have been removed.
-    /// Returns true if changes where made, false otherwise.
-    fn fix_predecessors(&self, function: &mut LIRFunction) -> bool {
-        let mut changed = false;
-
-        for block_id in &function.block_order.clone() {
-            if let Some(block) = function.blocks.get_mut(block_id) {
-                let old_len = block.predecessors.len();
-                block
-                    .predecessors
-                    .retain(|pred_id| self.reachable.contains(pred_id));
-                if block.predecessors.len() != old_len {
-                    changed = true;
-                }
-            }
-        }
-
         changed
     }
 }
@@ -128,16 +136,10 @@ impl OptimizationPass for DeadBlockElimination {
 
     fn run_on_function(&mut self, function: &mut LIRFunction) -> bool {
         self.find_reachable_blocks(function);
-        // If all are reachable -> skip
-        if self.reachable.len() == function.blocks.len() {
-            return false;
-        }
-
         let block_removed = self.remove_unreachable_blocks(function);
-        let phis_fixed = self.fix_phi_functions(function);
-        let predecessors_fixed = self.fix_predecessors(function);
+        let cfg_fixed = self.fix_cfg(function);
 
-        block_removed || phis_fixed || predecessors_fixed
+        block_removed || cfg_fixed
     }
 }
 

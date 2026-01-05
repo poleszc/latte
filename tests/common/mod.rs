@@ -290,14 +290,9 @@ pub fn run_integration_test_with_const_prop(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-const-prop"]);
 }
 
-/// Runs an integration test with only Branch Folding.
-pub fn run_integration_test_with_branch_fold(input_path: &str) {
-    run_integration_test_with_opts(input_path, &["--opt-branch-fold"]);
-}
-
-/// Runs an integration test with only Dead Block Elimination.
-pub fn run_integration_test_with_dbe(input_path: &str) {
-    run_integration_test_with_opts(input_path, &["--opt-dbe"]);
+/// Runs an integration test with Branch Folding and unreachable block elimination.
+pub fn run_integration_test_with_branch_elimination(input_path: &str) {
+    run_integration_test_with_opts(input_path, &["--opt-branch-fold", "--opt-dbe"]);
 }
 
 /// Runs an integration test with only Dead Code Elimination.

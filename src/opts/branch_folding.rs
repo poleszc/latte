@@ -2,6 +2,8 @@
 /// If a branch instruction depending on a constant value exists in
 /// the program, we change it to a jump making one block unreachable.
 /// This block is then removed by DeadBlockElimination.
+/// Note:   This opt has to be used in pair with DeadBlockElimination. 
+///         Otherwise the LLVM verification will not pass.
 use crate::{lir::*, opts::OptimizationPass};
 
 pub struct BranchFolding;

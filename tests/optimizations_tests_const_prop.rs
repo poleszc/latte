@@ -3,4 +3,4 @@
 mod common;
 use common::*;
 
-// include!(concat!(env!("OUT_DIR"), "/integration_opts_const_prop.rs"));
+include!(concat!(env!("OUT_DIR"), "/integration_opts_const_prop.rs"));
