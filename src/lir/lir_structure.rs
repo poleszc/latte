@@ -1,10 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    SourcePosition,
-    parser::{Block, ast::Type},
-    utils::StrID,
-};
+use crate::{SourcePosition, parser::ast::Type, utils::StrID};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RegisterID(pub usize);

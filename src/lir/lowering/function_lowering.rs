@@ -10,7 +10,7 @@ use crate::{
         BlockID as MirBID, LocalID, MIRFunction, MIROperation, MIRPlace, MIRTerminator, MIRValue,
         TempID,
     },
-    parser::{Type, TypeKind},
+    parser::Type,
     utils::StrID,
 };
 

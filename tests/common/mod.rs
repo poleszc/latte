@@ -6,7 +6,10 @@ use latte::{
     semantics::SemanticChecker,
 };
 use std::{
-    env::args, fs, io::Write, path::PathBuf, process::{Command, Stdio}
+    fs,
+    io::Write,
+    path::PathBuf,
+    process::{Command, Stdio},
 };
 use tempfile::tempdir;
 
@@ -293,6 +296,10 @@ pub fn run_integration_test_with_const_prop(input_path: &str) {
 /// Runs an integration test with Branch Folding and unreachable block elimination.
 pub fn run_integration_test_with_branch_elimination(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-branch-fold", "--opt-dbe"]);
+}
+
+pub fn run_integration_test_with_dbe(input_path: &str) {
+    run_integration_test_with_opts(input_path, &["--opt-dbe"]);
 }
 
 /// Runs an integration test with only Dead Code Elimination.

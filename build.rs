@@ -188,20 +188,20 @@ fn main() {
     .expect("Failed to generate integration tests for good cases");
 
     // =============== OPTIMIZATIONS ================
-    // generate_test_suite(
-    //     "integration_opts_all.rs",
-    //     &[
-    //         "tests/good/official",
-    //         "tests/good/extra",
-    //         "tests/good/extensions/arrays",
-    //         "tests/good/extensions/struct",
-    //         "tests/good/extensions/objects",
-    //         "tests/good/extensions/virtual",
-    //     ],
-    //     "run_integration_test_with_all_opts",
-    //     "integration_pass_all_opts",
-    // )
-    // .expect("Failed to generate integration tests with all optimizations");
+    generate_test_suite(
+        "integration_opts_all.rs",
+        &[
+            "tests/good/official",
+            "tests/good/extra",
+            "tests/good/extensions/arrays",
+            "tests/good/extensions/struct",
+            "tests/good/extensions/objects",
+            "tests/good/extensions/virtual",
+        ],
+        "run_integration_test_with_all_opts",
+        "integration_pass_all_opts",
+    )
+    .expect("Failed to generate integration tests with all optimizations");
 
     generate_test_suite(
         "integration_opts_const_prop.rs",
