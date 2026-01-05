@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use crate::{SourcePosition, parser::ast::Type, utils::StrID};
+use crate::{
+    SourcePosition,
+    parser::{Block, ast::Type},
+    utils::StrID,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RegisterID(pub usize);
@@ -18,7 +22,7 @@ impl BlockID {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LIRValue {
     Register(RegisterID),
     IntConst(i32),
@@ -119,6 +123,16 @@ pub struct LIRBlock {
     pub instructions: Vec<LIRInstruction>,
     pub terminator: Option<LIRTerminator>,
     pub predecessors: Vec<BlockID>, // Direct predecessors
+}
+impl LIRBlock {
+    pub fn with_id(id: BlockID) -> Self {
+        Self {
+            id,
+            instructions: Vec::new(),
+            terminator: None,
+            predecessors: Vec::new(),
+        }
+    }
 }
 
 /// Single function representation in MIR.

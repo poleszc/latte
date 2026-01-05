@@ -313,3 +313,265 @@ impl Default for ConstantFoldingAndPropagation {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SourcePosition;
+    use crate::parser::ast::{Type, TypeKind};
+    use crate::utils::StrID;
+    use std::collections::HashMap;
+
+    // Helper to create a basic LIRFunction for testing.
+    // Zakładam, że LIRBlock::new istnieje i przyjmuje BlockID. Jeśli używasz `with_id`, zmień `new` na `with_id`.
+    fn create_test_function() -> LIRFunction {
+        LIRFunction {
+            name: StrID::from("test"),
+            return_type: Type {
+                kind: TypeKind::Void,
+                position: SourcePosition(0, 0),
+            },
+            parameter_types: vec![],
+            parameter_registers: vec![],
+            registers: vec![],
+            blocks: HashMap::new(),
+            block_order: vec![],
+            entry_block: BlockID(0),
+            source_position: SourcePosition(0, 0),
+        }
+    }
+
+    #[test]
+    fn test_simple_integer_folding_and_propagation() {
+        // r0 = 10
+        // r1 = 20
+        // r2 = r0 + r1
+        // r3 = r2 * 2
+        let mut function = create_test_function();
+        let r0 = RegisterID(0);
+        let r1 = RegisterID(1);
+        let r2 = RegisterID(2);
+        let r3 = RegisterID(3);
+
+        let mut block = LIRBlock::with_id(BlockID(0));
+        block.instructions.push(LIRInstruction {
+            operation: LIROperation::Assign,
+            destination: Some(r0),
+            operands: vec![LIRValue::IntConst(10)],
+            source_position: SourcePosition(0, 0),
+        });
+        block.instructions.push(LIRInstruction {
+            operation: LIROperation::Assign,
+            destination: Some(r1),
+            operands: vec![LIRValue::IntConst(20)],
+            source_position: SourcePosition(0, 0),
+        });
+        block.instructions.push(LIRInstruction {
+            operation: LIROperation::IntAdd,
+            destination: Some(r2),
+            operands: vec![LIRValue::Register(r0), LIRValue::Register(r1)],
+            source_position: SourcePosition(0, 0),
+        });
+        block.instructions.push(LIRInstruction {
+            operation: LIROperation::IntMul,
+            destination: Some(r3),
+            operands: vec![LIRValue::Register(r2), LIRValue::IntConst(2)],
+            source_position: SourcePosition(0, 0),
+        });
+
+        function.blocks.insert(BlockID(0), block);
+        function.block_order.push(BlockID(0));
+
+        let mut pass = ConstantFoldingAndPropagation::new();
+        let changed = pass.run_on_function(&mut function);
+
+        assert!(changed);
+        let final_block = function.blocks.get(&BlockID(0)).unwrap();
+        let add_instr = &final_block.instructions[2];
+        let mul_instr = &final_block.instructions[3];
+
+        // Check that r0 and r1 were propagated into the add instruction
+        assert_eq!(add_instr.operands[0], LIRValue::IntConst(10));
+        assert_eq!(add_instr.operands[1], LIRValue::IntConst(20));
+
+        // Check that the result of the add (r2=30) was propagated into the mul instruction
+        assert_eq!(mul_instr.operands[0], LIRValue::IntConst(30));
+        assert_eq!(mul_instr.operands[1], LIRValue::IntConst(2));
+    }
+
+    #[test]
+    fn test_propagation_to_terminator() {
+        // r0 = 5 > 3
+        // branch r0, B1, B2
+        let mut function = create_test_function();
+        let r0 = RegisterID(0);
+        let b0 = BlockID(0);
+        let b1 = BlockID(1);
+        let b2 = BlockID(2);
+
+        let mut block = LIRBlock::with_id(b0);
+        block.instructions.push(LIRInstruction {
+            operation: LIROperation::IntGt,
+            destination: Some(r0),
+            operands: vec![LIRValue::IntConst(5), LIRValue::IntConst(3)],
+            source_position: SourcePosition(0, 0),
+        });
+        block.terminator = Some(LIRTerminator::Branch {
+            condition: LIRValue::Register(r0),
+            if_true: b1,
+            if_false: b2,
+            position: SourcePosition(0, 0),
+        });
+
+        function.blocks.insert(b0, block);
+        function.block_order.push(b0);
+
+        let mut pass = ConstantFoldingAndPropagation::new();
+        let changed = pass.run_on_function(&mut function);
+
+        assert!(changed);
+
+        let final_block = function.blocks.get(&b0).unwrap();
+        match &final_block.terminator {
+            Some(LIRTerminator::Branch { condition, .. }) => {
+                assert_eq!(*condition, LIRValue::BoolConst(true));
+            }
+            _ => panic!("Expected Branch terminator"),
+        }
+    }
+
+    #[test]
+    fn test_boolean_short_circuit_and() {
+        // r0 = false
+        // r1 = some_unknown_val
+        // r2 = r0 && r1 // Should evaluate to false without knowing r1
+        // r3 = r2
+        let mut function = create_test_function();
+        let r0 = RegisterID(0);
+        let r1 = RegisterID(1);
+        let r2 = RegisterID(2);
+        let r3 = RegisterID(3);
+
+        let mut block = LIRBlock::with_id(BlockID(0));
+        block.instructions.push(LIRInstruction {
+            operation: LIROperation::Assign,
+            destination: Some(r0),
+            operands: vec![LIRValue::BoolConst(false)],
+            source_position: SourcePosition(0, 0),
+        });
+        block.instructions.push(LIRInstruction {
+            operation: LIROperation::BoolAnd,
+            destination: Some(r2),
+            operands: vec![LIRValue::Register(r0), LIRValue::Register(r1)],
+            source_position: SourcePosition(0, 0),
+        });
+        block.instructions.push(LIRInstruction {
+            operation: LIROperation::Assign,
+            destination: Some(r3),
+            operands: vec![LIRValue::Register(r2)],
+            source_position: SourcePosition(0, 0),
+        });
+
+        function.blocks.insert(BlockID(0), block);
+        function.block_order.push(BlockID(0));
+
+        let mut pass = ConstantFoldingAndPropagation::new();
+        let changed = pass.run_on_function(&mut function);
+
+        assert!(changed);
+        let final_block = function.blocks.get(&BlockID(0)).unwrap();
+        let final_assign = &final_block.instructions[2];
+        // The value of r2 (false) should be propagated to the final assignment.
+        assert_eq!(final_assign.operands[0], LIRValue::BoolConst(false));
+    }
+
+    #[test]
+    fn test_string_operations() {
+        // r0 = "hello"
+        // r1 = " world"
+        // r2 = r0 + r1     // "hello world"
+        // r3 = length(r2)  // 11
+        let mut function = create_test_function();
+        let r0 = RegisterID(0);
+        let r1 = RegisterID(1);
+        let r2 = RegisterID(2);
+        let r3 = RegisterID(3);
+
+        let mut block = LIRBlock::with_id(BlockID(0));
+        block.instructions.push(LIRInstruction {
+            operation: LIROperation::Assign,
+            destination: Some(r0),
+            operands: vec![LIRValue::StringConst("hello".to_string())],
+            source_position: SourcePosition(0, 0),
+        });
+        block.instructions.push(LIRInstruction {
+            operation: LIROperation::Assign,
+            destination: Some(r1),
+            operands: vec![LIRValue::StringConst(" world".to_string())],
+            source_position: SourcePosition(0, 0),
+        });
+        block.instructions.push(LIRInstruction {
+            operation: LIROperation::StringConcat,
+            destination: Some(r2),
+            operands: vec![LIRValue::Register(r0), LIRValue::Register(r1)],
+            source_position: SourcePosition(0, 0),
+        });
+        block.instructions.push(LIRInstruction {
+            operation: LIROperation::StringLength,
+            destination: Some(r3),
+            operands: vec![LIRValue::Register(r2)],
+            source_position: SourcePosition(0, 0),
+        });
+
+        function.blocks.insert(BlockID(0), block);
+        function.block_order.push(BlockID(0));
+
+        let mut pass = ConstantFoldingAndPropagation::new();
+        let changed = pass.run_on_function(&mut function);
+
+        assert!(changed);
+        let final_block = function.blocks.get(&BlockID(0)).unwrap();
+        let length_instr = &final_block.instructions[3];
+
+        assert_eq!(
+            length_instr.operands[0],
+            LIRValue::StringConst("hello world".to_string())
+        );
+        assert_eq!(pass.constants.get(&r3), Some(&ConstantValue::Int(11)));
+    }
+
+    #[test]
+    fn test_no_changes_on_non_constants() {
+        // r2 = r0 + r1 (r0 and r1 are unknown (e.g., function parameters))
+        let mut function = create_test_function();
+        let r0 = RegisterID(0);
+        let r1 = RegisterID(1);
+        let r2 = RegisterID(2);
+
+        // Pretend r0 and r1 are function parameters
+        function.parameter_registers.push(r0);
+        function.parameter_registers.push(r1);
+
+        let mut block = LIRBlock::with_id(BlockID(0));
+        let original_instr = LIRInstruction {
+            operation: LIROperation::IntAdd,
+            destination: Some(r2),
+            operands: vec![LIRValue::Register(r0), LIRValue::Register(r1)],
+            source_position: SourcePosition(0, 0),
+        };
+        block.instructions.push(original_instr.clone());
+
+        function.blocks.insert(BlockID(0), block);
+        function.block_order.push(BlockID(0));
+
+        let mut pass = ConstantFoldingAndPropagation::new();
+        let changed = pass.run_on_function(&mut function);
+
+        assert!(!changed);
+        let final_block = function.blocks.get(&BlockID(0)).unwrap();
+        let final_instr = &final_block.instructions[0];
+
+        // The instruction should be identical because no constants could be propagated.
+        assert_eq!(final_instr.operands, original_instr.operands);
+    }
+}

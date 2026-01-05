@@ -13,24 +13,17 @@ impl BranchFolding {
 
     fn fold_branch(term: &mut LIRTerminator) -> bool {
         if let LIRTerminator::Branch {
-            condition,
+            condition: LIRValue::BoolConst(b),
             if_true,
             if_false,
             position,
         } = term
         {
-            let const_value = match condition {
-                LIRValue::BoolConst(b) => Some(*b),
-                _ => None,
+            let target = if *b { *if_true } else { *if_false };
+            *term = LIRTerminator::Jump {
+                target,
+                position: *position,
             };
-
-            if let Some(value) = const_value {
-                let target = if value { *if_true } else { *if_false };
-                *term = LIRTerminator::Jump {
-                    target,
-                    position: *position,
-                }
-            }
             return true;
         }
         false
