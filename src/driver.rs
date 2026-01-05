@@ -14,7 +14,7 @@ use crate::{
     semantics::{SemanticChecker, tast::TProgram},
 };
 
-/// Main driver for the compiler. Performs all the generic operations for both backends.
+/// Main driver for the compiler.
 /// - Resolves the output directories
 /// - Performs the parsing
 /// - Runs the compilation function(`backend_compile`).
@@ -66,7 +66,7 @@ pub fn run_compiler<
                 let comp_error = CompilerError::Semantic(err);
                 report_compiler_error(args.input_file.to_str().unwrap(), &source_code, &comp_error);
             }
-            return Err(CompilerError::Other("Semantic analysis failed".to_string()));
+            return Err(CompilerError::Silent);
         }
     };
 
