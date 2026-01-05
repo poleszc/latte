@@ -248,20 +248,20 @@ fn main() {
     )
     .expect("Failed to generate dead block elimination integration tests");
 
-    // generate_test_suite(
-    //     "integration_opts_dce.rs",
-    //     &[
-    //         "tests/good/official",
-    //         "tests/good/extra",
-    //         "tests/good/extensions/arrays",
-    //         "tests/good/extensions/struct",
-    //         "tests/good/extensions/objects",
-    //         "tests/good/extensions/virtual",
-    //     ],
-    //     "run_integration_test_with_dce",
-    //     "integration_pass_dce",
-    // )
-    // .expect("Failed to generate dead code elimination integration tests");
+    generate_test_suite(
+        "integration_opts_dce.rs",
+        &[
+            "tests/good/official",
+            "tests/good/extra",
+            "tests/good/extensions/arrays",
+            "tests/good/extensions/struct",
+            "tests/good/extensions/objects",
+            "tests/good/extensions/virtual",
+        ],
+        "run_integration_test_with_dce",
+        "integration_pass_dce",
+    )
+    .expect("Failed to generate dead code elimination integration tests");
 }
 
 /// Recursively collects all files starting from a giver directory.

@@ -1,0 +1,49 @@
+int main() {
+    test_simple_dead_code();
+    test_transitive_dead_code(10);
+    test_side_effects_preservation();
+    test_loop_dce(5);
+    return 0;
+}
+
+void test_simple_dead_code() {
+    int x = 42; // Dead
+    int y = 7;
+    printInt(y);
+}
+
+int test_transitive_dead_code(int n) {
+    int a = n + 1; // Dead
+    int b = a * 2; // Dead 
+    int c = b + 5; // Dead
+    
+    int live_var = n - 1;
+    return live_var;
+}
+
+void test_side_effects_preservation() {
+    int[] arr = new int[10]; 
+    arr[0] = 1337;
+    int[] arr2 = new int[10]; 
+    
+    get_constant_but_side_effect(); 
+}
+
+int get_constant_but_side_effect() {
+    printString("Hello");
+    return 100;
+}
+
+void test_loop_dce(int n) {
+    int i = 0;
+    int sum = 0;
+    
+    while (i < n) {
+        sum = sum + i;
+        int dead_in_loop = sum * 2;
+        int dead_chain = dead_in_loop + i;
+        i++;
+    }
+    
+    printInt(sum);
+}
