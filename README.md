@@ -2,13 +2,18 @@
 ## Co jest zrobione
 - Pełna podstawowa wersja zadania z backend'em LLVM
 - Dodatkowo z rozszerzeń (zarówno we frontendzie i backendzie):
-  - Użycie rejestrów i phi zamiast alloca (aktualnie w generowanym LLVM IR pojawiają się jeszcze instrukcje typu `%r0 = bitcast i32 10 to i32`, czyli odpowiednik `%r0 = 10`. To oczywiscie zniknie po pierwszym passie constant propagation, którego jeszcze nie ma.)
+  - Użycie rejestrów i phi zamiast alloca (aktualnie w generowanym LLVM IR pojawiają się jeszcze instrukcje typu `%r0 = bitcast i32 10 to i32`, czyli odpowiednik `%r0 = 10` działający nie tylko dla int'ów. To oczywiscie zniknie po pierwszym passie constant propagation)
   - Tablice (bez tablic tablic, nie do końca jest dla mnie jasne, czy powinny one być)
   - Struktury
   - Obiekty
   - Metody wirtualne
   - Zagnieżdżone struktury, obiekty, tablice struktur, obiekty z tablicami itp.
   - Jawna obsługa błędów wykonania takich jak dzielenie przez 0, null ptr access (poprzez wywołanie `error()` z `runtime.ll`)
+- Optymalizacje:
+  - Constant Propagation i Constant Folding
+  - Dead Code Elimination
+  - Branch Folding - zamienianie instrukcji typu `br [stała_logiczna_znana_w_czasie_kompilacji], blok1, blok2` na odpowiedni `jump`
+  - Dead block elimination - usuwanie nieosiagalnych bloków powstałych w wyniku Branch Folding
 
 ## Budowanie projektu
 1) Instalacja Rust:
@@ -50,12 +55,25 @@ cargo run tests/good/official/core001.lat --run
 ./latc_llvm tests/good/official/core001.lat --emit-ast
 # Wyemituje plik z AST analize semantycznej i otypowaniu. (*.tast.json)
 ./latc_llvm tests/good/official/core001.lat --emit-tast
-# Wyemituje plik z tekstową reprezentacja MIR (Mid Intermediate Representation). Prosta reprezentacja blokowa z kodem czwórkowym i bez złożonych LValue (zagnieżdżone accessy są już rozbite na kilka instrukcji). (*.mir)
+# Wyemituje plik z tekstową reprezentacja MIR (Mid Intermediate Representation). Prosta reprezentacja blokowa z kodem czwórkowym i bez złożonych LValue (zagnieżdżone access'y są już rozbite na kilka instrukcji). (*.mir)
 ./latc_llvm tests/good/official/core001.lat --emit-mir
 # Wyemituje plik z tekstową reprezentacja LIR (Low Intermediate Representation). Reprezentacja blokowa z SSA i phi. (*.lir)
 ./latc_llvm tests/good/official/core001.lat --emit-lir
+# Wyemituje plik z tekstową reprezentacja LIR otrzymaną po optymalizacjach (jeżeli takowe były włączone).
+./latc_llvm tests/good/official/core001.lat --emit-lir-opt
 # Wyemituje pliki ze wszystkimi reprezentacjami pośrednimi.
 ./latc_llvm tests/good/official/core001.lat --emit-all
+```
+
+### Optymalizacje
+- Domyślnie wszystkie optymalizacje są wyłączone. Uruchamia się je zestawem flag:
+```bash
+./latc_llvm tests/good/official/core001.lat -O                # Włącza wszystkie optymalizacje.
+./latc_llvm tests/good/official/core001.lat --opt-const-prop  # Constant propagation i constant folding.
+./latc_llvm tests/good/official/core001.lat --opt-branch-fold # Branch folding.
+./latc_llvm tests/good/official/core001.lat --opt-dbe         # Dead Block Elimination.
+./latc_llvm tests/good/official/core001.lat --opt-dce         # Dead Code Elimination.
+./latc_llvm tests/good/official/core001.lat --opt-max-iterations <OPT_MAX_ITERATIONS> # Opcjonalnie można ustawić maksymalną liczbe przejść przez program w czasie optymalizacji. Domyślnie maksymalna wartość to 10, ale optymalizator zatrzymuje się wcześniej jeżeli wykryje że wyoptymalizował już wszystko co się da.
 ```
 
 ## Struktura testów
@@ -70,14 +88,20 @@ tests
 │       ├── basic           # Dodatkowe testy latte bez rozszerzeń
 │       ├── error_recovery  # Testy sprawdzające error recovery.
 │       └── extensions      # Testy sprawdzające wykrywanie błędów semantycznych w przypadku rozszerzeń.
-└─ good                     # Testy, które powinny przejść i powinien się dla nich wygenerować poprawny MIR.
-    ├── extensions          # Prawidłowe testy dla rozszerzeń, dla których powinien się generować poprawny MIR.
+└─ good                     # Testy, które powinny przejść i powinien się dla nich wygenerować poprawny kod.
+    ├── extensions          # Prawidłowe testy dla rozszerzeń, dla których powinien się generować poprawny kod.
     │   ├── arrays
     │   ├── objects
     │   ├── struct
     │   └── virtual
     ├── extra               # Dodatkowe testy podstawy latte, bez rozszerzeń.
-    └── official            # Oficjalne, prawidłowe testy MRJP
+    ├── official            # Oficjalne, prawidłowe testy MRJP
+    └── opts                # Testy sprawdzające optymalizacje
+        ├── branch_removal
+        ├── constant_folding_and_propagation
+        ├── dead_code_elimination
+        ├── garbage_collector
+        └── tail_call
 ```
 
 ## Struktura projektu
@@ -87,7 +111,7 @@ src/
 ├── bin
 │   └── latc_llvm.rs                # Punkt wejścia kompilatora. Uruchamia driver i pełen pipeline.
 ├── config.rs                       # Definicje opcji i argumentów CLI (Clap).
-├── driver.rs                       # Główny sterownik kompilacji. Łączy: parser -> TAST -> MIR -> LIR -> LLVM.
+├── driver.rs                       # Główny sterownik kompilacji. Łączy: parser -> TAST -> MIR -> LIR -> OptLIR -> LLVM.
 ├── errors                          # Obsługa błędów i diagnostyka.
 │   ├── diagnostics.rs              # Formatowanie błędów (Ariadne).
 │   ├── lexical.rs                  # Błędy leksera.
@@ -115,6 +139,14 @@ src/
 │   ├── codegen.rs                  # Główny generator kodu LLVM IR z LIR
 │   ├── driver.rs                   # Integracja z zewnętrznymi narzędziami (llvm-as, llvm-link, lli).
 │   └── mod.rs
+├── opts                            # Moduł optymalizacji kodu, działający na LIR przed generacja kodu LLVM.
+│   ├── branch_folding.rs           # Usuwanie niepotrzebnych gałęzi.
+│   ├── constant_propagation.rs     # Propagacja stałych i zwijanie stałych.
+│   ├── dead_block_elimination.rs   # Usuwanie martwych bloków.
+│   ├── dead_code_elimination.rs    # Usuwanie martwego kodu.
+│   ├── mod.rs                      # Główna logika uruchamiania optymalizacji na LIRze.
+│   ├── pass.rs                     # Trait specyfikujący pojedynczą optymalizacje.
+│   └── phi_removal.rs              # Usuwanie uproszczonych phi (jeszcze nie zaimplementowane).
 ├── parser                          # Lekser, parser i surowe AST.
 │   ├── ast                         # Węzły AST (nietypowane).
 │   ├── lexer.rs                    # Lekser (Logos).
@@ -146,4 +178,3 @@ src/
 *   [**Ariadne**](https://crates.io/crates/ariadne) – biblioteka do wizualizacji błędów kompilacji (kolorowanie składni, podkreślanie błędów).
 *   [**Ustr**](https://crates.io/crates/ustr) – string interning (używane jako `StrID`), co przyspiesza porównywanie identyfikatorów i oszczędza kopiowania stringów.
 *   [**Serde**](https://crates.io/crates/serde) – serializacja struktur danych.
-```

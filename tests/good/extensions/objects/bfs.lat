@@ -1,22 +1,3 @@
-/******************************************************************
- *                                                                *
- * bfs test by Michał Gregorczyk (mg277528@students.mimuw.edu.pl) *
- *                               (michalg89@gmail.com)            *
- *                                                                *
- ******************************************************************
- * 22. stycznia 12:00                                             *
- *                                                                *
- * Mój kompilator jeszcze nie potrafi                             *
- * skompilować tego testu, dlatego                                *
- * nie sprawidziłem jego poprawności.                             *
- * Test przechodzi natomiast przez                                *
- * analizę semantyczną.                                           *
- *                                                                *
- * Będę wdzięczny za wszelkie uwagi                               *
- * typu "nie działa, daje zły wynik"                              *
- * lub "u mnie działa".                                           *
- *****************************************************************/
-
 class Node{
     boolean visited;
     int value;
