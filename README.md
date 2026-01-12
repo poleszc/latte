@@ -1,4 +1,12 @@
 # Latte - Piotr Oleszczuk, nr 448390
+## Punkty
+- Front-end - 4
+- Backend LLVM - 8
+- Phi - 2
+- Tablice - 1
+- Struktury/Obiekty/Metody - 8
+Suma: 23
+
 ## Co jest zrobione
 - Pełna podstawowa wersja zadania z backend'em LLVM
 - Dodatkowo z rozszerzeń (zarówno we frontendzie i backendzie):
