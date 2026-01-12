@@ -1,0 +1,24 @@
+int get() {
+    return 1234;    
+}
+
+
+int main() {
+    int x = 42;
+    int y = x;
+    int z = y;
+    
+    int result = z + x;
+    
+    printInt(result);
+    
+    int a = get();
+    int b = a;
+    int c = b;
+    
+    if (c > 0) {
+        printInt(c);
+    }
+
+    return 0;
+}

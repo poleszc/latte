@@ -2,9 +2,7 @@ use crate::{
     LatteArgs,
     lir::LIRProgram,
     opts::{
-        branch_folding::BranchFolding, constant_propagation::ConstantFoldingAndPropagation,
-        dead_block_elimination::DeadBlockElimination, dead_code_elimination::DeadCodeElimination,
-        gcse::GlobalCSE, pass::OptimizationPass,
+        branch_folding::BranchFolding, constant_propagation::ConstantFoldingAndPropagation, copy_propagation::CopyPropagation, dead_block_elimination::DeadBlockElimination, dead_code_elimination::DeadCodeElimination, gcse::GlobalCSE, pass::OptimizationPass
     },
 };
 mod branch_folding;
@@ -12,6 +10,7 @@ mod constant_propagation;
 mod dead_block_elimination;
 mod dead_code_elimination;
 mod gcse;
+mod copy_propagation;
 mod pass;
 
 pub struct OptimizationConfig {
@@ -72,6 +71,9 @@ impl Optimizer {
         }
         if args.optimize || args.opt_gcse {
             self.add_pass(Box::new(GlobalCSE::new()));
+        }
+        if args.optimize || args.opt_copy_prop {
+            self.add_pass(Box::new(CopyPropagation::new()));
         }
     }
 

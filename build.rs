@@ -283,6 +283,22 @@ fn main() {
         "integration_pass_gcse",
     )
     .expect("Failed to generate GCSE integration tests");
+    
+    generate_test_suite(
+        "integration_opts_copy_prop.rs",
+        &[
+            "tests/good/official",
+            "tests/good/extra",
+            "tests/good/extensions/arrays",
+            "tests/good/extensions/struct",
+            "tests/good/extensions/objects",
+            "tests/good/extensions/virtual",
+            "tests/good/opts",
+        ],
+        "run_integration_test_with_copy_prop",
+        "integration_pass_copy_prop",
+    )
+    .expect("Failed to generate copt propagation integration tests");
 }
 
 /// Recursively collects all files starting from a giver directory.
