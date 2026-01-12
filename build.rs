@@ -315,7 +315,7 @@ fn main() {
         "integration_pass_dead_function",
     )
     .expect("Failed to generate dead function integration tests");
-    
+
     generate_test_suite(
         "integration_opts_function_inline.rs",
         &[

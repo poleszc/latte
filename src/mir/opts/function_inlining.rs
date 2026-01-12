@@ -87,10 +87,23 @@ impl MIRFunctionInlining {
     fn is_inlineable(&self, func: &MIRFunction) -> bool {
         // TODO: Remove empty functions.
         let mut instr_count = 0;
+        let mut is_recursive = false;
+
         for block in func.blocks.values() {
             instr_count += block.instructions.len();
+
+            for instr in &block.instructions {
+                if let MIROperation::Call = instr.operation {
+                    if let MIRValue::Function(called_name) = &instr.operands[0] {
+                        if *called_name == func.name {
+                            is_recursive = true;
+                        }
+                    }
+                }
+            }
         }
-        instr_count > 0 && instr_count < self.max_func_size
+
+        instr_count > 0 && instr_count < self.max_func_size && !is_recursive
     }
 
     fn inline_calls(
@@ -140,6 +153,25 @@ impl MIRFunctionInlining {
 
         let inlined = &candidates[inlined_name];
 
+        let proxy_return_local = if let Some(dest) = &instruction.destination {
+            let new_id = LocalID(func.locals.len());
+            let typ = match dest {
+                MIRPlace::Local(id) => func.locals[id.0].typ.clone(),
+                MIRPlace::Temp(id) => func.temps[id.0].typ.clone(),
+                _ => panic!("Unsupported destination"),
+            };
+            func.locals.push(LocalInfo {
+                id: new_id,
+                name: Some(StrID::from(format!("inline_ret_{}", inlined_name))),
+                typ,
+                is_parameter: false,
+                parameter_index: None,
+            });
+            Some(new_id)
+        } else {
+            None
+        };
+
         // First rename all variables from the inlined function and insert them in the caller function.
         // Inlined LocalID -> Caller LocalID
         let mut local_map = HashMap::new();
@@ -184,6 +216,17 @@ impl MIRFunctionInlining {
 
         let mut after_instructions = caller_block.instructions.split_off(instr_idx);
         after_instructions.remove(0); // Remove the call instruction
+        if let (Some(dest), Some(proxy_id)) = (&instruction.destination, proxy_return_local) {
+            after_instructions.insert(
+                0,
+                MIRInstruction {
+                    operation: MIROperation::Assign,
+                    destination: Some(dest.clone()),
+                    operands: vec![MIRValue::Local(proxy_id)],
+                    source_position: instruction.source_position,
+                },
+            );
+        }
 
         // If it's an entry block we insert additional assign instructions at the beginning of the block.
         for (i, arg_val) in instruction.operands.iter().skip(1).enumerate() {
@@ -245,7 +288,7 @@ impl MIRFunctionInlining {
                             if let Some(dest) = &instruction.destination {
                                 new_instructions.push(MIRInstruction {
                                     operation: MIROperation::Assign,
-                                    destination: Some(dest.clone()),
+                                    destination: Some(MIRPlace::Local(proxy_return_local.unwrap())),
                                     operands: vec![self.remap_value(
                                         val.clone(),
                                         &local_map,
