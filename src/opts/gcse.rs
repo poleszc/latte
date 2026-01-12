@@ -1,4 +1,6 @@
 /// Global Common Sub-expression Elimination:
+/// https://www.cs.cmu.edu/afs/cs/academic/class/15745-s16/www/lectures/L7-GCSE-Const-Prop.pdf
+/// https://github.com/lighthousand/books/blob/master/Engineering%20A%20Compiler%202nd%20Edition%20by%20Cooper%20and%20Torczon.pdf
 use crate::{lir::*, opts::OptimizationPass, utils::cfg::GraphAnalysis};
 use std::collections::HashMap;
 
