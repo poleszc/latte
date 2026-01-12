@@ -42,10 +42,10 @@ impl MIRFunctionInlining {
                 .collect();
 
             for func_name in &mut program.function_order {
-                if let Some(mut func) = program.functions.get_mut(&func_name) {
-                    if self.inline_calls(&mut func, &candidates) {
-                        changed = true;
-                    }
+                if let Some(func) = program.functions.get_mut(func_name)
+                    && self.inline_calls(func, &candidates)
+                {
+                    changed = true;
                 }
             }
         }
@@ -59,21 +59,21 @@ impl MIRFunctionInlining {
         reachable.insert(func.entry_block);
 
         while let Some(bid) = stack.pop() {
-            if let Some(block) = func.blocks.get(&bid) {
-                if let Some(term) = &block.terminator {
-                    let targets = match term {
-                        MIRTerminator::Jump { target, .. } => vec![*target],
-                        MIRTerminator::Branch {
-                            if_true, if_false, ..
-                        } => vec![*if_true, *if_false],
-                        MIRTerminator::Return { .. } => vec![],
-                        MIRTerminator::Unreachable { .. } => vec![],
-                    };
+            if let Some(block) = func.blocks.get(&bid)
+                && let Some(term) = &block.terminator
+            {
+                let targets = match term {
+                    MIRTerminator::Jump { target, .. } => vec![*target],
+                    MIRTerminator::Branch {
+                        if_true, if_false, ..
+                    } => vec![*if_true, *if_false],
+                    MIRTerminator::Return { .. } => vec![],
+                    MIRTerminator::Unreachable { .. } => vec![],
+                };
 
-                    for target in targets {
-                        if reachable.insert(target) {
-                            stack.push(target);
-                        }
+                for target in targets {
+                    if reachable.insert(target) {
+                        stack.push(target);
                     }
                 }
             }
@@ -93,12 +93,11 @@ impl MIRFunctionInlining {
             instr_count += block.instructions.len();
 
             for instr in &block.instructions {
-                if let MIROperation::Call = instr.operation {
-                    if let MIRValue::Function(called_name) = &instr.operands[0] {
-                        if *called_name == func.name {
-                            is_recursive = true;
-                        }
-                    }
+                if let MIROperation::Call = instr.operation
+                    && let MIRValue::Function(called_name) = &instr.operands[0]
+                    && *called_name == func.name
+                {
+                    is_recursive = true;
                 }
             }
         }
@@ -119,12 +118,12 @@ impl MIRFunctionInlining {
 
             if let Some(block) = func.blocks.get_mut(&block_id) {
                 for (idx, instr) in block.instructions.iter().enumerate() {
-                    if let MIROperation::Call = instr.operation {
-                        if let MIRValue::Function(func_name) = &instr.operands[0] {
-                            // Don't inline recursive functions.
-                            if candidates.contains_key(func_name) && *func_name != func.name {
-                                call_idx = Some(idx);
-                            }
+                    if let MIROperation::Call = instr.operation
+                        && let MIRValue::Function(func_name) = &instr.operands[0]
+                    {
+                        // Don't inline recursive functions.
+                        if candidates.contains_key(func_name) && *func_name != func.name {
+                            call_idx = Some(idx);
                         }
                     }
                 }
@@ -212,7 +211,7 @@ impl MIRFunctionInlining {
         let after_block_id = BlockID(next_free_block_id);
 
         // Split the current block into two parts.
-        let mut caller_block = func.blocks.get_mut(&block_id).unwrap();
+        let caller_block = func.blocks.get_mut(&block_id).unwrap();
 
         let mut after_instructions = caller_block.instructions.split_off(instr_idx);
         after_instructions.remove(0); // Remove the call instruction
@@ -285,18 +284,16 @@ impl MIRFunctionInlining {
                     Some(MIRTerminator::Return { value, position }) => {
                         // Return is mapped to an assign to the caller destination register and a jump to the after block.
                         if let Some(val) = value {
-                            if let Some(dest) = &instruction.destination {
-                                new_instructions.push(MIRInstruction {
-                                    operation: MIROperation::Assign,
-                                    destination: Some(MIRPlace::Local(proxy_return_local.unwrap())),
-                                    operands: vec![self.remap_value(
-                                        val.clone(),
-                                        &local_map,
-                                        &temp_map,
-                                    )],
-                                    source_position: *position,
-                                });
-                            }
+                            new_instructions.push(MIRInstruction {
+                                operation: MIROperation::Assign,
+                                destination: Some(MIRPlace::Local(proxy_return_local.unwrap())),
+                                operands: vec![self.remap_value(
+                                    val.clone(),
+                                    &local_map,
+                                    &temp_map,
+                                )],
+                                source_position: *position,
+                            });
                         }
                         Some(MIRTerminator::Jump {
                             target: after_block_id,
