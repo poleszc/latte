@@ -1,18 +1,1 @@
-class Calculator {
-    int offset;
-
-    int compute(int x) {
-        return x + self.getOffset();
-    }
-
-    int getOffset() {
-        return self.offset;
-    }
-}
-
-int main() {
-    Calculator c = new Calculator;
-    c.offset = 10;
-    printInt(c.compute(5));
-    return 0;
-}
+15

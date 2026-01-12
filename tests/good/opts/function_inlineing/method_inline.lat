@@ -2,11 +2,11 @@ class Calculator {
     int offset;
 
     int compute(int x) {
-        return x + self.getOffset();
+        return x + this.getOffset();
     }
 
     int getOffset() {
-        return self.offset;
+        return this.offset;
     }
 }
 

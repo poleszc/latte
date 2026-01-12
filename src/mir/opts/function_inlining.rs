@@ -1,14 +1,4 @@
-use std::collections::HashMap;
-
-use crate::{
-    mir::{
-        BlockID, LocalID, LocalInfo, MIRBlock, MIRFunction, MIRInstruction, MIROperation, MIRPlace,
-        MIRProgram, MIRTerminator, MIRValue, TempID, TempInfo,
-    },
-    utils::StrID,
-};
-
-/// Function Inlining module:
+/// Function Inlining:
 /// Function inlining is done here and not on LIR,
 /// since it would require fixing phi functions and recomputing
 /// the dominance related stuff, which sounds hard. Instead we do it on MIR level.
@@ -18,6 +8,15 @@ use crate::{
 /// - The function is not self recursive
 /// - The function is short (< 10 instructions)
 /// - The function is not a method
+use crate::{
+    mir::{
+        BlockID, LocalID, LocalInfo, MIRBlock, MIRFunction, MIRInstruction, MIROperation, MIRPlace,
+        MIRProgram, MIRTerminator, MIRValue, TempID, TempInfo,
+    },
+    utils::StrID,
+};
+use std::collections::HashMap;
+
 const SHORT_FUNCTION_THRESHOLD: usize = 10;
 pub struct MIRFunctionInlining {
     /// Maximum number of instructions for the function to be inlined.
@@ -64,7 +63,7 @@ impl MIRFunctionInlining {
 
     fn inline_calls(
         &self,
-        mut func: &mut MIRFunction,
+        func: &mut MIRFunction,
         candidates: &HashMap<StrID, MIRFunction>,
     ) -> bool {
         let mut changed = false;
@@ -167,6 +166,15 @@ impl MIRFunctionInlining {
             block_map.insert(*inlined_bid, new_bid);
         }
 
+        // Fix the terminator of the first block.
+        let inlined_entry_id = block_map[&inlined.entry_block];
+        if let Some(block) = func.blocks.get_mut(&block_id) {
+            block.terminator = Some(MIRTerminator::Jump {
+                target: inlined_entry_id,
+                position: instruction.source_position,
+            });
+        }
+
         // Now insert all blocks from the inlined function to the caller.
         for inlined_bid in &inlined.block_order {
             if let Some(inlined_block) = inlined.blocks.get(inlined_bid) {
@@ -183,11 +191,7 @@ impl MIRFunctionInlining {
                         new_instructions.push(MIRInstruction {
                             operation: MIROperation::Assign,
                             destination: Some(MIRPlace::Local(local_map[&param_local.id])),
-                            operands: vec![self.remap_value(
-                                arg_val.clone(),
-                                &local_map,
-                                &temp_map,
-                            )],
+                            operands: vec![arg_val.clone()],
                             source_position: instruction.source_position,
                         });
                     }
