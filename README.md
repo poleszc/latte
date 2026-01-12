@@ -5,7 +5,8 @@
 - Phi - 2
 - Tablice - 1
 - Struktury/Obiekty/Metody - 8
-Suma: 23
+- GCSE - 5
+Suma: 28
 
 ## Co jest zrobione
 - Pełna podstawowa wersja zadania z backend'em LLVM

@@ -16,17 +16,24 @@ mod pass;
 
 pub struct OptimizationConfig {
     pub max_iterations: usize,
+    /// Print the program state after each optimization pass.
+    pub verbose_opts: bool,
 }
 
 impl Default for OptimizationConfig {
     fn default() -> Self {
-        Self { max_iterations: 10 }
+        Self {
+            max_iterations: 10,
+            verbose_opts: false,
+        }
     }
 }
 
 impl OptimizationConfig {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(verbose: bool) -> Self {
+        let mut config = Self::default();
+        config.verbose_opts = verbose;
+        config
     }
 
     pub fn with_max_iterations(mut self, max: usize) -> Self {
@@ -75,9 +82,12 @@ impl Optimizer {
     pub fn run(&mut self, program: &mut LIRProgram) {
         println!("[OPT] Start...");
         println!("[OPT] Max iterations: {}", self.config.max_iterations);
-        println!("++++++++++++++++++++++++++++++++++++++");
-        program.dump_to_stderr();
-        println!("++++++++++++++++++++++++++++++++++++++");
+
+        if self.config.verbose_opts {
+            println!("++++++++++++++++++++++++++++++++++++++");
+            program.dump_to_stderr();
+            println!("++++++++++++++++++++++++++++++++++++++");
+        }
 
         for iteration in 0..self.config.max_iterations {
             let mut program_changed = false;
@@ -87,9 +97,11 @@ impl Optimizer {
             for pass in &mut self.passes {
                 if pass.run_on_program(program) {
                     println!("[OPT] {} made changes", pass.name());
-                    println!("++++++++++++++++++++++++++++++++++++++");
-                    program.dump_to_stderr();
-                    println!("++++++++++++++++++++++++++++++++++++++");
+                    if self.config.verbose_opts {
+                        println!("++++++++++++++++++++++++++++++++++++++");
+                        program.dump_to_stderr();
+                        println!("++++++++++++++++++++++++++++++++++++++");
+                    }
                     program_changed = true;
                 }
             }
@@ -112,7 +124,7 @@ impl Optimizer {
 }
 
 pub fn optimize_program(program: &mut LIRProgram, args: &LatteArgs) {
-    let config = OptimizationConfig::new();
+    let config = OptimizationConfig::new(args.verbose_opts);
     let mut optimizer = Optimizer::new(config, args);
     optimizer.run(program);
 }
