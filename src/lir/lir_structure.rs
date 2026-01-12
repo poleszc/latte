@@ -35,7 +35,7 @@ pub enum LIRValue {
     Block(BlockID),
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum LIROperation {
     Phi,
     Assign,

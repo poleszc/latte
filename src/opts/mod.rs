@@ -4,7 +4,7 @@ use crate::{
     opts::{
         branch_folding::BranchFolding, constant_propagation::ConstantFoldingAndPropagation,
         dead_block_elimination::DeadBlockElimination, dead_code_elimination::DeadCodeElimination,
-        pass::OptimizationPass,
+        gcse::GCSE, pass::OptimizationPass,
     },
 };
 mod branch_folding;
@@ -62,6 +62,9 @@ impl Optimizer {
         }
         if args.optimize || args.opt_dce {
             self.add_pass(Box::new(DeadCodeElimination::new()));
+        }
+        if args.optimize || args.opt_gcse {
+            self.add_pass(Box::new(GCSE::new()));
         }
     }
 
