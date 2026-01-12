@@ -262,6 +262,21 @@ fn main() {
         "integration_pass_dce",
     )
     .expect("Failed to generate dead code elimination integration tests");
+
+    generate_test_suite(
+        "integration_opts_gcse.rs",
+        &[
+            "tests/good/official",
+            "tests/good/extra",
+            "tests/good/extensions/arrays",
+            "tests/good/extensions/struct",
+            "tests/good/extensions/objects",
+            "tests/good/extensions/virtual",
+        ],
+        "run_integration_test_with_gcse",
+        "integration_pass_gcse",
+    )
+    .expect("Failed to generate GCSE integration tests");
 }
 
 /// Recursively collects all files starting from a giver directory.

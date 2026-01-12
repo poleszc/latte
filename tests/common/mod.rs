@@ -306,3 +306,8 @@ pub fn run_integration_test_with_dbe(input_path: &str) {
 pub fn run_integration_test_with_dce(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-dce"]);
 }
+
+/// Runs an integration test with only GCSE
+pub fn run_integration_test_with_gcse(input_path: &str) {
+    run_integration_test_with_opts(input_path, &["--opt-gcse"]);
+}
