@@ -282,7 +282,7 @@ mod tests {
         // 0 (entry) -> 1 (header);
         // 1 -> 2 (body), 3 (exit);
         // 2 -> 1 (back-edge)
-        let mut func = crate::lir::lowering::cfg::tests::create_mock_func(4);
+        let mut func = create_mock_func(4);
 
         // 0 -> 1
         func.blocks.get_mut(&BID(0)).unwrap().terminator = Some(MIRTerminator::Jump {
