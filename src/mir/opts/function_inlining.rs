@@ -15,7 +15,7 @@ use crate::{
     },
     utils::StrID,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const SHORT_FUNCTION_THRESHOLD: usize = 10;
 pub struct MIRFunctionInlining {
@@ -49,6 +49,38 @@ impl MIRFunctionInlining {
                 }
             }
         }
+        for func in program.functions.values_mut() {
+            Self::remove_unreachable_blocks(func);
+        }
+    }
+    fn remove_unreachable_blocks(func: &mut MIRFunction) {
+        let mut reachable = HashSet::new();
+        let mut stack = vec![func.entry_block];
+        reachable.insert(func.entry_block);
+
+        while let Some(bid) = stack.pop() {
+            if let Some(block) = func.blocks.get(&bid) {
+                if let Some(term) = &block.terminator {
+                    let targets = match term {
+                        MIRTerminator::Jump { target, .. } => vec![*target],
+                        MIRTerminator::Branch {
+                            if_true, if_false, ..
+                        } => vec![*if_true, *if_false],
+                        MIRTerminator::Return { .. } => vec![],
+                        MIRTerminator::Unreachable { .. } => vec![],
+                    };
+
+                    for target in targets {
+                        if reachable.insert(target) {
+                            stack.push(target);
+                        }
+                    }
+                }
+            }
+        }
+
+        func.block_order.retain(|id| reachable.contains(id));
+        func.blocks.retain(|id, _| reachable.contains(id));
     }
 
     /// Returns true if the function should be inlined.
@@ -113,7 +145,7 @@ impl MIRFunctionInlining {
         let mut local_map = HashMap::new();
         for inlined_local in &inlined.locals {
             let new_id = func.locals.len();
-            let new_local = LocalInfo {
+            func.locals.push(LocalInfo {
                 id: LocalID(new_id),
                 name: inlined_local
                     .name
@@ -121,8 +153,7 @@ impl MIRFunctionInlining {
                 typ: inlined_local.typ.clone(),
                 is_parameter: false,
                 parameter_index: None,
-            };
-            func.locals.push(new_local);
+            });
             local_map.insert(inlined_local.id, LocalID(new_id));
         }
 
@@ -137,18 +168,47 @@ impl MIRFunctionInlining {
             temp_map.insert(callee_temp.id, TempID(new_id));
         }
 
-        // Split the current block into two parts.
-        let mut after_instructions = func
-            .blocks
-            .get_mut(&block_id)
-            .unwrap()
-            .instructions
-            .split_off(instr_idx);
-        after_instructions.remove(0); // Remove the call instruction
-        let old_terminator = func.blocks.get_mut(&block_id).unwrap().terminator.take();
+        let mut next_free_block_id = func.blocks.keys().map(|b| b.0).max().unwrap_or(0) + 1;
+        // Now renumber all blocks of the inlined function.
+        let mut block_map = HashMap::new();
+        for inlined_bid in &inlined.block_order {
+            block_map.insert(*inlined_bid, BlockID(next_free_block_id));
+            next_free_block_id += 1;
+        }
 
         // Create the after block.
-        let after_block_id = BlockID(func.blocks.len());
+        let after_block_id = BlockID(next_free_block_id);
+
+        // Split the current block into two parts.
+        let mut caller_block = func.blocks.get_mut(&block_id).unwrap();
+
+        let mut after_instructions = caller_block.instructions.split_off(instr_idx);
+        after_instructions.remove(0); // Remove the call instruction
+
+        // If it's an entry block we insert additional assign instructions at the beginning of the block.
+        for (i, arg_val) in instruction.operands.iter().skip(1).enumerate() {
+            let param_local = inlined
+                .locals
+                .iter()
+                .find(|l| l.parameter_index == Some(i))
+                .unwrap();
+            caller_block.instructions.push(MIRInstruction {
+                operation: MIROperation::Assign,
+                destination: Some(MIRPlace::Local(local_map[&param_local.id])),
+                operands: vec![arg_val.clone()],
+                source_position: instruction.source_position,
+            });
+        }
+
+        let old_terminator = func.blocks.get_mut(&block_id).unwrap().terminator.take();
+
+        // Fix the terminator of the first block. Set it to the first block of the inlined function.
+        let inlined_entry_id = block_map[&inlined.entry_block];
+        func.blocks.get_mut(&block_id).unwrap().terminator = Some(MIRTerminator::Jump {
+            target: inlined_entry_id,
+            position: instruction.source_position,
+        });
+
         func.blocks.insert(
             after_block_id,
             MIRBlock {
@@ -157,45 +217,12 @@ impl MIRFunctionInlining {
                 terminator: old_terminator,
             },
         );
-        func.block_order.push(after_block_id);
-
-        // Now renumber all blocks of the inlined function.
-        let mut block_map = HashMap::new();
-        for inlined_bid in &inlined.block_order {
-            let new_bid = BlockID(func.blocks.iter().len() + inlined_bid.0);
-            block_map.insert(*inlined_bid, new_bid);
-        }
-
-        // Fix the terminator of the first block.
-        let inlined_entry_id = block_map[&inlined.entry_block];
-        if let Some(block) = func.blocks.get_mut(&block_id) {
-            block.terminator = Some(MIRTerminator::Jump {
-                target: inlined_entry_id,
-                position: instruction.source_position,
-            });
-        }
+        // func.block_order.push(after_block_id);
 
         // Now insert all blocks from the inlined function to the caller.
         for inlined_bid in &inlined.block_order {
             if let Some(inlined_block) = inlined.blocks.get(inlined_bid) {
                 let mut new_instructions = Vec::new();
-
-                // If it's an entry block we insert additional assign instructions at the beginning of the block.
-                if *inlined_bid == inlined.entry_block {
-                    for (i, arg_val) in instruction.operands.iter().skip(1).enumerate() {
-                        let param_local = inlined
-                            .locals
-                            .iter()
-                            .find(|l| l.parameter_index == Some(i))
-                            .unwrap();
-                        new_instructions.push(MIRInstruction {
-                            operation: MIROperation::Assign,
-                            destination: Some(MIRPlace::Local(local_map[&param_local.id])),
-                            operands: vec![arg_val.clone()],
-                            source_position: instruction.source_position,
-                        });
-                    }
-                }
 
                 // Now remap all instructions in the inlined function.
                 for instr in &inlined_block.instructions {
@@ -218,7 +245,7 @@ impl MIRFunctionInlining {
                             if let Some(dest) = &instruction.destination {
                                 new_instructions.push(MIRInstruction {
                                     operation: MIROperation::Assign,
-                                    destination: Some(dest.clone()), // TODO: Bug?
+                                    destination: Some(dest.clone()),
                                     operands: vec![self.remap_value(
                                         val.clone(),
                                         &local_map,
@@ -260,9 +287,20 @@ impl MIRFunctionInlining {
                         terminator: new_term,
                     },
                 );
-                func.block_order.push(new_bid);
             }
         }
+        let pos = func
+            .block_order
+            .iter()
+            .position(|&id| id == block_id)
+            .unwrap();
+        let mut to_add = Vec::new();
+        for inlined_bid in &inlined.block_order {
+            to_add.push(block_map[inlined_bid]);
+        }
+        to_add.push(after_block_id);
+
+        func.block_order.splice(pos + 1..pos + 1, to_add);
     }
 
     fn remap_value(
