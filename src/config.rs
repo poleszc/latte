@@ -56,7 +56,8 @@ pub struct LatteArgs {
     /// Enable Dead Block Elimination.
     #[arg(long)]
     pub opt_dbe: bool,
-    /// Enable Dead Code Elimination.tests/good/opts/function_inlining/recursive_inline.lat
+    /// Enable Dead Code Elimination.
+    #[arg(long)]
     pub opt_dce: bool,
     /// Enable Global Common Sub-expression Elimination.
     #[arg(long)]
