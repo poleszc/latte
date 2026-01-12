@@ -1,0 +1,51 @@
+int give() {
+    return 2137;
+}
+void leaveMeAlone(int a) {}
+
+int main() {
+    int x = readInt();
+    int y = readInt();
+
+    printString("======== Local =======");
+    int a = x + y;
+    int b = y + x; 
+    printInt(a);
+    printInt(b);
+    
+    int kajak = x - y;
+    leaveMeAlone(kajak);
+
+    printString("======== Global =======");
+    int base = x * y;
+    leaveMeAlone(base);
+
+    if (x > 0) {
+        int redundant_if = x * y;
+        printInt(redundant_if);
+    } else {
+        int redundant_else = x * y;
+        printInt(redundant_else);
+    }
+
+    printString("======== Nested =======");
+    int complex1 = (x - y) * 10;
+    int complex2 = (x - y) / 2;
+    printInt(complex1);
+    printInt(complex2);
+
+    printString("======== String =======");
+    string s = "latte";
+    int l1 = s.length;
+    int l2 = s.length;
+    printInt(l1 + l2);
+
+    printString("======== Side Effects =======");
+    int n1 = readInt(); 
+    int n2 = readInt(); 
+
+    printInt(n1);
+    printInt(n2);
+
+    return 0;
+}

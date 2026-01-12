@@ -84,6 +84,9 @@ impl Optimizer {
             for pass in &mut self.passes {
                 if pass.run_on_program(program) {
                     println!("[OPT] {} made changes", pass.name());
+                    println!("++++++++++++++++++++++++++++++++++++++");
+                    program.dump_to_stderr();
+                    println!("++++++++++++++++++++++++++++++++++++++");
                     program_changed = true;
                 }
             }

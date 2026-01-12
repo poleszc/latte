@@ -38,6 +38,8 @@ impl Expression {
                 | LIROperation::NewObject
                 | LIROperation::ArraySet
                 | LIROperation::FieldSet
+                | LIROperation::FieldGet
+                | LIROperation::ArrayGet
                 | LIROperation::Phi
                 | LIROperation::Assign
         )
@@ -144,6 +146,12 @@ impl GlobalCSE {
                 {
                     changed = true;
                 }
+            }
+        }
+
+        for reg_info in &mut function.registers {
+            if self.replacements.contains_key(&reg_info.id) {
+                reg_info.id = RegisterID(usize::MAX);
             }
         }
         changed

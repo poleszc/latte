@@ -186,7 +186,9 @@ impl fmt::Display for LIRFunction {
         if !self.registers.is_empty() {
             writeln!(f, "  ; Registers:")?;
             for reg in &self.registers {
-                writeln!(f, "  ; {}", reg)?;
+                if reg.id.0 != usize::MAX {
+                    writeln!(f, "  ; {}", reg)?;
+                }
             }
             writeln!(f)?;
         }
