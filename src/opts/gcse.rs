@@ -56,14 +56,14 @@ impl Expression {
     }
 }
 
-pub struct GCSE {
+pub struct GlobalCSE {
     /// Expression -> RegisterID where it was first calculated.
     expressions: HashMap<Expression, RegisterID>,
     /// Which registers should be replaced, by the already calculated values.
     replacements: HashMap<RegisterID, RegisterID>,
 }
 
-impl GCSE {
+impl GlobalCSE {
     pub fn new() -> Self {
         Self {
             expressions: HashMap::new(),
@@ -139,10 +139,10 @@ impl GCSE {
                     }
                 }
 
-                if let Some(term) = &mut block.terminator {
-                    if self.replace_terminator(term) {
-                        changed = true;
-                    }
+                if let Some(term) = &mut block.terminator
+                    && self.replace_terminator(term)
+                {
+                    changed = true;
                 }
             }
         }
@@ -150,11 +150,11 @@ impl GCSE {
     }
 
     fn replace_value(&self, value: &mut LIRValue) -> bool {
-        if let LIRValue::Register(reg) = value {
-            if let Some(new_reg) = self.replacements.get(reg) {
-                *value = LIRValue::Register(*new_reg);
-                return true;
-            }
+        if let LIRValue::Register(reg) = value
+            && let Some(new_reg) = self.replacements.get(reg)
+        {
+            *value = LIRValue::Register(*new_reg);
+            return true;
         }
         false
     }
@@ -170,7 +170,7 @@ impl GCSE {
     }
 }
 
-impl OptimizationPass for GCSE {
+impl OptimizationPass for GlobalCSE {
     fn name(&self) -> String {
         String::from("Global Common Subexpressions Elimination")
     }
@@ -195,7 +195,7 @@ impl OptimizationPass for GCSE {
     }
 }
 
-impl Default for GCSE {
+impl Default for GlobalCSE {
     fn default() -> Self {
         Self::new()
     }
