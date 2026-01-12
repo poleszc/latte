@@ -298,7 +298,23 @@ fn main() {
         "run_integration_test_with_copy_prop",
         "integration_pass_copy_prop",
     )
-    .expect("Failed to generate copt propagation integration tests");
+    .expect("Failed to generate const propagation integration tests");
+
+    generate_test_suite(
+        "integration_opts_dead_function.rs",
+        &[
+            "tests/good/official",
+            "tests/good/extra",
+            "tests/good/extensions/arrays",
+            "tests/good/extensions/struct",
+            "tests/good/extensions/objects",
+            "tests/good/extensions/virtual",
+            "tests/good/opts",
+        ],
+        "run_integration_test_with_dead_function",
+        "integration_pass_dead_function",
+    )
+    .expect("Failed to generate dead function integration tests");
 }
 
 /// Recursively collects all files starting from a giver directory.

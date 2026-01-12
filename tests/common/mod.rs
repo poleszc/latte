@@ -316,3 +316,8 @@ pub fn run_integration_test_with_gcse(input_path: &str) {
 pub fn run_integration_test_with_copy_prop(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-copy-prop"]);
 }
+
+/// Runs an integration test with only Dead Function Elimination.
+pub fn run_integration_test_with_dead_function(input_path: &str) {
+    run_integration_test_with_opts(input_path, &["--opt-dead-function"]);
+}
