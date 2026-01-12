@@ -197,6 +197,7 @@ fn main() {
             "tests/good/extensions/struct",
             "tests/good/extensions/objects",
             "tests/good/extensions/virtual",
+            "tests/good/opts",
         ],
         "run_integration_test_with_all_opts",
         "integration_pass_all_opts",
@@ -212,6 +213,7 @@ fn main() {
             "tests/good/extensions/struct",
             "tests/good/extensions/objects",
             "tests/good/extensions/virtual",
+            "tests/good/opts",
         ],
         "run_integration_test_with_const_prop",
         "integration_pass_const_prop",
@@ -227,6 +229,7 @@ fn main() {
             "tests/good/extensions/struct",
             "tests/good/extensions/objects",
             "tests/good/extensions/virtual",
+            "tests/good/opts",
         ],
         "run_integration_test_with_branch_elimination",
         "integration_pass_branch_fold",
@@ -242,6 +245,7 @@ fn main() {
             "tests/good/extensions/struct",
             "tests/good/extensions/objects",
             "tests/good/extensions/virtual",
+            "tests/good/opts",
         ],
         "run_integration_test_with_dbe",
         "integration_pass_dbe",
@@ -257,11 +261,28 @@ fn main() {
             "tests/good/extensions/struct",
             "tests/good/extensions/objects",
             "tests/good/extensions/virtual",
+            "tests/good/opts",
         ],
         "run_integration_test_with_dce",
         "integration_pass_dce",
     )
     .expect("Failed to generate dead code elimination integration tests");
+
+    generate_test_suite(
+        "integration_opts_gcse.rs",
+        &[
+            "tests/good/official",
+            "tests/good/extra",
+            "tests/good/extensions/arrays",
+            "tests/good/extensions/struct",
+            "tests/good/extensions/objects",
+            "tests/good/extensions/virtual",
+            "tests/good/opts",
+        ],
+        "run_integration_test_with_gcse",
+        "integration_pass_gcse",
+    )
+    .expect("Failed to generate GCSE integration tests");
 }
 
 /// Recursively collects all files starting from a giver directory.

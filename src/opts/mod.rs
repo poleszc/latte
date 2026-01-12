@@ -4,13 +4,14 @@ use crate::{
     opts::{
         branch_folding::BranchFolding, constant_propagation::ConstantFoldingAndPropagation,
         dead_block_elimination::DeadBlockElimination, dead_code_elimination::DeadCodeElimination,
-        pass::OptimizationPass,
+        gcse::GlobalCSE, pass::OptimizationPass,
     },
 };
 mod branch_folding;
 mod constant_propagation;
 mod dead_block_elimination;
 mod dead_code_elimination;
+mod gcse;
 mod pass;
 
 pub struct OptimizationConfig {
@@ -62,6 +63,9 @@ impl Optimizer {
         if args.optimize || args.opt_dce {
             self.add_pass(Box::new(DeadCodeElimination::new()));
         }
+        if args.optimize || args.opt_gcse {
+            self.add_pass(Box::new(GlobalCSE::new()));
+        }
     }
 
     pub fn add_pass(&mut self, pass: Box<dyn OptimizationPass>) {
@@ -71,6 +75,9 @@ impl Optimizer {
     pub fn run(&mut self, program: &mut LIRProgram) {
         println!("[OPT] Start...");
         println!("[OPT] Max iterations: {}", self.config.max_iterations);
+        println!("++++++++++++++++++++++++++++++++++++++");
+        program.dump_to_stderr();
+        println!("++++++++++++++++++++++++++++++++++++++");
 
         for iteration in 0..self.config.max_iterations {
             let mut program_changed = false;
@@ -80,6 +87,9 @@ impl Optimizer {
             for pass in &mut self.passes {
                 if pass.run_on_program(program) {
                     println!("[OPT] {} made changes", pass.name());
+                    println!("++++++++++++++++++++++++++++++++++++++");
+                    program.dump_to_stderr();
+                    println!("++++++++++++++++++++++++++++++++++++++");
                     program_changed = true;
                 }
             }

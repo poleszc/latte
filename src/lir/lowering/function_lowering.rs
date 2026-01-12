@@ -4,14 +4,16 @@ use crate::{
     lir::{
         BlockID as LirBID, LIRBlock, LIRFunction, LIRInstruction, LIROperation, LIRTerminator,
         LIRValue, RegisterID, RegisterInfo,
-        lowering::cfg::{DominanceFrontier, GraphAnalysis},
     },
     mir::{
         BlockID as MirBID, LocalID, MIRFunction, MIROperation, MIRPlace, MIRTerminator, MIRValue,
         TempID,
     },
     parser::Type,
-    utils::StrID,
+    utils::{
+        StrID,
+        cfg::{DominanceFrontier, GraphAnalysis},
+    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -147,7 +149,7 @@ impl LIRFunctionBuilder {
 
     /// Insert needed phi functions based on the dominance frontier.
     /// https://pfalcon.github.io/ssabook/latest/book-full.pdf (Algorithm 3.1)
-    fn insert_phi_functions(&mut self, func: &MIRFunction, df: &DominanceFrontier) {
+    fn insert_phi_functions(&mut self, func: &MIRFunction, df: &DominanceFrontier<MirBID>) {
         // Look for all variables name in the program and create a mapping to all blocks containing them.
         let mut local_defs: HashMap<SSAId, HashSet<MirBID>> = HashMap::new();
         for block_ix in &func.block_order {
@@ -209,7 +211,7 @@ impl LIRFunctionBuilder {
         &mut self,
         block_id: MirBID,
         mir_func: &MIRFunction,
-        cfg_analysis: &GraphAnalysis,
+        cfg_analysis: &GraphAnalysis<MirBID>,
         lir_blocks: &mut HashMap<LirBID, LIRBlock>,
     ) {
         let lir_id = LirBID(block_id.0);

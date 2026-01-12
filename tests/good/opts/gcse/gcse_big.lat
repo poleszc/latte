@@ -1,0 +1,66 @@
+void leaveMeAlone(int a) {}
+
+void giga_test(int a, int b, int c, int d, int x, int y) {
+    // B0
+    int r1 = a + b;
+    int r2 = c * d;
+    leaveMeAlone(r1);
+    leaveMeAlone(r2);
+
+
+    if (x > 0) {
+        // B1
+        int r3 = a + b;      // r1
+        int r4 = b + a;      // r1
+        printInt(r3 + r4);
+
+        if (y > 10) {
+            // B3
+            int r5 = a + b;  // r1
+            printInt(r5);
+        }
+    } else {
+        // B2
+        int r6 = a + b;      // r1
+        printInt(r6);
+
+        if (y <0) {
+            // B6
+            int r7 = x * y;
+            printInt(r7);
+        } else {
+            // B7
+            int r8 = x * y;  // r7 should not be used
+            printInt(r8);
+        }
+    }
+
+    // B6
+    int r11 = a + b;         // r1
+    printInt(r11);
+
+    // B7
+    int i = 0;
+    while (i < 10) {
+        // B8
+        
+        int r12 = a + b;     // r1
+        int r13 = c * d;     // r2
+        
+        int r14 = r12 + r13; 
+        printInt(r14);
+
+        int r15 = a * i;     
+        printInt(r15);
+        i++;
+    }
+
+    // B9
+    int r16 = a + b;         // r1
+    printInt(r16);
+}
+
+int main() {
+    giga_test(10, 20, 2, 3, 5, 15);
+    return 0;
+}

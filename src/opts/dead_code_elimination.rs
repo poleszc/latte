@@ -167,6 +167,13 @@ impl DeadCodeElimination {
                 }
             }
         }
+
+        // Remove unused registers from the list - mark them with usize::MAX.
+        for reg_info in &mut function.registers {
+            if !self.live_registers.contains(&reg_info.id) {
+                reg_info.id = RegisterID(usize::MAX);
+            }
+        }
         changed
     }
 }

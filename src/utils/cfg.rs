@@ -1,28 +1,38 @@
-use crate::mir::{BlockID as MirBID, MIRFunction, MIRTerminator};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
-/// BlockID -> list of predecessors.
-pub type PredecessorMap = HashMap<MirBID, Vec<MirBID>>;
-/// BlockID -> list of successors.
-pub type SuccessorMap = HashMap<MirBID, Vec<MirBID>>;
-pub type DominatorTree = HashMap<MirBID, Vec<MirBID>>;
-pub type DominanceFrontier = HashMap<MirBID, HashSet<MirBID>>;
-pub type ImmediateDominators = HashMap<MirBID, MirBID>;
-pub type ReversePostOrder = Vec<MirBID>;
+pub trait CFG {
+    type BID: Copy + Hash + Eq + Ord;
 
-/// A POD storing the results of the CFG analysis
-pub struct GraphAnalysis {
-    pub predecessors: PredecessorMap,
-    pub successors: SuccessorMap,
-    pub dominance_frontier: DominanceFrontier,
-    pub dominator_tree: DominatorTree,
+    fn entry_block(&self) -> Self::BID;
+    fn block_order(&self) -> Vec<Self::BID>;
+    fn successors(&self, block_id: Self::BID) -> Vec<Self::BID>;
 }
 
-impl GraphAnalysis {
+/// BlockID -> list of predecessors.
+pub type PredecessorMap<BID> = HashMap<BID, Vec<BID>>;
+/// BlockID -> list of successors.
+pub type SuccessorMap<BID> = HashMap<BID, Vec<BID>>;
+pub type DominatorTree<BID> = HashMap<BID, Vec<BID>>;
+pub type DominanceFrontier<BID> = HashMap<BID, HashSet<BID>>;
+pub type ImmediateDominators<BID> = HashMap<BID, BID>;
+pub type ReversePostOrder<BID> = Vec<BID>;
+
+/// A POD storing the results of the CFG analysis
+pub struct GraphAnalysis<BID> {
+    pub predecessors: PredecessorMap<BID>,
+    pub successors: SuccessorMap<BID>,
+    pub dominance_frontier: DominanceFrontier<BID>,
+    pub dominator_tree: DominatorTree<BID>,
+}
+
+impl<BID: Copy + Hash + Eq + Ord> GraphAnalysis<BID> {
     /// Perform analysis of the CFG graph and return all data needed for SSA transformation.
-    pub fn analyze(func: &MIRFunction) -> Self {
-        let (preds, succs) = compute_predecessors_and_successors(func);
-        let rpo = compute_reverse_post_order(func.entry_block, &succs);
+    pub fn analyze<G: CFG<BID = BID>>(graph: &G) -> Self {
+        let (preds, succs) = compute_predecessors_and_successors(graph);
+        let rpo = compute_reverse_post_order(graph.entry_block(), &succs);
         let idom = compute_immediate_dominators(&rpo, &preds);
         let df = compute_dominance_frontier(&rpo, &idom, &preds);
         let dom_tree = build_dom_tree(&idom);
@@ -37,53 +47,43 @@ impl GraphAnalysis {
 }
 
 /// Calculates a predecessors and successors for each block in the MIR function.
-fn compute_predecessors_and_successors(func: &MIRFunction) -> (PredecessorMap, SuccessorMap) {
+fn compute_predecessors_and_successors<G: CFG>(
+    func: &G,
+) -> (PredecessorMap<G::BID>, SuccessorMap<G::BID>) {
     let mut preds = PredecessorMap::new();
     let mut succ = SuccessorMap::new();
 
-    for &block_id in &func.block_order {
+    let order = func.block_order();
+    for &block_id in &order {
         preds.insert(block_id, Vec::new());
         succ.insert(block_id, Vec::new());
     }
 
-    for &block_id in &func.block_order {
-        let block = &func.blocks[&block_id];
-        // Insert all successors for the block.
-        let mut successors_list = Vec::new();
-        if let Some(term) = &block.terminator {
-            match term {
-                MIRTerminator::Jump { target, .. } => successors_list.push(*target),
-                MIRTerminator::Branch {
-                    if_true, if_false, ..
-                } => {
-                    successors_list.push(*if_true);
-                    successors_list.push(*if_false);
-                }
-                _ => {}
-            }
-        }
-
+    for &block_id in &order {
+        let successors_list = func.successors(block_id);
         // Insert THIS block as a predecessor of all it's successors.
         for &s in &successors_list {
-            preds.get_mut(&s).unwrap().push(block.id);
+            preds.get_mut(&s).unwrap().push(block_id);
         }
-
-        succ.insert(block.id, successors_list);
+        succ.insert(block_id, successors_list);
     }
     (preds, succ)
 }
 
 /// Computes the reverse post order of the blocks needed for computing the
 /// immediate dominators and dominance frontiers with fast convergence.
-fn compute_reverse_post_order(entry: MirBID, succs: &SuccessorMap) -> ReversePostOrder {
+fn compute_reverse_post_order<BID: Copy + Hash + Eq>(
+    entry: BID,
+    succs: &SuccessorMap<BID>,
+) -> ReversePostOrder<BID> {
     let mut post_order = Vec::new();
     let mut visited = HashSet::new();
 
-    fn walk(
-        curr: MirBID,
-        succs: &SuccessorMap,
-        visited: &mut HashSet<MirBID>,
-        post_order: &mut Vec<MirBID>,
+    fn walk<BID: Copy + Hash + Eq>(
+        curr: BID,
+        succs: &SuccessorMap<BID>,
+        visited: &mut HashSet<BID>,
+        post_order: &mut Vec<BID>,
     ) {
         visited.insert(curr);
         if let Some(children) = succs.get(&curr) {
@@ -104,17 +104,16 @@ fn compute_reverse_post_order(entry: MirBID, succs: &SuccessorMap) -> ReversePos
 /// Computes the immediate dominator for each block.
 /// Reverse post order is needed for fast convergence.
 /// https://www.cs.tufts.edu/~nr/cs257/archive/keith-cooper/dom14.pdf
-fn compute_immediate_dominators(
-    rpo_order: &ReversePostOrder,
-    preds: &PredecessorMap,
-) -> ImmediateDominators {
+fn compute_immediate_dominators<BID: Copy + Hash + Eq + Ord>(
+    rpo_order: &ReversePostOrder<BID>,
+    preds: &PredecessorMap<BID>,
+) -> ImmediateDominators<BID> {
     let mut idom = ImmediateDominators::new();
     let entry = rpo_order[0];
     idom.insert(entry, entry); // Entry dominates itself.
 
     // Helper mapping from block id to it's index in the rpo order.
-    let rpo_map: HashMap<MirBID, usize> =
-        rpo_order.iter().enumerate().map(|(i, &b)| (b, i)).collect();
+    let rpo_map: HashMap<BID, usize> = rpo_order.iter().enumerate().map(|(i, &b)| (b, i)).collect();
 
     let mut changed = true;
     while changed {
@@ -148,12 +147,12 @@ fn compute_immediate_dominators(
 
 /// Find the closest common predecessor for two blocks.
 /// https://www.cs.tufts.edu/~nr/cs257/archive/keith-cooper/dom14.pdf
-fn intersect(
-    mut b1: MirBID,
-    mut b2: MirBID,
-    idom: &ImmediateDominators,
-    rpo_map: &HashMap<MirBID, usize>, // Mapping from block ID to it's index in the reverse post order.
-) -> MirBID {
+fn intersect<BID: Copy + Hash + Eq>(
+    mut b1: BID,
+    mut b2: BID,
+    idom: &ImmediateDominators<BID>,
+    rpo_map: &HashMap<BID, usize>, // Mapping from block ID to it's index in the reverse post order.
+) -> BID {
     while b1 != b2 {
         // If b1 is "later" in the graph then b2, we take a step upwards with b1.
         while rpo_map[&b1] > rpo_map[&b2] {
@@ -171,11 +170,11 @@ fn intersect(
 /// Returns a mapping from a block_id, to blocks where the variables defined in them die.
 /// Reverse post order is needed for fast convergence.
 /// https://www.cs.tufts.edu/~nr/cs257/archive/keith-cooper/dom14.pdf
-fn compute_dominance_frontier(
-    rpo: &ReversePostOrder,
-    idom: &ImmediateDominators,
-    preds: &PredecessorMap,
-) -> DominanceFrontier {
+fn compute_dominance_frontier<BID: Copy + Hash + Eq + Ord>(
+    rpo: &ReversePostOrder<BID>,
+    idom: &ImmediateDominators<BID>,
+    preds: &PredecessorMap<BID>,
+) -> DominanceFrontier<BID> {
     let mut df = DominanceFrontier::new();
     for &b in rpo {
         df.insert(b, HashSet::new());
@@ -204,7 +203,9 @@ fn compute_dominance_frontier(
 
 /// Reverse the idom mapping of (child -> parent) to (parent -> list of children)
 /// https://pfalcon.github.io/ssabook/latest/book-full.pdf
-fn build_dom_tree(idom: &ImmediateDominators) -> DominatorTree {
+fn build_dom_tree<BID: Copy + Hash + Eq + Ord>(
+    idom: &ImmediateDominators<BID>,
+) -> DominatorTree<BID> {
     let mut tree = DominatorTree::new();
     for (&b, &p) in idom {
         if b != p {
@@ -213,7 +214,7 @@ fn build_dom_tree(idom: &ImmediateDominators) -> DominatorTree {
     }
 
     for children in tree.values_mut() {
-        children.sort_by_key(|bid| bid.0);
+        children.sort();
     }
 
     tree
@@ -223,7 +224,7 @@ fn build_dom_tree(idom: &ImmediateDominators) -> DominatorTree {
 mod tests {
     use super::*;
     use crate::SourcePosition;
-    use crate::mir::{BlockID as MirBID, MIRBlock, MIRFunction, MIRTerminator, MIRValue};
+    use crate::mir::{BlockID as BID, MIRBlock, MIRFunction, MIRTerminator, MIRValue};
     use crate::parser::ast::{Type, TypeKind};
     use crate::utils::StrID;
 
@@ -240,17 +241,17 @@ mod tests {
             blocks: (0..num_blocks)
                 .map(|i| {
                     (
-                        MirBID(i),
+                        BID(i),
                         MIRBlock {
-                            id: MirBID(i),
+                            id: BID(i),
                             instructions: vec![],
                             terminator: None,
                         },
                     )
                 })
                 .collect(),
-            block_order: (0..num_blocks).map(MirBID).collect(),
-            entry_block: MirBID(0),
+            block_order: (0..num_blocks).map(BID).collect(),
+            entry_block: BID(0),
             source_position: SourcePosition(0, 0),
         }
     }
@@ -259,26 +260,26 @@ mod tests {
     fn test_cfg_analysis_diamond() {
         // 0 -> 1, 2; 1 -> 3; 2 -> 3
         let mut func = create_mock_func(4);
-        func.blocks.get_mut(&MirBID(0)).unwrap().terminator = Some(MIRTerminator::Branch {
+        func.blocks.get_mut(&BID(0)).unwrap().terminator = Some(MIRTerminator::Branch {
             condition: crate::mir::MIRValue::BoolConst(true),
-            if_true: MirBID(1),
-            if_false: MirBID(2),
+            if_true: BID(1),
+            if_false: BID(2),
             position: SourcePosition(0, 0),
         });
-        func.blocks.get_mut(&MirBID(1)).unwrap().terminator = Some(MIRTerminator::Jump {
-            target: MirBID(3),
+        func.blocks.get_mut(&BID(1)).unwrap().terminator = Some(MIRTerminator::Jump {
+            target: BID(3),
             position: SourcePosition(0, 0),
         });
-        func.blocks.get_mut(&MirBID(2)).unwrap().terminator = Some(MIRTerminator::Jump {
-            target: MirBID(3),
+        func.blocks.get_mut(&BID(2)).unwrap().terminator = Some(MIRTerminator::Jump {
+            target: BID(3),
             position: SourcePosition(0, 0),
         });
 
         let analysis = GraphAnalysis::analyze(&func);
 
-        assert_eq!(analysis.predecessors[&MirBID(3)].len(), 2);
-        assert!(analysis.dominance_frontier[&MirBID(1)].contains(&MirBID(3)));
-        assert!(analysis.dominance_frontier[&MirBID(2)].contains(&MirBID(3)));
+        assert_eq!(analysis.predecessors[&BID(3)].len(), 2);
+        assert!(analysis.dominance_frontier[&BID(1)].contains(&BID(3)));
+        assert!(analysis.dominance_frontier[&BID(2)].contains(&BID(3)));
     }
 
     #[test]
@@ -286,25 +287,25 @@ mod tests {
         // 0 (entry) -> 1 (header);
         // 1 -> 2 (body), 3 (exit);
         // 2 -> 1 (back-edge)
-        let mut func = crate::lir::lowering::cfg::tests::create_mock_func(4);
+        let mut func = create_mock_func(4);
 
         // 0 -> 1
-        func.blocks.get_mut(&MirBID(0)).unwrap().terminator = Some(MIRTerminator::Jump {
-            target: MirBID(1),
+        func.blocks.get_mut(&BID(0)).unwrap().terminator = Some(MIRTerminator::Jump {
+            target: BID(1),
             position: SourcePosition(0, 0),
         });
 
         // 1 -> 2, 3
-        func.blocks.get_mut(&MirBID(1)).unwrap().terminator = Some(MIRTerminator::Branch {
+        func.blocks.get_mut(&BID(1)).unwrap().terminator = Some(MIRTerminator::Branch {
             condition: MIRValue::BoolConst(true),
-            if_true: MirBID(2),
-            if_false: MirBID(3),
+            if_true: BID(2),
+            if_false: BID(3),
             position: SourcePosition(0, 0),
         });
 
         // 2 -> 1
-        func.blocks.get_mut(&MirBID(2)).unwrap().terminator = Some(MIRTerminator::Jump {
-            target: MirBID(1),
+        func.blocks.get_mut(&BID(2)).unwrap().terminator = Some(MIRTerminator::Jump {
+            target: BID(1),
             position: SourcePosition(0, 0),
         });
 
@@ -312,10 +313,10 @@ mod tests {
 
         // 1 should dominate over 2.
         // Dominance frontier of 2 should be 1.
-        assert!(analysis.dominance_frontier[&MirBID(2)].contains(&MirBID(1)));
+        assert!(analysis.dominance_frontier[&BID(2)].contains(&BID(1)));
 
         // Dominance frontier of 1 should be 1
-        assert!(analysis.dominance_frontier[&MirBID(1)].contains(&MirBID(1)));
-        assert_eq!(analysis.dominance_frontier[&MirBID(1)].len(), 1);
+        assert!(analysis.dominance_frontier[&BID(1)].contains(&BID(1)));
+        assert_eq!(analysis.dominance_frontier[&BID(1)].len(), 1);
     }
 }
