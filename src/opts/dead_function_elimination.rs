@@ -1,6 +1,6 @@
 /// Dead Function Elimination - removed functions which are not called.
 use crate::{lir::*, opts::OptimizationPass, utils::StrID};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
 
 pub struct DeadFunctionElimination {}
 
@@ -30,13 +30,12 @@ impl DeadFunctionElimination {
             if let Some(func) = program.functions.get(&func_name) {
                 for block in func.blocks.values() {
                     for instr in &block.instructions {
-                        if instr.operation == LIROperation::Call {
-                            if let Some(LIRValue::Function(target)) = instr.operands.first() {
-                                if !live_functions.contains(target) {
-                                    live_functions.insert(*target);
-                                    worklist.push_back(*target);
-                                }
-                            }
+                        if instr.operation == LIROperation::Call
+                            && let Some(LIRValue::Function(target)) = instr.operands.first()
+                            && !live_functions.contains(target)
+                        {
+                            live_functions.insert(*target);
+                            worklist.push_back(*target);
                         }
                     }
                 }
