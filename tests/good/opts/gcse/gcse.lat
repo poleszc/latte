@@ -4,8 +4,8 @@ int give() {
 void leaveMeAlone(int a) {}
 
 int main() {
-    int x = readInt();
-    int y = readInt();
+    int x = give();
+    int y = give();
 
     printString("======== Local =======");
     int a = x + y;
@@ -41,8 +41,8 @@ int main() {
     printInt(l1 + l2);
 
     printString("======== Side Effects =======");
-    int n1 = readInt(); 
-    int n2 = readInt(); 
+    int n1 = give(); 
+    int n2 = give(); 
 
     printInt(n1);
     printInt(n2);
