@@ -72,6 +72,6 @@ pub struct LatteArgs {
     #[arg(long, default_value_t = 10)]
     pub opt_max_iterations: usize,
     /// Print program state after every optimization pass.
-    #[arg(long)]
+    #[arg(short = 'v', long)]
     pub verbose_opts: bool,
 }
