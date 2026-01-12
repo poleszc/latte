@@ -72,7 +72,10 @@ fn compute_predecessors_and_successors<G: CFG>(
 
 /// Computes the reverse post order of the blocks needed for computing the
 /// immediate dominators and dominance frontiers with fast convergence.
-fn compute_reverse_post_order<BID: Copy + Hash + Eq>(entry: BID, succs: &SuccessorMap<BID>) -> ReversePostOrder<BID> {
+fn compute_reverse_post_order<BID: Copy + Hash + Eq>(
+    entry: BID,
+    succs: &SuccessorMap<BID>,
+) -> ReversePostOrder<BID> {
     let mut post_order = Vec::new();
     let mut visited = HashSet::new();
 
@@ -200,7 +203,9 @@ fn compute_dominance_frontier<BID: Copy + Hash + Eq + Ord>(
 
 /// Reverse the idom mapping of (child -> parent) to (parent -> list of children)
 /// https://pfalcon.github.io/ssabook/latest/book-full.pdf
-fn build_dom_tree<BID: Copy + Hash + Eq + Ord>(idom: &ImmediateDominators<BID>) -> DominatorTree<BID> {
+fn build_dom_tree<BID: Copy + Hash + Eq + Ord>(
+    idom: &ImmediateDominators<BID>,
+) -> DominatorTree<BID> {
     let mut tree = DominatorTree::new();
     for (&b, &p) in idom {
         if b != p {

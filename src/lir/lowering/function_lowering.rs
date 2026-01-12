@@ -10,7 +10,10 @@ use crate::{
         TempID,
     },
     parser::Type,
-    utils::{StrID, cfg::{DominanceFrontier, GraphAnalysis}},
+    utils::{
+        StrID,
+        cfg::{DominanceFrontier, GraphAnalysis},
+    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

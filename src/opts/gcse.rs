@@ -91,7 +91,6 @@ impl GCSE {
     pub fn eliminate_common_subexpressions(&self, function: &mut LIRFunction) -> i64 {
         todo!()
     }
-
 }
 
 impl OptimizationPass for GCSE {
@@ -101,7 +100,7 @@ impl OptimizationPass for GCSE {
 
     fn run_on_function(&mut self, function: &mut LIRFunction) -> bool {
         let analysis = self.analyze_lir(function);
-        
+
         let mut changed = false;
         self.collect_expressions(function);
         if !self.replacements.is_empty() {
