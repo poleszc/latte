@@ -3,12 +3,13 @@ use crate::{
     lir::LIRProgram,
     opts::{
         branch_folding::BranchFolding, constant_propagation::ConstantFoldingAndPropagation,
-        dead_block_elimination::DeadBlockElimination, dead_code_elimination::DeadCodeElimination,
-        gcse::GlobalCSE, pass::OptimizationPass,
+        copy_propagation::CopyPropagation, dead_block_elimination::DeadBlockElimination,
+        dead_code_elimination::DeadCodeElimination, gcse::GlobalCSE, pass::OptimizationPass,
     },
 };
 mod branch_folding;
 mod constant_propagation;
+mod copy_propagation;
 mod dead_block_elimination;
 mod dead_code_elimination;
 mod gcse;
@@ -16,17 +17,25 @@ mod pass;
 
 pub struct OptimizationConfig {
     pub max_iterations: usize,
+    /// Print the program state after each optimization pass.
+    pub verbose_opts: bool,
 }
 
 impl Default for OptimizationConfig {
     fn default() -> Self {
-        Self { max_iterations: 10 }
+        Self {
+            max_iterations: 10,
+            verbose_opts: false,
+        }
     }
 }
 
 impl OptimizationConfig {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(max_iterations: usize, verbose: bool) -> Self {
+        Self {
+            max_iterations,
+            verbose_opts: verbose,
+        }
     }
 
     pub fn with_max_iterations(mut self, max: usize) -> Self {
@@ -66,6 +75,9 @@ impl Optimizer {
         if args.optimize || args.opt_gcse {
             self.add_pass(Box::new(GlobalCSE::new()));
         }
+        if args.optimize || args.opt_copy_prop {
+            self.add_pass(Box::new(CopyPropagation::new()));
+        }
     }
 
     pub fn add_pass(&mut self, pass: Box<dyn OptimizationPass>) {
@@ -75,9 +87,12 @@ impl Optimizer {
     pub fn run(&mut self, program: &mut LIRProgram) {
         println!("[OPT] Start...");
         println!("[OPT] Max iterations: {}", self.config.max_iterations);
-        println!("++++++++++++++++++++++++++++++++++++++");
-        program.dump_to_stderr();
-        println!("++++++++++++++++++++++++++++++++++++++");
+
+        if self.config.verbose_opts {
+            println!("++++++++++++++++++++++++++++++++++++++");
+            program.dump_to_stderr();
+            println!("++++++++++++++++++++++++++++++++++++++");
+        }
 
         for iteration in 0..self.config.max_iterations {
             let mut program_changed = false;
@@ -87,9 +102,11 @@ impl Optimizer {
             for pass in &mut self.passes {
                 if pass.run_on_program(program) {
                     println!("[OPT] {} made changes", pass.name());
-                    println!("++++++++++++++++++++++++++++++++++++++");
-                    program.dump_to_stderr();
-                    println!("++++++++++++++++++++++++++++++++++++++");
+                    if self.config.verbose_opts {
+                        println!("++++++++++++++++++++++++++++++++++++++");
+                        program.dump_to_stderr();
+                        println!("++++++++++++++++++++++++++++++++++++++");
+                    }
                     program_changed = true;
                 }
             }
@@ -112,7 +129,7 @@ impl Optimizer {
 }
 
 pub fn optimize_program(program: &mut LIRProgram, args: &LatteArgs) {
-    let config = OptimizationConfig::new();
+    let config = OptimizationConfig::new(args.opt_max_iterations, args.verbose_opts);
     let mut optimizer = Optimizer::new(config, args);
     optimizer.run(program);
 }

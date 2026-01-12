@@ -62,7 +62,13 @@ pub struct LatteArgs {
     /// Enable Global Common Sub-expression Elimination.
     #[arg(long)]
     pub opt_gcse: bool,
+    /// Enable Copy Propagation
+    #[arg(long)]
+    pub opt_copy_prop: bool,
     /// Maximum iterations for the optimizer.
     #[arg(long, default_value_t = 10)]
     pub opt_max_iterations: usize,
+    /// Print program state after every optimization pass.
+    #[arg(long)]
+    pub verbose_opts: bool,
 }

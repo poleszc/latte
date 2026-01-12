@@ -1,6 +1,6 @@
 /// Global Common Sub-expression Elimination:
 use crate::{lir::*, opts::OptimizationPass, utils::cfg::GraphAnalysis};
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct Expression {

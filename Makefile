@@ -25,6 +25,7 @@ clean:
 	rm -rf tests/good/opts/dead_code_elimination/*.json
 	rm -rf tests/good/opts/branch_removal/*.json
 	rm -rf tests/good/opts/gcse/*.json
+	rm -rf tests/good/opts/copy_propagation/*.json
 	rm -rf tests/good/opts/garbage_collection/*.json
 	rm -rf tests/good/opts/tail_call/*.json
 	rm -rf tests/bad/runtime/*.json
@@ -40,6 +41,7 @@ clean:
 	rm -rf tests/good/opts/dead_code_elimination/*.mir
 	rm -rf tests/good/opts/branch_removal/*.mir
 	rm -rf tests/good/opts/gcse/*.mir
+	rm -rf tests/good/opts/copy_propagation/*.mir
 	rm -rf tests/good/opts/garbage_collection/*.mir
 	rm -rf tests/good/opts/tail_call/*.mir
 	rm -rf tests/bad/runtime/*.mir
@@ -55,6 +57,7 @@ clean:
 	rm -rf tests/good/opts/dead_code_elimination/*.lir
 	rm -rf tests/good/opts/branch_removal/*.lir
 	rm -rf tests/good/opts/gcse/*.lir
+	rm -rf tests/good/opts/copy_propagation/*.lir
 	rm -rf tests/good/opts/garbage_collection/*.lir
 	rm -rf tests/good/opts/tail_call/*.lir
 	rm -rf tests/bad/runtime/*.lir
@@ -70,6 +73,7 @@ clean:
 	rm -rf tests/good/opts/dead_code_elimination/*.opt.lir
 	rm -rf tests/good/opts/branch_removal/*.opt.lir
 	rm -rf tests/good/opts/gcse/*.opt.lir
+	rm -rf tests/good/opts/copy_propagation/*.opt.lir
 	rm -rf tests/good/opts/garbage_collection/*.opt.lir
 	rm -rf tests/good/opts/tail_call/*.opt.lir
 	rm -rf tests/bad/runtime/*.opt.lir
@@ -85,6 +89,7 @@ clean:
 	rm -rf tests/good/opts/dead_code_elimination/*.ll
 	rm -rf tests/good/opts/branch_removal/*.ll
 	rm -rf tests/good/opts/gcse/*.ll
+	rm -rf tests/good/opts/copy_propagation/*.ll
 	rm -rf tests/good/opts/garbage_collection/*.ll
 	rm -rf tests/good/opts/tail_call/*.ll
 	rm -rf tests/bad/runtime/*.ll
@@ -101,6 +106,7 @@ clean:
 	rm -rf tests/good/opts/dead_code_elimination/*.bc
 	rm -rf tests/good/opts/branch_removal/*.bc
 	rm -rf tests/good/opts/gcse/*.bc
+	rm -rf tests/good/opts/copy_propagation/*.bc
 	rm -rf tests/good/opts/garbage_collection/*.bc
 	rm -rf tests/good/opts/tail_call/*.bc
 	rm -rf tests/bad/runtime/*.bc
