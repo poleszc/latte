@@ -283,7 +283,7 @@ fn main() {
         "integration_pass_gcse",
     )
     .expect("Failed to generate GCSE integration tests");
-    
+
     generate_test_suite(
         "integration_opts_copy_prop.rs",
         &[

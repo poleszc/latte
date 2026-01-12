@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
-/// Global Common Sub-expression Elimination:
+/// Copy Propagation:
 use crate::{lir::*, opts::OptimizationPass};
+use std::collections::HashMap;
 
 pub struct CopyPropagation {
     /// Register to its original value.
