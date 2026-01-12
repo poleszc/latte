@@ -41,7 +41,6 @@ impl Expression {
                 | LIROperation::FieldGet
                 | LIROperation::ArrayGet
                 | LIROperation::Phi
-                | LIROperation::Assign
         )
     }
 

@@ -75,6 +75,9 @@ impl Optimizer {
     pub fn run(&mut self, program: &mut LIRProgram) {
         println!("[OPT] Start...");
         println!("[OPT] Max iterations: {}", self.config.max_iterations);
+        println!("++++++++++++++++++++++++++++++++++++++");
+        program.dump_to_stderr();
+        println!("++++++++++++++++++++++++++++++++++++++");
 
         for iteration in 0..self.config.max_iterations {
             let mut program_changed = false;

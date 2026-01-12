@@ -162,20 +162,22 @@ impl CFG for LIRFunction {
     }
 
     fn successors(&self, block_id: Self::BID) -> Vec<Self::BID> {
-        let block = &self.blocks[&block_id];
         let mut succs = Vec::new();
-        if let Some(term) = &block.terminator {
-            match term {
-                LIRTerminator::Jump { target, .. } => succs.push(*target),
-                LIRTerminator::Branch {
-                    if_true, if_false, ..
-                } => {
-                    succs.push(*if_true);
-                    succs.push(*if_false);
+        if let Some(block) = self.blocks.get(&block_id) {
+            if let Some(term) = &block.terminator {
+                match term {
+                    LIRTerminator::Jump { target, .. } => succs.push(*target),
+                    LIRTerminator::Branch {
+                        if_true, if_false, ..
+                    } => {
+                        succs.push(*if_true);
+                        succs.push(*if_false);
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
         }
+
         succs
     }
 }
