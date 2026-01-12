@@ -31,10 +31,11 @@ impl Default for OptimizationConfig {
 }
 
 impl OptimizationConfig {
-    pub fn new(verbose: bool) -> Self {
-        let mut config = Self::default();
-        config.verbose_opts = verbose;
-        config
+    pub fn new(max_iterations: usize, verbose: bool) -> Self {
+        Self {
+            max_iterations,
+            verbose_opts: verbose,
+        }
     }
 
     pub fn with_max_iterations(mut self, max: usize) -> Self {
@@ -128,7 +129,7 @@ impl Optimizer {
 }
 
 pub fn optimize_program(program: &mut LIRProgram, args: &LatteArgs) {
-    let config = OptimizationConfig::new(args.verbose_opts);
+    let config = OptimizationConfig::new(args.opt_max_iterations, args.verbose_opts);
     let mut optimizer = Optimizer::new(config, args);
     optimizer.run(program);
 }

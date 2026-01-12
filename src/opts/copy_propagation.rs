@@ -21,20 +21,20 @@ impl CopyPropagation {
     /// %6 = add %5, 1
     /// And replaces %5 with %1 straight away.
     fn find_source(&self, value: &LIRValue) -> LIRValue {
-        if let LIRValue::Register(reg) = value {
-            if let Some(original) = self.copies.get(reg) {
-                return self.find_source(original);
-            }
+        if let LIRValue::Register(reg) = value
+            && let Some(original) = self.copies.get(reg)
+        {
+            return self.find_source(original);
         }
         value.clone()
     }
 
     fn replace_value(&self, value: &mut LIRValue) -> bool {
-        if let LIRValue::Register(reg) = value {
-            if let Some(original) = self.copies.get(reg) {
-                *value = self.find_source(original);
-                return true;
-            }
+        if let LIRValue::Register(reg) = value
+            && let Some(original) = self.copies.get(reg)
+        {
+            *value = self.find_source(original);
+            return true;
         }
         false
     }
@@ -61,11 +61,11 @@ impl OptimizationPass for CopyPropagation {
         for block_id in &function.block_order {
             if let Some(block) = function.blocks.get(block_id) {
                 for instr in &block.instructions {
-                    if matches!(instr.operation, LIROperation::Assign) {
-                        if let Some(dest) = instr.destination {
-                            let src = &instr.operands[0];
-                            self.copies.insert(dest, src.clone());
-                        }
+                    if matches!(instr.operation, LIROperation::Assign)
+                        && let Some(dest) = instr.destination
+                    {
+                        let src = &instr.operands[0];
+                        self.copies.insert(dest, src.clone());
                     }
                 }
             }
@@ -84,10 +84,10 @@ impl OptimizationPass for CopyPropagation {
                         }
                     }
                 }
-                if let Some(term) = &mut block.terminator {
-                    if self.replace_terminator(term) {
-                        changed = true;
-                    }
+                if let Some(term) = &mut block.terminator
+                    && self.replace_terminator(term)
+                {
+                    changed = true;
                 }
             }
         }
