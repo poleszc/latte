@@ -1,8 +1,12 @@
 use std::collections::HashMap;
 
-use crate::{SourcePosition, parser::ast::Type, utils::StrID};
+use crate::{
+    SourcePosition,
+    parser::ast::Type,
+    utils::{StrID, cfg::CFG},
+};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct RegisterID(pub usize);
 impl RegisterID {
     pub fn new(id: usize) -> Self {
@@ -10,7 +14,7 @@ impl RegisterID {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct BlockID(pub usize);
 impl BlockID {
     pub fn new(id: usize) -> Self {
@@ -18,7 +22,7 @@ impl BlockID {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum LIRValue {
     Register(RegisterID),
     IntConst(i32),
@@ -31,7 +35,7 @@ pub enum LIRValue {
     Block(BlockID),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum LIROperation {
     Phi,
     Assign,
@@ -144,6 +148,36 @@ pub struct LIRFunction {
     pub block_order: Vec<BlockID>,
     pub entry_block: BlockID,
     pub source_position: SourcePosition,
+}
+
+impl CFG for LIRFunction {
+    type BID = BlockID;
+
+    fn entry_block(&self) -> Self::BID {
+        self.entry_block
+    }
+
+    fn block_order(&self) -> Vec<Self::BID> {
+        self.block_order.clone()
+    }
+
+    fn successors(&self, block_id: Self::BID) -> Vec<Self::BID> {
+        let block = &self.blocks[&block_id];
+        let mut succs = Vec::new();
+        if let Some(term) = &block.terminator {
+            match term {
+                LIRTerminator::Jump { target, .. } => succs.push(*target),
+                LIRTerminator::Branch {
+                    if_true, if_false, ..
+                } => {
+                    succs.push(*if_true);
+                    succs.push(*if_false);
+                }
+                _ => {}
+            }
+        }
+        succs
+    }
 }
 
 #[derive(Debug, Clone)]

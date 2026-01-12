@@ -1,4 +1,4 @@
-mod cfg;
+pub(crate) mod cfg;
 mod function_lowering;
 mod program_lowering;
 

@@ -1,9 +1,13 @@
 use std::collections::HashMap;
 
-use crate::{SourcePosition, parser::ast::Type, utils::StrID};
+use crate::{
+    SourcePosition,
+    parser::ast::Type,
+    utils::{StrID, cfg::CFG},
+};
 
 /// Unique identifier of a single block.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct BlockID(pub usize);
 impl BlockID {
     pub fn new(id: usize) -> Self {
@@ -205,6 +209,36 @@ pub struct MIRFunction {
     pub entry_block: BlockID,
     /// Position in the source code.
     pub source_position: SourcePosition,
+}
+
+impl CFG for MIRFunction {
+    type BID = BlockID;
+
+    fn entry_block(&self) -> Self::BID {
+        self.entry_block
+    }
+
+    fn block_order(&self) -> Vec<Self::BID> {
+        self.block_order.clone()
+    }
+
+    fn successors(&self, block_id: Self::BID) -> Vec<Self::BID> {
+        let block = &self.blocks[&block_id];
+        let mut succs = Vec::new();
+        if let Some(term) = &block.terminator {
+            match term {
+                MIRTerminator::Jump { target, .. } => succs.push(*target),
+                MIRTerminator::Branch {
+                    if_true, if_false, ..
+                } => {
+                    succs.push(*if_true);
+                    succs.push(*if_false);
+                }
+                _ => {}
+            }
+        }
+        succs
+    }
 }
 
 /// Single class information.

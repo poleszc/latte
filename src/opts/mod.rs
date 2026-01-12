@@ -11,6 +11,7 @@ mod branch_folding;
 mod constant_propagation;
 mod dead_block_elimination;
 mod dead_code_elimination;
+mod gcse;
 mod pass;
 
 pub struct OptimizationConfig {

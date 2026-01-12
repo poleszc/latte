@@ -220,14 +220,14 @@ fn build_dom_tree(idom: &ImmediateDominators) -> DominatorTree {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::SourcePosition;
     use crate::mir::{BlockID as MirBID, MIRBlock, MIRFunction, MIRTerminator, MIRValue};
     use crate::parser::ast::{Type, TypeKind};
     use crate::utils::StrID;
 
-    fn create_mock_func(num_blocks: usize) -> MIRFunction {
+    pub(crate) fn create_mock_func(num_blocks: usize) -> MIRFunction {
         MIRFunction {
             name: StrID::from("test"),
             return_type: Type {
