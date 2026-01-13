@@ -74,8 +74,11 @@ pub struct LatteArgs {
     /// Enable Phi Elimination.
     #[arg(long)]
     pub opt_phi_elimination: bool,
+    /// Enable Empty Block Elimination.
+    #[arg(long)]
+    pub opt_empty_block: bool,
     /// Maximum iterations for the optimizer.
-    #[arg(long, default_value_t = 10)]
+    #[arg(long, default_value_t = 100)]
     pub opt_max_iterations: usize,
     /// Print program state after every optimization pass.
     #[arg(short = 'v', long)]

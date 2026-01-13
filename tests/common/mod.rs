@@ -346,3 +346,8 @@ pub fn run_integration_test_with_function_inline(input_path: &str) {
 pub fn run_integration_test_with_phi_elimination(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-phi-elimination"]);
 }
+
+/// Runs an integration test with only Empty Block Elimination.
+pub fn run_integration_test_with_empty_block(input_path: &str) {
+    run_integration_test_with_opts(input_path, &["--opt-empty-block"]);
+}

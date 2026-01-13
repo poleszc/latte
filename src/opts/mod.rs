@@ -5,8 +5,9 @@ use crate::{
         branch_folding::BranchFolding, constant_propagation::ConstantFoldingAndPropagation,
         copy_propagation::CopyPropagation, dead_block_elimination::DeadBlockElimination,
         dead_code_elimination::DeadCodeElimination,
-        dead_function_elimination::DeadFunctionElimination, gcse::GlobalCSE,
-        pass::OptimizationPass, phi_elimination::PhiElimination,
+        dead_function_elimination::DeadFunctionElimination,
+        empty_block_elimination::EmptyBlockElimination, gcse::GlobalCSE, pass::OptimizationPass,
+        phi_elimination::PhiElimination,
     },
 };
 mod branch_folding;
@@ -15,6 +16,7 @@ mod copy_propagation;
 mod dead_block_elimination;
 mod dead_code_elimination;
 mod dead_function_elimination;
+mod empty_block_elimination;
 mod gcse;
 mod pass;
 mod phi_elimination;
@@ -73,6 +75,9 @@ impl Optimizer {
         if args.optimize || args.opt_dbe {
             self.add_pass(Box::new(DeadBlockElimination::new()));
         }
+        if args.optimize || args.opt_empty_block {
+            self.add_pass(Box::new(EmptyBlockElimination::new()));
+        }
         if args.optimize || args.opt_dce {
             self.add_pass(Box::new(DeadCodeElimination::new()));
         }
@@ -86,7 +91,6 @@ impl Optimizer {
             self.add_pass(Box::new(DeadFunctionElimination::new()));
         }
         if args.optimize || args.opt_phi_elimination {
-            println!("hello");
             self.add_pass(Box::new(PhiElimination::new()));
         }
     }

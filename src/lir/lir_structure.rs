@@ -103,6 +103,18 @@ pub enum LIRTerminator {
     },
 }
 
+impl LIRTerminator {
+    pub fn successors(&self) -> Vec<BlockID> {
+        match self {
+            LIRTerminator::Jump { target, .. } => vec![*target],
+            LIRTerminator::Branch {
+                if_true, if_false, ..
+            } => vec![*if_true, *if_false],
+            _ => vec![],
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct LIRInstruction {
     pub operation: LIROperation,

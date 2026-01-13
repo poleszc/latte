@@ -119,6 +119,7 @@ fn are_lir_opts_on(args: &LatteArgs) -> bool {
         || args.opt_dead_function
         || args.opt_gcse
         || args.opt_phi_elimination
+        || args.opt_empty_block
 }
 
 /// Dumps the AST to a JSON file in a specified output_dir and a given file name.
