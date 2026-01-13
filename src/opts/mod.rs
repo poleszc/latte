@@ -86,6 +86,7 @@ impl Optimizer {
             self.add_pass(Box::new(DeadFunctionElimination::new()));
         }
         if args.optimize || args.opt_phi_elimination {
+            println!("hello");
             self.add_pass(Box::new(PhiElimination::new()));
         }
     }

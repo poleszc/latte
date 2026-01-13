@@ -19,7 +19,7 @@ impl PhiElimination {
             let val = &chunk[0];
             
             if matches!(val, LIRValue::Undefined) {
-                continue;
+                return None;
             }
 
             // Two different values, can't be simplified.
