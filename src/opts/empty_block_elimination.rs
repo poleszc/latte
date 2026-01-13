@@ -61,7 +61,6 @@ impl EmptyBlockElimination {
             None => return true,
         };
 
-        // Szukamy instrukcji Phi w bloku docelowym
         let phis: Vec<_> = target_block
             .instructions
             .iter()
@@ -114,6 +113,7 @@ impl EmptyBlockElimination {
         }
         None
     }
+
     /// Change the values in block terminators to new blocks, after removal of the empty ones.
     fn apply_redirections(
         &self,
