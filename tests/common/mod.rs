@@ -337,7 +337,12 @@ pub fn run_integration_test_with_dead_function(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-dead-function"]);
 }
 
-/// Runs an integration test with only function inlining
+/// Runs an integration test with only Function Inlining.
 pub fn run_integration_test_with_function_inline(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-inline"]);
+}
+
+/// Runs an integration test with only Empty Block Elimination.
+pub fn run_integration_test_with_empty_block(input_path: &str) {
+    run_integration_test_with_opts(input_path, &["--opt-empty-block"]);
 }

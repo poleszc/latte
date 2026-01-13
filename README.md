@@ -7,6 +7,7 @@
 - Struktury/Obiekty/Metody - 8
 - GCSE - 5
 - Function Inlining - 2
+
 Suma: 28
 
 ## Co jest zrobione
