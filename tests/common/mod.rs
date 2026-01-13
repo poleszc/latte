@@ -337,7 +337,12 @@ pub fn run_integration_test_with_dead_function(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-dead-function"]);
 }
 
-/// Runs an integration test with only function inlining
+/// Runs an integration test with only Function Inlining.
 pub fn run_integration_test_with_function_inline(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-inline"]);
+}
+
+/// Runs an integration test with only Phi Elimination.
+pub fn run_integration_test_with_phi_elimination(input_path: &str) {
+    run_integration_test_with_opts(input_path, &["--opt-phi-elimination"]);
 }

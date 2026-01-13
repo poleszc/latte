@@ -331,6 +331,22 @@ fn main() {
         "integration_pass_function_inline",
     )
     .expect("Failed to generate function inline integration tests");
+
+    generate_test_suite(
+        "integration_opts_phi_elimination.rs",
+        &[
+            "tests/good/official",
+            "tests/good/extra",
+            "tests/good/extensions/arrays",
+            "tests/good/extensions/struct",
+            "tests/good/extensions/objects",
+            "tests/good/extensions/virtual",
+            "tests/good/opts",
+        ],
+        "run_integration_test_with_phi_elimination",
+        "integration_pass_phi_elimination",
+    )
+    .expect("Failed to generate phi elimination integration tests");
 }
 
 /// Recursively collects all files starting from a giver directory.
