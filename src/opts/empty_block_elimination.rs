@@ -29,6 +29,7 @@ impl EmptyBlockElimination {
             }
         }
 
+        // Compress the paths so block chains like B1 -> B2 -> B3 -> B4 are handled in one iteration.
         let mut final_map = HashMap::new();
         for &start_node in redirection.keys() {
             let mut current = start_node;
@@ -36,7 +37,7 @@ impl EmptyBlockElimination {
 
             while let Some(&next) = redirection.get(&current) {
                 if !visited.insert(current) {
-                    break; // Cycle. TODO: Probably remove.
+                    break;
                 }
                 current = next;
             }
@@ -45,10 +46,10 @@ impl EmptyBlockElimination {
                 final_map.insert(start_node, current);
             }
         }
-
         final_map
     }
 
+    /// Change the values in block terminators to new blocks, after removal of the empty ones.
     fn apply_redirections(
         &self,
         func: &mut LIRFunction,
@@ -86,75 +87,87 @@ impl EmptyBlockElimination {
         changed
     }
 
-    fn fix_phis(&self, func: &mut LIRFunction, redirections: &HashMap<BlockID, BlockID>) -> bool {
-        let mut changed = false;
-        // Fix predecessor map
-        let mut new_preds: HashMap<BlockID, Vec<BlockID>> = HashMap::new();
-        for (&bid, block) in &func.blocks {
+    /// Build a mapping from (Removed Block) -> (List of its predecessors).
+    /// Used later when fixing phi functions.
+    fn build_source_map(
+        &self,
+        func: &LIRFunction,
+        redirects: &HashMap<BlockID, BlockID>,
+    ) -> HashMap<BlockID, Vec<BlockID>> {
+        let mut source_map: HashMap<BlockID, Vec<BlockID>> = HashMap::new();
+        let blocks_to_be_removed: HashSet<_> = redirects.keys().collect();
+
+        for (&pred_id, block) in &func.blocks {
             if let Some(term) = &block.terminator {
-                match term {
-                    LIRTerminator::Jump { target, .. } => {
-                        new_preds.entry(*target).or_default().push(bid);
+                for successor in term.successors() {
+                    if blocks_to_be_removed.contains(&successor) {
+                        source_map.entry(successor).or_default().push(pred_id);
                     }
-                    LIRTerminator::Branch {
-                        if_true, if_false, ..
-                    } => {
-                        new_preds.entry(*if_true).or_default().push(bid);
-                        new_preds.entry(*if_false).or_default().push(bid);
-                    }
-                    _ => {}
                 }
             }
         }
+        source_map
+    }
 
-        // Fix Phis which may have arguments from the removed blocks.
-        for &bid in &func.block_order {
-            let current_predecessors = new_preds.get(&bid).cloned().unwrap_or_default();
-            let pred_set: HashSet<BlockID> = current_predecessors.iter().cloned().collect();
-
-            if let Some(block) = func.blocks.get_mut(&bid) {
-                block.predecessors = current_predecessors;
-
-                for instr in &mut block.instructions {
-                    if instr.operation == LIROperation::Phi {
-                        let mut new_phi_operands = Vec::new();
-                        let mut processed_preds = HashSet::new();
-
-                        for chunk in instr.operands.chunks_exact(2) {
-                            let val = &chunk[0];
-                            let old_label = match chunk[1] {
-                                LIRValue::Block(id) => id,
-                                _ => continue,
-                            };
-
-                            if pred_set.contains(&old_label) {
-                                if processed_preds.insert(old_label) {
-                                    new_phi_operands.push(val.clone());
-                                    new_phi_operands.push(LIRValue::Block(old_label));
-                                }
-                            } else {
-                                for &p in &block.predecessors {
-                                    if !processed_preds.contains(&p) {
-                                        new_phi_operands.push(val.clone());
-                                        new_phi_operands.push(LIRValue::Block(p));
-                                        processed_preds.insert(p);
-                                    }
+    // Fixes the phi arguments in block, since new predecessors may
+    // have appeared when relinking blocks.
+    fn fix_phis(
+        &self,
+        func: &mut LIRFunction,
+        source_map: &HashMap<BlockID, Vec<BlockID>>,
+    ) -> bool {
+        let mut changed = false;
+        for block in func.blocks.values_mut() {
+            for instr in &mut block.instructions {
+                if matches!(instr.operation, LIROperation::Phi) {
+                    let mut operands_to_add = Vec::new();
+                    for chunk in instr.operands.chunks_exact(2) {
+                        let value = &chunk[0];
+                        if let LIRValue::Block(pred_id) = chunk[1] {
+                            if let Some(original_sources) = source_map.get(&pred_id) {
+                                // If the phi argument is the one referencing a removed block, then we add
+                                // an argument for each of it's predecessors. We don't remove the removed
+                                // block argument, this will be done by dead block elimination.
+                                for &source_block_id in original_sources {
+                                    operands_to_add.push(value.clone());
+                                    operands_to_add.push(LIRValue::Block(source_block_id));
                                 }
                             }
                         }
+                    }
 
-                        if new_phi_operands.len() == 2 {
-                            instr.operation = LIROperation::Assign;
-                            instr.operands = vec![new_phi_operands[0].clone()];
-                            changed = true;
-                        } else {
-                            instr.operands = new_phi_operands;
-                        }
+                    if !operands_to_add.is_empty() {
+                        instr.operands.extend(operands_to_add);
+                        changed = true;
                     }
                 }
             }
         }
         changed
+    }
+
+    fn rebuild_predecessors(&self, func: &mut LIRFunction) {
+        let mut new_preds: HashMap<BlockID, Vec<BlockID>> = HashMap::new();
+
+        for &block_id in func.blocks.keys() {
+            new_preds.insert(block_id, Vec::new());
+        }
+
+        for (&pred_id, block) in &func.blocks {
+            if let Some(term) = &block.terminator {
+                for successor_id in term.successors() {
+                    if let Some(preds) = new_preds.get_mut(&successor_id) {
+                        preds.push(pred_id);
+                    }
+                }
+            }
+        }
+
+        for (id, block) in &mut func.blocks {
+            let mut preds = new_preds.remove(id).unwrap_or_default();
+            preds.sort();
+            block.predecessors = preds;
+        }
     }
 }
 
@@ -164,20 +177,23 @@ impl OptimizationPass for EmptyBlockElimination {
     }
 
     fn run_on_function(&mut self, function: &mut LIRFunction) -> bool {
+        // First find empty blocks.
         let stupid_blocks = self.find_stupid_blocks(function);
         if stupid_blocks.is_empty() {
             return false;
         }
-        dbg!(&stupid_blocks);
+        // Build a mapping from (Removed Block) -> (List of its predecessors)
+        let source_map = self.build_source_map(function, &stupid_blocks);
+
+        // Change the values in terminators.
         let changed1 = self.apply_redirections(function, &stupid_blocks);
+        // Fix the phi functions of the blocks that we're targets of the remove block.
+        let changed2 = self.fix_phis(function, &source_map);
+        // Rebuild the predecessor lists in LIRBlocks.
+        self.rebuild_predecessors(function);
 
-        println!("{}", &function);
-
-        let changed2 = self.fix_phis(function, &stupid_blocks);
-        println!("{}", &function);
         changed1 || changed2
     }
-
 }
 
 impl Default for EmptyBlockElimination {
