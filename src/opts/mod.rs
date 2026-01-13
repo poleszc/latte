@@ -75,6 +75,9 @@ impl Optimizer {
         if args.optimize || args.opt_dbe {
             self.add_pass(Box::new(DeadBlockElimination::new()));
         }
+        if args.optimize || args.opt_empty_block {
+            self.add_pass(Box::new(EmptyBlockElimination::new()));
+        }
         if args.optimize || args.opt_dce {
             self.add_pass(Box::new(DeadCodeElimination::new()));
         }
@@ -89,9 +92,6 @@ impl Optimizer {
         }
         if args.optimize || args.opt_phi_elimination {
             self.add_pass(Box::new(PhiElimination::new()));
-        }
-        if args.optimize || args.opt_empty_block {
-            self.add_pass(Box::new(EmptyBlockElimination::new()));
         }
     }
 

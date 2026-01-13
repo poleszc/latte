@@ -15,6 +15,7 @@ impl EmptyBlockElimination {
         let mut redirection = HashMap::new();
 
         for &id in &func.block_order {
+            // Skip the entry block, since it can't be a jump target.
             if id == func.entry_block {
                 continue;
             }
@@ -226,6 +227,7 @@ impl OptimizationPass for EmptyBlockElimination {
         }
         let to_remove: HashSet<BlockID> = stupid_blocks.keys().cloned().collect();
 
+        // Save the original predecessors for them to be used later on when fixing phis.
         let original_preds: HashMap<BlockID, Vec<BlockID>> = function
             .blocks
             .iter()
