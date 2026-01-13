@@ -71,6 +71,9 @@ pub struct LatteArgs {
     /// Enable Function Inlining.
     #[arg(long)]
     pub opt_inline: bool,
+    /// Enable Phi Elimination.
+    #[arg(long)]
+    pub opt_phi_elimination: bool,
     /// Maximum iterations for the optimizer.
     #[arg(long, default_value_t = 10)]
     pub opt_max_iterations: usize,

@@ -145,6 +145,7 @@ impl<'a> LLVMGenerator<'a> {
     }
 
     fn emit_preambule(&mut self) {
+        // TODO: Make not all of them appear
         let decls = [
             "declare void @printInt(i32)",
             "declare void @printString(i8*)",
