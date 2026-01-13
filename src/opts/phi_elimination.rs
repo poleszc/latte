@@ -1,3 +1,8 @@
+/// Phi Elimination:
+/// Eliminate redundant phis like:
+/// %r = phi [1: %B0]
+/// %r = phi [1: %B0, 1: %B1, 1: %B2]
+/// %r = phi [%1: %B0, %1: %B1, %1: %B2]
 use crate::{lir::*, opts::OptimizationPass};
 
 pub struct PhiElimination;
