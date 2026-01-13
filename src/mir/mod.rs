@@ -21,13 +21,12 @@ pub fn lower_to_mir(
     let mut mir_lowering_context = lowering::MIRLoweringContext::new(symbol_table);
     let mut mir_program = mir_lowering_context.lower_program(program);
 
-    if verbose {
-        println!("++++++++++++++++++++++++++++++++++++++");
-        mir_program.dump_to_stderr();
-        println!("++++++++++++++++++++++++++++++++++++++");
-    }
-
     if inline {
+        if verbose {
+            println!("++++++++++++++++++++++++++++++++++++++");
+            mir_program.dump_to_stderr();
+            println!("++++++++++++++++++++++++++++++++++++++");
+        }
         inline_functions(&mut mir_program);
         if verbose {
             println!("++++++++++++++++++++++++++++++++++++++");

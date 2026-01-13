@@ -333,6 +333,22 @@ fn main() {
     .expect("Failed to generate function inline integration tests");
 
     generate_test_suite(
+        "integration_opts_phi_elimination.rs",
+        &[
+            "tests/good/official",
+            "tests/good/extra",
+            "tests/good/extensions/arrays",
+            "tests/good/extensions/struct",
+            "tests/good/extensions/objects",
+            "tests/good/extensions/virtual",
+            "tests/good/opts",
+        ],
+        "run_integration_test_with_phi_elimination",
+        "integration_pass_phi_elimination",
+    )
+    .expect("Failed to generate phi elimination integration tests");
+
+    generate_test_suite(
         "integration_opts_empty_block.rs",
         &[
             "tests/good/official",

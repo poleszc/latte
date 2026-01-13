@@ -2,7 +2,12 @@ use crate::{
     LatteArgs,
     lir::LIRProgram,
     opts::{
-        branch_folding::BranchFolding, constant_propagation::ConstantFoldingAndPropagation, copy_propagation::CopyPropagation, dead_block_elimination::DeadBlockElimination, dead_code_elimination::DeadCodeElimination, dead_function_elimination::DeadFunctionElimination, empty_block_elimination::EmptyBlockElimination, gcse::GlobalCSE, pass::OptimizationPass
+        branch_folding::BranchFolding, constant_propagation::ConstantFoldingAndPropagation,
+        copy_propagation::CopyPropagation, dead_block_elimination::DeadBlockElimination,
+        dead_code_elimination::DeadCodeElimination,
+        dead_function_elimination::DeadFunctionElimination,
+        empty_block_elimination::EmptyBlockElimination, gcse::GlobalCSE, pass::OptimizationPass,
+        phi_elimination::PhiElimination,
     },
 };
 mod branch_folding;
@@ -14,6 +19,7 @@ mod dead_function_elimination;
 mod empty_block_elimination;
 mod gcse;
 mod pass;
+mod phi_elimination;
 
 pub struct OptimizationConfig {
     pub max_iterations: usize,
@@ -80,6 +86,9 @@ impl Optimizer {
         }
         if args.optimize || args.opt_dead_function {
             self.add_pass(Box::new(DeadFunctionElimination::new()));
+        }
+        if args.optimize || args.opt_phi_elimination {
+            self.add_pass(Box::new(PhiElimination::new()));
         }
         if args.optimize || args.opt_empty_block {
             self.add_pass(Box::new(EmptyBlockElimination::new()));
