@@ -3,7 +3,4 @@
 mod common;
 use common::*;
 
-include!(concat!(
-    env!("OUT_DIR"),
-    "/integration_opts_block_merge.rs"
-));
+include!(concat!(env!("OUT_DIR"), "/integration_opts_block_merge.rs"));
