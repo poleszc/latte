@@ -10,6 +10,7 @@ impl EmptyBlockElimination {
         Self
     }
 
+    /// Finds block which can be removed. Have empty instruction set and a terminator.
     fn find_stupid_blocks(&self, func: &LIRFunction) -> HashMap<BlockID, BlockID> {
         let mut redirection = HashMap::new();
 
@@ -35,6 +36,7 @@ impl EmptyBlockElimination {
             let mut current = start_node;
             let mut visited = HashSet::new();
 
+            // Detect cycles cause back edges may cause ones to appear.
             while let Some(&next) = redirection.get(&current) {
                 if !visited.insert(current) {
                     break;
@@ -68,7 +70,10 @@ impl EmptyBlockElimination {
                             }
                         }
                         LIRTerminator::Branch {
-                            if_true, if_false, ..
+                            if_true,
+                            if_false,
+                            position,
+                            ..
                         } => {
                             if let Some(&new_t) = redirections.get(if_true) {
                                 *if_true = new_t;
@@ -77,6 +82,13 @@ impl EmptyBlockElimination {
                             if let Some(&new_f) = redirections.get(if_false) {
                                 *if_false = new_f;
                                 changed = true;
+                            }
+                            // If both branches lead to the same block, change the branch to a jump.
+                            if *if_true == *if_false {
+                                *term = LIRTerminator::Jump {
+                                    target: *if_true,
+                                    position: *position,
+                                };
                             }
                         }
                         _ => {}
@@ -87,57 +99,60 @@ impl EmptyBlockElimination {
         changed
     }
 
-    /// Build a mapping from (Removed Block) -> (List of its predecessors).
-    /// Used later when fixing phi functions.
-    fn build_source_map(
-        &self,
-        func: &LIRFunction,
-        redirects: &HashMap<BlockID, BlockID>,
-    ) -> HashMap<BlockID, Vec<BlockID>> {
-        let mut source_map: HashMap<BlockID, Vec<BlockID>> = HashMap::new();
-        let blocks_to_be_removed: HashSet<_> = redirects.keys().collect();
-
-        for (&pred_id, block) in &func.blocks {
-            if let Some(term) = &block.terminator {
-                for successor in term.successors() {
-                    if blocks_to_be_removed.contains(&successor) {
-                        source_map.entry(successor).or_default().push(pred_id);
-                    }
-                }
-            }
-        }
-        source_map
-    }
-
     // Fixes the phi arguments in block, since new predecessors may
-    // have appeared when relinking blocks.
+    // have appeared when relinking blocks and some may have disappeared.
     fn fix_phis(
         &self,
         func: &mut LIRFunction,
-        source_map: &HashMap<BlockID, Vec<BlockID>>,
+        to_remove: &HashSet<BlockID>,
+        original_preds: &HashMap<BlockID, Vec<BlockID>>,
     ) -> bool {
         let mut changed = false;
+
         for block in func.blocks.values_mut() {
             for instr in &mut block.instructions {
-                if matches!(instr.operation, LIROperation::Phi) {
-                    let mut operands_to_add = Vec::new();
+                if instr.operation == LIROperation::Phi {
+                    let mut new_ops = Vec::new();
+                    let mut instr_changed = false;
+
                     for chunk in instr.operands.chunks_exact(2) {
-                        let value = &chunk[0];
-                        if let LIRValue::Block(pred_id) = chunk[1] {
-                            if let Some(original_sources) = source_map.get(&pred_id) {
-                                // If the phi argument is the one referencing a removed block, then we add
-                                // an argument for each of it's predecessors. We don't remove the removed
-                                // block argument, this will be done by dead block elimination.
-                                for &source_block_id in original_sources {
-                                    operands_to_add.push(value.clone());
-                                    operands_to_add.push(LIRValue::Block(source_block_id));
+                        let val = chunk[0].clone();
+                        let pred_id = match chunk[1] {
+                            LIRValue::Block(id) => id,
+                            _ => unreachable!(),
+                        };
+
+                        // If an arguments contains a removed block, we change it to the nearest alive predecessor.
+                        if to_remove.contains(&pred_id) {
+                            instr_changed = true;
+                            let mut worklist = vec![pred_id];
+                            let mut resolved = HashSet::new();
+                            let mut visited = HashSet::new();
+
+                            // Walk up the predecessor path and look for the nearest alive predecessor.
+                            while let Some(curr) = worklist.pop() {
+                                if !to_remove.contains(&curr) {
+                                    resolved.insert(curr);
+                                } else if visited.insert(curr) {
+                                    if let Some(preds) = original_preds.get(&curr) {
+                                        worklist.extend(preds);
+                                    }
                                 }
                             }
+
+                            for res_id in resolved {
+                                new_ops.push(val.clone());
+                                new_ops.push(LIRValue::Block(res_id));
+                            }
+                        } else {
+                            new_ops.push(val);
+                            new_ops.push(LIRValue::Block(pred_id));
                         }
                     }
 
-                    if !operands_to_add.is_empty() {
-                        instr.operands.extend(operands_to_add);
+                    if instr_changed {
+                        // Remove duplicate arguments which might have appeared with diamond like CFGs.
+                        instr.operands = self.deduplicate_phi_args(new_ops);
                         changed = true;
                     }
                 }
@@ -146,6 +161,24 @@ impl EmptyBlockElimination {
         changed
     }
 
+    /// Removes duplicate phi arguments - coming from the same block.
+    /// This might have occurred when having a diamond like CFG.
+    fn deduplicate_phi_args(&self, ops: Vec<LIRValue>) -> Vec<LIRValue> {
+        let mut seen = HashSet::new();
+        let mut final_ops = Vec::new();
+        for chunk in ops.chunks_exact(2).rev() {
+            if let LIRValue::Block(id) = chunk[1] {
+                if seen.insert(id) {
+                    final_ops.push(chunk[1].clone());
+                    final_ops.push(chunk[0].clone());
+                }
+            }
+        }
+        final_ops.reverse();
+        final_ops
+    }
+
+    /// Rebuild predecessor list for blocks once blocks have been removed.
     fn rebuild_predecessors(&self, func: &mut LIRFunction) {
         let mut new_preds: HashMap<BlockID, Vec<BlockID>> = HashMap::new();
 
@@ -169,6 +202,15 @@ impl EmptyBlockElimination {
             block.predecessors = preds;
         }
     }
+
+    fn remove_dead_blocks(&self, func: &mut LIRFunction, redirects: &HashMap<BlockID, BlockID>) {
+        let blocks_to_remove: HashSet<BlockID> = redirects.keys().cloned().collect();
+        if blocks_to_remove.is_empty() {
+            return;
+        }
+        func.blocks.retain(|id, _| !blocks_to_remove.contains(id));
+        func.block_order.retain(|id| !blocks_to_remove.contains(id));
+    }
 }
 
 impl OptimizationPass for EmptyBlockElimination {
@@ -182,13 +224,19 @@ impl OptimizationPass for EmptyBlockElimination {
         if stupid_blocks.is_empty() {
             return false;
         }
-        // Build a mapping from (Removed Block) -> (List of its predecessors)
-        let source_map = self.build_source_map(function, &stupid_blocks);
+        let to_remove: HashSet<BlockID> = stupid_blocks.keys().cloned().collect();
+
+        let original_preds: HashMap<BlockID, Vec<BlockID>> = function
+            .blocks
+            .iter()
+            .map(|(id, b)| (*id, b.predecessors.clone()))
+            .collect();
 
         // Change the values in terminators.
         let changed1 = self.apply_redirections(function, &stupid_blocks);
         // Fix the phi functions of the blocks that we're targets of the remove block.
-        let changed2 = self.fix_phis(function, &source_map);
+        let changed2 = self.fix_phis(function, &to_remove, &original_preds);
+        self.remove_dead_blocks(function, &stupid_blocks);
         // Rebuild the predecessor lists in LIRBlocks.
         self.rebuild_predecessors(function);
 
