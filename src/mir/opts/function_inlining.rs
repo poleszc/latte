@@ -27,9 +27,9 @@ pub struct MIRFunctionInlining {
 
 struct InliningContext<'a> {
     callee: &'a MIRFunction,
-    local_map: HashMap<LocalID, LocalID>,
-    temp_map: HashMap<TempID, TempID>,
-    block_map: HashMap<BlockID, BlockID>,
+    local_map: HashMap<LocalID, LocalID>, // Callee LocalID -> Caller LocalID
+    temp_map: HashMap<TempID, TempID>,    // Callee TempID -> Caller TempID
+    block_map: HashMap<BlockID, BlockID>, // Callee BlockID -> Caller BlockID
     return_local: Option<LocalID>,
     after_block_id: BlockID,
 }
