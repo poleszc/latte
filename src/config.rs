@@ -77,6 +77,9 @@ pub struct LatteArgs {
     /// Enable Empty Block Elimination.
     #[arg(long)]
     pub opt_empty_block: bool,
+    /// Enable Block Merging.
+    #[arg(long)]
+    pub opt_block_merge: bool,
     /// Maximum iterations for the optimizer.
     #[arg(long, default_value_t = 100)]
     pub opt_max_iterations: usize,

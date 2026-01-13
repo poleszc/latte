@@ -2,14 +2,15 @@ use crate::{
     LatteArgs,
     lir::LIRProgram,
     opts::{
-        branch_folding::BranchFolding, constant_propagation::ConstantFoldingAndPropagation,
-        copy_propagation::CopyPropagation, dead_block_elimination::DeadBlockElimination,
-        dead_code_elimination::DeadCodeElimination,
+        block_merging::BlockMerging, branch_folding::BranchFolding,
+        constant_propagation::ConstantFoldingAndPropagation, copy_propagation::CopyPropagation,
+        dead_block_elimination::DeadBlockElimination, dead_code_elimination::DeadCodeElimination,
         dead_function_elimination::DeadFunctionElimination,
         empty_block_elimination::EmptyBlockElimination, gcse::GlobalCSE, pass::OptimizationPass,
         phi_elimination::PhiElimination,
     },
 };
+mod block_merging;
 mod branch_folding;
 mod constant_propagation;
 mod copy_propagation;
@@ -92,6 +93,9 @@ impl Optimizer {
         }
         if args.optimize || args.opt_phi_elimination {
             self.add_pass(Box::new(PhiElimination::new()));
+        }
+        if args.optimize || args.opt_block_merge {
+            self.add_pass(Box::new(BlockMerging::new()));
         }
     }
 
