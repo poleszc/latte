@@ -15,7 +15,6 @@ use crate::{
         BlockID, LocalID, LocalInfo, MIRBlock, MIRFunction, MIRInstruction, MIROperation, MIRPlace,
         MIRProgram, MIRTerminator, MIRValue, TempID, TempInfo,
     },
-    parser::Block,
     utils::StrID,
 };
 use std::collections::{HashMap, HashSet};
@@ -24,6 +23,15 @@ const SHORT_FUNCTION_THRESHOLD: usize = 10;
 pub struct MIRFunctionInlining {
     /// Maximum number of instructions for the function to be inlined.
     max_func_size: usize,
+}
+
+struct InliningContext<'a> {
+    callee: &'a MIRFunction,
+    local_map: HashMap<LocalID, LocalID>,
+    temp_map: HashMap<TempID, TempID>,
+    block_map: HashMap<BlockID, BlockID>,
+    return_local: Option<LocalID>,
+    after_block_id: BlockID,
 }
 
 impl MIRFunctionInlining {
@@ -129,6 +137,7 @@ impl MIRFunctionInlining {
         // Iterate over the copy since we're gonna modify the block order.
         for block_id in func.block_order.clone() {
             let mut call_idx = None;
+            let mut callee_name = None;
 
             if let Some(block) = func.blocks.get_mut(&block_id) {
                 for (idx, instr) in block.instructions.iter().enumerate() {
@@ -137,30 +146,85 @@ impl MIRFunctionInlining {
                         && candidates.contains_key(func_name)
                     {
                         call_idx = Some(idx);
+                        callee_name = Some(*func_name);
                     }
                 }
             }
 
             if let Some(idx) = call_idx {
-                self.perform_inline(func, block_id, idx, candidates);
+                self.perform_inline(func, block_id, idx, &candidates[&callee_name.unwrap()]);
                 changed = true;
             }
         }
         changed
     }
 
-    /// Creates a mapping from the inlined LocalIDs to Caller LocalID, analogously for Temporaries.
-    /// Inserts the locals and temps into the caller function.
-    fn remap_locals_and_temps(
+    /// Actually performs the inline.
+    fn perform_inline(
         &self,
         caller: &mut MIRFunction,
+        block_id: BlockID,
+        instr_idx: usize,
         callee: &MIRFunction,
-    ) -> (HashMap<LocalID, LocalID>, HashMap<TempID, TempID>) {
+    ) {
+        let call_instr = caller.blocks[&block_id].instructions[instr_idx].clone();
+        let ctx = InliningContext::new(caller, callee, &call_instr);
+
+        // Create the after block and move the instructions after the call to it.
+        ctx.split_off_after_block(caller, block_id, instr_idx, &call_instr);
+
+        // Insert Assign instructions from the caller arguments to callee's locals, before the jump to the callee block.
+        ctx.inject_argument_assignments(caller, block_id, &call_instr);
+
+        // Insert callee's block to the caller. Remap all BlockIDs, LocalIDs and TempIDs.
+        ctx.inject_callee_blocks(caller);
+
+        // Fix the terminator of the first block.
+        // Make if a jump to the first block of the inlined function.
+        let callee_entry_block_id = ctx.block_map[&callee.entry_block];
+        caller.blocks.get_mut(&block_id).unwrap().terminator = Some(MIRTerminator::Jump {
+            target: callee_entry_block_id,
+            position: call_instr.source_position,
+        });
+
+        self.update_block_order(caller, block_id, &ctx);
+    }
+
+    /// Updates the block order of the caller after callee block have been added.
+    fn update_block_order(
+        &self,
+        func: &mut MIRFunction,
+        caller_bid: BlockID,
+        ctx: &InliningContext,
+    ) {
+        let pos = func
+            .block_order
+            .iter()
+            .position(|&id| id == caller_bid)
+            .unwrap();
+        let mut to_add: Vec<BlockID> = ctx
+            .callee
+            .block_order
+            .iter()
+            .map(|bid| ctx.block_map[bid])
+            .collect();
+        to_add.push(ctx.after_block_id);
+        func.block_order.splice(pos + 1..pos + 1, to_add);
+    }
+}
+
+impl<'a> InliningContext<'a> {
+    fn new(caller: &mut MIRFunction, callee: &'a MIRFunction, call_instr: &MIRInstruction) -> Self {
         let mut local_map = HashMap::new();
+        let mut temp_map = HashMap::new();
+        let mut block_map = HashMap::new();
+
+        // First create a mapping from caller Locals/Temps to callee Locals/Temps as they
+        // have to be renamed and insert new locals to the callers function.
         for inlined_local in &callee.locals {
-            let new_id = caller.locals.len();
+            let new_id = LocalID(caller.locals.len());
             caller.locals.push(LocalInfo {
-                id: LocalID(new_id),
+                id: new_id,
                 name: inlined_local
                     .name
                     .map(|n| StrID::from(format!("inline_{}_{}", callee.name, n))),
@@ -168,85 +232,80 @@ impl MIRFunctionInlining {
                 is_parameter: false,
                 parameter_index: None,
             });
-            local_map.insert(inlined_local.id, LocalID(new_id));
+            local_map.insert(inlined_local.id, new_id);
         }
 
-        let mut temp_map = HashMap::new();
         for callee_temp in &callee.temps {
-            let new_id = caller.temps.len();
+            let new_id = TempID(caller.temps.len());
             caller.temps.push(TempInfo {
-                id: TempID(new_id),
+                id: new_id,
                 typ: callee_temp.typ.clone(),
             });
-            temp_map.insert(callee_temp.id, TempID(new_id));
+            temp_map.insert(callee_temp.id, new_id);
         }
 
-        (local_map, temp_map)
-    }
-
-    /// Creates a mapping from the inlined BlockID to Caller BlockID.
-    /// Blocks are reserved at the end of the function blocks.
-    /// Block them self are not inserted yet.
-    fn create_block_map(
-        &self,
-        caller: &mut MIRFunction,
-        callee: &MIRFunction,
-    ) -> (HashMap<BlockID, BlockID>, usize) {
-        let mut block_map = HashMap::new();
-        let mut next_free_block_id = caller.blocks.keys().map(|b| b.0).max().unwrap_or(0) + 1;
+        // Create a mapping from the inlined BlockID to Caller BlockID.
+        // Blocks are reserved at the end of the function blocks.
+        // Block them self are not inserted yet.
+        let mut next_id = caller.blocks.keys().map(|b| b.0).max().unwrap_or(0) + 1;
         for inlined_bid in &callee.block_order {
-            block_map.insert(*inlined_bid, BlockID(next_free_block_id));
-            next_free_block_id += 1;
+            block_map.insert(*inlined_bid, BlockID(next_id));
+            next_id += 1;
         }
-        (block_map, next_free_block_id)
-    }
 
-    fn create_return_local(
-        &self,
-        caller: &mut MIRFunction,
-        instr: &MIRInstruction,
-        callee_name: StrID,
-    ) -> Option<LocalID> {
-        let dest = instr.destination.as_ref()?;
-        let typ = match dest {
-            MIRPlace::Local(id) => caller.locals[id.0].typ.clone(),
-            MIRPlace::Temp(id) => caller.temps[id.0].typ.clone(),
-            _ => panic!("Unsupported destination"),
-        };
-        let new_id = LocalID(caller.locals.len());
-        caller.locals.push(LocalInfo {
-            id: new_id,
-            name: Some(StrID::from(format!("inline_ret_{}", callee_name))),
-            typ,
-            is_parameter: false,
-            parameter_index: None,
+        let after_block_id = BlockID(next_id);
+
+        // Since LIR assumes Temporaries can't leak through block, we need to create a local
+        // in which the return value will be stored, so it can leak through blocks.
+        let return_local = call_instr.destination.as_ref().map(|dest| {
+            let typ = match dest {
+                MIRPlace::Local(id) => caller.locals[id.0].typ.clone(),
+                MIRPlace::Temp(id) => caller.temps[id.0].typ.clone(),
+                _ => panic!("Unsupported destination"),
+            };
+            let new_id = LocalID(caller.locals.len());
+            caller.locals.push(LocalInfo {
+                id: new_id,
+                name: Some(StrID::from(format!("inline_ret_{}", callee.name))),
+                typ,
+                is_parameter: false,
+                parameter_index: None,
+            });
+            new_id
         });
-        Some(new_id)
+
+        Self {
+            callee,
+            local_map,
+            temp_map,
+            block_map,
+            return_local,
+            after_block_id,
+        }
     }
 
+    /// Splits the block with the inlined call into two blocks (before call, after all)
+    /// and removes the call instruction itself.
     fn split_off_after_block(
         &self,
-        func: &mut MIRFunction,
-        caller_block_id: BlockID,
-        instr_idx: usize,
-        after_block_id: BlockID,
+        caller: &mut MIRFunction,
+        block_id: BlockID,
+        idx: usize,
         call_instr: &MIRInstruction,
-        return_local: Option<LocalID>,
     ) {
-        // Split the current block into two parts.
-        let caller_block = func.blocks.get_mut(&caller_block_id).unwrap();
-        let mut after_instructions = caller_block.instructions.split_off(instr_idx);
-        after_instructions.remove(0); // Remove the call instruction
+        let caller_block = caller.blocks.get_mut(&block_id).unwrap();
+        let mut after_instructions = caller_block.instructions.split_off(idx);
+        after_instructions.remove(0); // Remove the call instruction.
 
         // If a function returned a value insert the assign instruction after the inlined call
         // from the return local to the real call destination.
-        if let (Some(dest), Some(proxy_id)) = (&call_instr.destination, return_local) {
+        if let (Some(dest), Some(ret_id)) = (&call_instr.destination, self.return_local) {
             after_instructions.insert(
                 0,
                 MIRInstruction {
                     operation: MIROperation::Assign,
                     destination: Some(dest.clone()),
-                    operands: vec![MIRValue::Local(proxy_id)],
+                    operands: vec![MIRValue::Local(ret_id)],
                     source_position: call_instr.source_position,
                 },
             );
@@ -254,19 +313,13 @@ impl MIRFunctionInlining {
 
         // Remove the terminator from the split block. It will be filled later.
         // Move it to the after block.
-        let old_terminator = func
-            .blocks
-            .get_mut(&caller_block_id)
-            .unwrap()
-            .terminator
-            .take();
-
-        func.blocks.insert(
-            after_block_id,
+        let old_term = caller_block.terminator.take();
+        caller.blocks.insert(
+            self.after_block_id,
             MIRBlock {
-                id: after_block_id,
+                id: self.after_block_id,
                 instructions: after_instructions,
-                terminator: old_terminator,
+                terminator: old_term,
             },
         );
     }
@@ -274,52 +327,42 @@ impl MIRFunctionInlining {
     fn inject_argument_assignments(
         &self,
         caller: &mut MIRFunction,
-        caller_block_id: BlockID,
+        block_id: BlockID,
         call_instr: &MIRInstruction,
-        callee: &MIRFunction,
-        local_map: &HashMap<LocalID, LocalID>,
     ) {
-        let block = caller.blocks.get_mut(&caller_block_id).unwrap();
+        let block = caller.blocks.get_mut(&block_id).unwrap();
         // Skip the first operand since it's the function name.
         for (i, arg_val) in call_instr.operands.iter().skip(1).enumerate() {
-            let param_local = callee
+            let param = self
+                .callee
                 .locals
                 .iter()
                 .find(|l| l.parameter_index == Some(i))
                 .unwrap();
             block.instructions.push(MIRInstruction {
                 operation: MIROperation::Assign,
-                destination: Some(MIRPlace::Local(local_map[&param_local.id])),
+                destination: Some(MIRPlace::Local(self.local_map[&param.id])),
                 operands: vec![arg_val.clone()],
                 source_position: call_instr.source_position,
             });
         }
     }
-    fn inject_callee_blocks(
-        &self,
-        func: &mut MIRFunction,
-        callee: &MIRFunction,
-        block_map: &HashMap<BlockID, BlockID>,
-        local_map: &HashMap<LocalID, LocalID>,
-        temp_map: &HashMap<TempID, TempID>,
-        after_block_id: BlockID,
-        return_local: Option<LocalID>,
-    ) {
-        for callee_bid in &callee.block_order {
-            let callee_block = &callee.blocks[callee_bid];
+
+    fn inject_callee_blocks(&self, caller: &mut MIRFunction) {
+        for callee_bid in &self.callee.block_order {
+            let callee_block = &self.callee.blocks[callee_bid];
+
             // Remap all instructions of the callee to use the locals and temps of the caller.
             let mut new_instructions: Vec<MIRInstruction> = callee_block
                 .instructions
                 .iter()
                 .map(|instr| {
                     let mut new_instr = instr.clone();
-                    new_instr.destination = new_instr
-                        .destination
-                        .map(|d| self.remap_place(d, local_map, temp_map));
+                    new_instr.destination = new_instr.destination.map(|d| self.remap_place(d));
                     new_instr.operands = new_instr
                         .operands
                         .into_iter()
-                        .map(|o| self.remap_value(o, local_map, temp_map))
+                        .map(|o| self.remap_value(o))
                         .collect();
                     new_instr
                 })
@@ -333,18 +376,20 @@ impl MIRFunctionInlining {
                     if let Some(val) = value {
                         new_instructions.push(MIRInstruction {
                             operation: MIROperation::Assign,
-                            destination: Some(MIRPlace::Local(return_local.unwrap())),
-                            operands: vec![self.remap_value(val.clone(), local_map, temp_map)],
+                            destination: Some(MIRPlace::Local(
+                                self.return_local.expect("Return value without proxy"),
+                            )),
+                            operands: vec![self.remap_value(val.clone())],
                             source_position: *position,
                         });
                     }
                     Some(MIRTerminator::Jump {
-                        target: after_block_id,
+                        target: self.after_block_id,
                         position: *position,
                     })
                 }
                 Some(MIRTerminator::Jump { target, position }) => Some(MIRTerminator::Jump {
-                    target: block_map[target],
+                    target: self.block_map[target],
                     position: *position,
                 }),
                 Some(MIRTerminator::Branch {
@@ -353,20 +398,19 @@ impl MIRFunctionInlining {
                     if_false,
                     position,
                 }) => Some(MIRTerminator::Branch {
-                    condition: self.remap_value(condition.clone(), local_map, temp_map),
-                    if_true: block_map[if_true],
-                    if_false: block_map[if_false],
+                    condition: self.remap_value(condition.clone()),
+                    if_true: self.block_map[if_true],
+                    if_false: self.block_map[if_false],
                     position: *position,
                 }),
                 other => other.clone(),
             };
 
             // Insert the new block to the caller block stack.
-            let new_bid = block_map[callee_bid];
-            func.blocks.insert(
-                new_bid,
+            caller.blocks.insert(
+                self.block_map[callee_bid],
                 MIRBlock {
-                    id: new_bid,
+                    id: self.block_map[callee_bid],
                     instructions: new_instructions,
                     terminator: new_term,
                 },
@@ -374,125 +418,32 @@ impl MIRFunctionInlining {
         }
     }
 
-    /// Update the block order of the caller.
-    fn update_block_order(
-        &self,
-        func: &mut MIRFunction,
-        caller_bid: BlockID,
-        callee: &MIRFunction,
-        block_map: &HashMap<BlockID, BlockID>,
-        after_bid: BlockID,
-    ) {
-        let pos = func
-            .block_order
-            .iter()
-            .position(|&id| id == caller_bid)
-            .unwrap();
-        let mut to_add: Vec<BlockID> = callee
-            .block_order
-            .iter()
-            .map(|bid| block_map[bid])
-            .collect();
-        to_add.push(after_bid);
-        func.block_order.splice(pos + 1..pos + 1, to_add);
-    }
-
-    /// Actually performs the inline.
-    fn perform_inline(
-        &self,
-        func: &mut MIRFunction,
-        block_id: BlockID,
-        instr_idx: usize,
-        candidates: &HashMap<StrID, MIRFunction>,
-    ) {
-        let call_instr = func.blocks[&block_id].instructions[instr_idx].clone();
-        let callee_name = match &call_instr.operands[0] {
-            MIRValue::Function(name) => name,
-            _ => unreachable!(),
-        };
-        let callee = &candidates[callee_name];
-
-        // First create a mapping from caller Locals/Temps to callee Locals/Temps as they
-        // have to be renamed and insert new locals to the callers function.
-        let (local_map, temp_map) = self.remap_locals_and_temps(func, callee);
-        // Now renumber all blocks of the inlined function, and create a mapping from callee BlockID to caller BlockID.
-        let (block_map, next_id) = self.create_block_map(func, callee);
-
-        // TODO: Comment
-        let return_local = self.create_return_local(func, &call_instr, *callee_name);
-
-        // Create the after block and move the instructions after the call to it.
-        let after_block_id = BlockID(next_id);
-        self.split_off_after_block(
-            func,
-            block_id,
-            instr_idx,
-            after_block_id,
-            &call_instr,
-            return_local,
-        );
-
-        // Insert Assign instructions from the caller arguments to callee's locals, before the jump to the callee block.
-        self.inject_argument_assignments(func, block_id, &call_instr, callee, &local_map);
-
-        // Insert callee's block to the caller. Remap all BlockIDs, LocalIDs and TempIDs.
-        self.inject_callee_blocks(
-            func,
-            callee,
-            &block_map,
-            &local_map,
-            &temp_map,
-            after_block_id,
-            return_local,
-        );
-
-        // Fix the terminator of the first block.
-        // Make if a jump to the first block of the inlined function.
-        let callee_entry_block_id = block_map[&callee.entry_block];
-        func.blocks.get_mut(&block_id).unwrap().terminator = Some(MIRTerminator::Jump {
-            target: callee_entry_block_id,
-            position: call_instr.source_position,
-        });
-
-        self.update_block_order(func, block_id, callee, &block_map, after_block_id);
-    }
-
-    fn remap_value(
-        &self,
-        val: MIRValue,
-        locals: &HashMap<LocalID, LocalID>,
-        temps: &HashMap<TempID, TempID>,
-    ) -> MIRValue {
+    fn remap_value(&self, val: MIRValue) -> MIRValue {
         match val {
-            MIRValue::Local(id) => MIRValue::Local(locals[&id]),
-            MIRValue::Temp(id) => MIRValue::Temp(temps[&id]),
+            MIRValue::Local(id) => MIRValue::Local(self.local_map[&id]),
+            MIRValue::Temp(id) => MIRValue::Temp(self.temp_map[&id]),
             other => other,
         }
     }
 
-    fn remap_place(
-        &self,
-        place: MIRPlace,
-        locals: &HashMap<LocalID, LocalID>,
-        temps: &HashMap<TempID, TempID>,
-    ) -> MIRPlace {
+    fn remap_place(&self, place: MIRPlace) -> MIRPlace {
         match place {
-            MIRPlace::Local(id) => MIRPlace::Local(locals[&id]),
-            MIRPlace::Temp(id) => MIRPlace::Temp(temps[&id]),
+            MIRPlace::Local(id) => MIRPlace::Local(self.local_map[&id]),
+            MIRPlace::Temp(id) => MIRPlace::Temp(self.temp_map[&id]),
             MIRPlace::Field {
                 base,
                 class_name,
                 field_name,
                 field_index,
             } => MIRPlace::Field {
-                base: Box::new(self.remap_place(*base, locals, temps)),
+                base: Box::new(self.remap_place(*base)),
                 class_name,
                 field_name,
                 field_index,
             },
             MIRPlace::Index { base, index } => MIRPlace::Index {
-                base: Box::new(self.remap_place(*base, locals, temps)),
-                index: Box::new(self.remap_value(*index, locals, temps)),
+                base: Box::new(self.remap_place(*base)),
+                index: Box::new(self.remap_value(*index)),
             },
         }
     }
