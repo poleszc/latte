@@ -351,3 +351,8 @@ pub fn run_integration_test_with_phi_elimination(input_path: &str) {
 pub fn run_integration_test_with_empty_block(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-empty-block"]);
 }
+
+/// Runs an integration test with only Block Merging.
+pub fn run_integration_test_with_block_merge(input_path: &str) {
+    run_integration_test_with_opts(input_path, &["--opt-block-merge"]);
+}
