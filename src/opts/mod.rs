@@ -15,9 +15,9 @@ mod copy_propagation;
 mod dead_block_elimination;
 mod dead_code_elimination;
 mod dead_function_elimination;
-mod phi_elimination;
 mod gcse;
 mod pass;
+mod phi_elimination;
 
 pub struct OptimizationConfig {
     pub max_iterations: usize,

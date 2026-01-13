@@ -17,7 +17,7 @@ impl PhiElimination {
 
         for chunk in instr.operands.chunks(2) {
             let val = &chunk[0];
-            
+
             if matches!(val, LIRValue::Undefined) {
                 return None;
             }
