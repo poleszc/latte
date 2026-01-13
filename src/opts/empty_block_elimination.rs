@@ -20,16 +20,13 @@ impl EmptyBlockElimination {
                 continue;
             }
 
-            if let Some(block) = func.blocks.get(&id) {
-                if block.instructions.is_empty() {
-                    if let Some(LIRTerminator::Jump { target, .. }) = &block.terminator {
-                        if *target != id {
-                            if self.is_safe_to_remove(func, id, *target) {
-                                redirection.insert(id, *target);
-                            }
-                        }
-                    }
-                }
+            if let Some(block) = func.blocks.get(&id)
+                && block.instructions.is_empty()
+                && let Some(LIRTerminator::Jump { target, .. }) = &block.terminator
+                && *target != id
+                && self.is_safe_to_remove(func, id, *target)
+            {
+                redirection.insert(id, *target);
             }
         }
 
@@ -105,10 +102,10 @@ impl EmptyBlockElimination {
 
     fn get_phi_value(&self, instr: &LIRInstruction, pred: BlockID) -> Option<LIRValue> {
         for chunk in instr.operands.chunks_exact(2) {
-            if let LIRValue::Block(id) = chunk[1] {
-                if id == pred {
-                    return Some(chunk[0].clone());
-                }
+            if let LIRValue::Block(id) = chunk[1]
+                && id == pred
+            {
+                return Some(chunk[0].clone());
             }
         }
         None
@@ -123,39 +120,39 @@ impl EmptyBlockElimination {
         let mut changed = false;
 
         for src_id in func.block_order.clone() {
-            if let Some(block) = func.blocks.get_mut(&src_id) {
-                if let Some(term) = &mut block.terminator {
-                    match term {
-                        LIRTerminator::Jump { target, .. } => {
-                            if let Some(&new_target) = redirections.get(target) {
-                                *target = new_target;
-                                changed = true;
-                            }
+            if let Some(block) = func.blocks.get_mut(&src_id)
+                && let Some(term) = &mut block.terminator
+            {
+                match term {
+                    LIRTerminator::Jump { target, .. } => {
+                        if let Some(&new_target) = redirections.get(target) {
+                            *target = new_target;
+                            changed = true;
                         }
-                        LIRTerminator::Branch {
-                            if_true,
-                            if_false,
-                            position,
-                            ..
-                        } => {
-                            if let Some(&new_t) = redirections.get(if_true) {
-                                *if_true = new_t;
-                                changed = true;
-                            }
-                            if let Some(&new_f) = redirections.get(if_false) {
-                                *if_false = new_f;
-                                changed = true;
-                            }
-                            // If both branches lead to the same block, change the branch to a jump.
-                            if *if_true == *if_false {
-                                *term = LIRTerminator::Jump {
-                                    target: *if_true,
-                                    position: *position,
-                                };
-                            }
-                        }
-                        _ => {}
                     }
+                    LIRTerminator::Branch {
+                        if_true,
+                        if_false,
+                        position,
+                        ..
+                    } => {
+                        if let Some(&new_t) = redirections.get(if_true) {
+                            *if_true = new_t;
+                            changed = true;
+                        }
+                        if let Some(&new_f) = redirections.get(if_false) {
+                            *if_false = new_f;
+                            changed = true;
+                        }
+                        // If both branches lead to the same block, change the branch to a jump.
+                        if *if_true == *if_false {
+                            *term = LIRTerminator::Jump {
+                                target: *if_true,
+                                position: *position,
+                            };
+                        }
+                    }
+                    _ => {}
                 }
             }
         }
@@ -196,10 +193,10 @@ impl EmptyBlockElimination {
                             while let Some(curr) = worklist.pop() {
                                 if !to_remove.contains(&curr) {
                                     resolved.insert(curr);
-                                } else if visited.insert(curr) {
-                                    if let Some(preds) = original_preds.get(&curr) {
-                                        worklist.extend(preds);
-                                    }
+                                } else if visited.insert(curr)
+                                    && let Some(preds) = original_preds.get(&curr)
+                                {
+                                    worklist.extend(preds);
                                 }
                             }
 
@@ -230,11 +227,11 @@ impl EmptyBlockElimination {
         let mut seen = HashSet::new();
         let mut final_ops = Vec::new();
         for chunk in ops.chunks_exact(2).rev() {
-            if let LIRValue::Block(id) = chunk[1] {
-                if seen.insert(id) {
-                    final_ops.push(chunk[1].clone());
-                    final_ops.push(chunk[0].clone());
-                }
+            if let LIRValue::Block(id) = chunk[1]
+                && seen.insert(id)
+            {
+                final_ops.push(chunk[1].clone());
+                final_ops.push(chunk[0].clone());
             }
         }
         final_ops.reverse();
