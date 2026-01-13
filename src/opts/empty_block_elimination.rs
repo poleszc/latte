@@ -24,7 +24,9 @@ impl EmptyBlockElimination {
                 if block.instructions.is_empty() {
                     if let Some(LIRTerminator::Jump { target, .. }) = &block.terminator {
                         if *target != id {
-                            redirection.insert(id, *target);
+                            if self.is_safe_to_remove(func, id, *target) {
+                                redirection.insert(id, *target);
+                            }
                         }
                     }
                 }
@@ -52,6 +54,66 @@ impl EmptyBlockElimination {
         final_map
     }
 
+    /// Checks if removing 'this' block won't cause two jumps to the same block with the different values.
+    fn is_safe_to_remove(&self, func: &LIRFunction, to_remove: BlockID, target: BlockID) -> bool {
+        let target_block = match func.blocks.get(&target) {
+            Some(b) => b,
+            None => return true,
+        };
+
+        // Szukamy instrukcji Phi w bloku docelowym
+        let phis: Vec<_> = target_block
+            .instructions
+            .iter()
+            .filter(|i| i.operation == LIROperation::Phi)
+            .collect();
+
+        if phis.is_empty() {
+            return true;
+        }
+
+        // Dla każdego poprzednika bloku, który chcemy usunąć
+        for &pred_id in &func.blocks.get(&to_remove).unwrap().predecessors {
+            if let Some(pred_block) = func.blocks.get(&pred_id) {
+                // For each predecessor of the block, check if it jumps to the target
+                // block some other way with a different value. If so, we can't remove
+                // it unless both values are the same.
+                // B1
+                // | \
+                // |  B2 (to remove)
+                // | /
+                // B3
+                if pred_block
+                    .terminator
+                    .as_ref()
+                    .unwrap()
+                    .successors()
+                    .contains(&target)
+                {
+                    for phi in &phis {
+                        let val_from_removed = self.get_phi_value(phi, to_remove);
+                        let val_from_predecessor = self.get_phi_value(phi, pred_id);
+
+                        if val_from_removed != val_from_predecessor {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    fn get_phi_value(&self, instr: &LIRInstruction, pred: BlockID) -> Option<LIRValue> {
+        for chunk in instr.operands.chunks_exact(2) {
+            if let LIRValue::Block(id) = chunk[1] {
+                if id == pred {
+                    return Some(chunk[0].clone());
+                }
+            }
+        }
+        None
+    }
     /// Change the values in block terminators to new blocks, after removal of the empty ones.
     fn apply_redirections(
         &self,
