@@ -1,0 +1,11 @@
+int power2(int x) {
+    return x * x;
+}
+
+int main() {
+    int a = power2(2); // x_1 = 2 * 2
+    int b = power2(a); // x_2 = a * a
+    int c = power2(b); // x_3 = b * b
+    printInt(c);       // 256
+    return 0;
+}

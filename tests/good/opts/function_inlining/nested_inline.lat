@@ -1,0 +1,14 @@
+int mul(int a, int b) {
+    return a * b;
+}
+
+int addMul(int a, int b, int c) {
+    return a + mul(b, c);
+}
+
+int main() {
+    int x = addMul(10, 20, 30);
+    int y = addMul(1, 2, 3);
+    printInt(x + y);
+    return 0;
+}

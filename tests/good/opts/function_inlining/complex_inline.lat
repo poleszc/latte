@@ -1,0 +1,17 @@
+int main() {
+    int x = 56;
+    int y = -23;
+    printBool(x-y > x+y);
+    // printBool(x/y <= x*y);
+    return 0 ;
+}
+
+void printBool(boolean b) {
+  if (b) {
+    printString("true");
+    return;
+  } else {
+    printString("false");
+    return;
+ }
+}

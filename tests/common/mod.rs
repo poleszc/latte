@@ -104,7 +104,12 @@ pub fn assert_mir_lowering_pass(input_path: &str) {
     let semantic_result =
         SemanticChecker::check(&ast).expect("Expected semantic analysis to succeed, but it failed");
 
-    let _ = mir::lower_to_mir(&semantic_result.tast, semantic_result.symbol_table);
+    let _ = mir::lower_to_mir(
+        &semantic_result.tast,
+        semantic_result.symbol_table,
+        false,
+        false,
+    );
     // If we got here, it means mir lowering passed.
 }
 
@@ -116,7 +121,12 @@ pub fn assert_lir_lowering_pass(input_path: &str) {
     let semantic_result =
         SemanticChecker::check(&ast).expect("Expected semantic analysis to succeed, but it failed");
 
-    let mir_program = mir::lower_to_mir(&semantic_result.tast, semantic_result.symbol_table);
+    let mir_program = mir::lower_to_mir(
+        &semantic_result.tast,
+        semantic_result.symbol_table,
+        false,
+        false,
+    );
     let _ = lir::lower_to_lir(mir_program);
     // If we got here, it means the lir lowering passed.
 }
@@ -129,7 +139,12 @@ pub fn assert_llvm_lowering_pass(input_path: &str) {
     let semantic_result =
         SemanticChecker::check(&ast).expect("Expected semantic analysis to succeed, but it failed");
 
-    let mir_program = mir::lower_to_mir(&semantic_result.tast, semantic_result.symbol_table);
+    let mir_program = mir::lower_to_mir(
+        &semantic_result.tast,
+        semantic_result.symbol_table,
+        false,
+        false,
+    );
     let lir_program = lir::lower_to_lir(mir_program);
     let llvm_generator = LLVMGenerator::new();
     llvm_generator.generate_program(&lir_program);
@@ -320,4 +335,9 @@ pub fn run_integration_test_with_copy_prop(input_path: &str) {
 /// Runs an integration test with only Dead Function Elimination.
 pub fn run_integration_test_with_dead_function(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-dead-function"]);
+}
+
+/// Runs an integration test with only function inlining
+pub fn run_integration_test_with_function_inline(input_path: &str) {
+    run_integration_test_with_opts(input_path, &["--opt-inline"]);
 }

@@ -68,6 +68,9 @@ pub struct LatteArgs {
     /// Enable Dead Function Elimination.
     #[arg(long)]
     pub opt_dead_function: bool,
+    /// Enable Function Inlining.
+    #[arg(long)]
+    pub opt_inline: bool,
     /// Maximum iterations for the optimizer.
     #[arg(long, default_value_t = 10)]
     pub opt_max_iterations: usize,

@@ -79,6 +79,8 @@ pub fn run_compiler<
     let mir_program = mir::lower_to_mir(
         &semantic_analysis_result.tast,
         semantic_analysis_result.symbol_table,
+        args.opt_inline || args.optimize,
+        args.verbose_opts,
     );
     if args.emit_mir || args.emit_all {
         dump_mir(&output_dir, file_stem, &mir_program)?;
@@ -92,10 +94,12 @@ pub fn run_compiler<
     }
 
     // ============= LIR OPTIMIZATIONS ===============
-    println!("[LATTE]: Optimizing LIR...");
-    optimize_program(&mut lir_program, args);
-    if args.emit_lir_opt || (args.emit_all && are_opts_on(args)) {
-        dump_lir(&output_dir, file_stem, &lir_program, true)?;
+    if are_opts_on(args) {
+        println!("[LATTE]: Optimizing LIR...");
+        optimize_program(&mut lir_program, args);
+        if args.emit_lir_opt || args.emit_all {
+            dump_lir(&output_dir, file_stem, &lir_program, true)?;
+        }
     }
 
     // ============= LLVM BACKEND ===============

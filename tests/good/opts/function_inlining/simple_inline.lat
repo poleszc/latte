@@ -1,0 +1,9 @@
+int addFive(int x) {
+    return x + 5;
+}
+
+int main() {
+    int a = addFive(10);
+    printInt(a); 
+    return 0;
+}
