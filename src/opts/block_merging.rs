@@ -44,10 +44,10 @@ impl BlockMerging {
                         for instr in &mut succ_block.instructions {
                             if instr.operation == LIROperation::Phi {
                                 for chunk in instr.operands.chunks_exact_mut(2) {
-                                    if let LIRValue::Block(id) = &mut chunk[1] {
-                                        if *id == dst_bid {
-                                            *id = *src_bid;
-                                        }
+                                    if let LIRValue::Block(id) = &mut chunk[1]
+                                        && *id == dst_bid
+                                    {
+                                        *id = *src_bid;
                                     }
                                 }
                             }
