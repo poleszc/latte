@@ -117,8 +117,9 @@ define i32 @stringLength(i8* %s) {
 }
 
 define i8* @alloc_string(i64 %size) {
-    %msg_ptr = getelementptr [7 x i8], [7 x i8]* @alloc, i32 0, i32 0
-    call i32 (i8*, ...) @printf(i8* %msg_ptr)
+    ; Just for demo purposes.
+    ; %msg_ptr = getelementptr [7 x i8], [7 x i8]* @alloc, i32 0, i32 0
+    ; call i32 (i8*, ...) @printf(i8* %msg_ptr)
     %total_size = add i64 %size, 8 ; +8 for the reference counter
     %raw = call i8* @malloc(i64 %total_size)
     %is_null = icmp eq i8* %raw, null
@@ -166,8 +167,9 @@ increment:
     %is_zero = icmp eq i64 %new_count, 0
     br i1 %is_zero, label %free, label %return
 free:
-    %msg_ptr = getelementptr [9 x i8], [9 x i8]* @dealloc, i32 0, i32 0
-    call i32 (i8*, ...) @printf(i8* %msg_ptr)
+    ; Just for demo purposes.
+    ; %msg_ptr = getelementptr [9 x i8], [9 x i8]* @dealloc, i32 0, i32 0
+    ; call i32 (i8*, ...) @printf(i8* %msg_ptr)
     call void @free(i8* %rc_ptr)
     br label %return
 return:
