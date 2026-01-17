@@ -17,9 +17,14 @@ impl MIRLoweringContext {
 
         for stmt in &block.stmts {
             self.lower_stmt(stmt, &mut block_locals);
+            if self.builder().is_current_block_terminated() {
+                break;
+            }
         }
 
-        self.emit_drops(&block_locals, block.position);
+        if !self.builder().is_current_block_terminated() {
+            self.emit_drops(&block_locals, block.position);
+        }
         self.variable_map = old_variable_map;
     }
 

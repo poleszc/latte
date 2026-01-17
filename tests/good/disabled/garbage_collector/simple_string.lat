@@ -1,0 +1,6 @@
+int main() {
+    string s1 = "kajak";
+    s1 = s1 + "drugi_kajak";
+    printString("Done");
+    return 0;
+}

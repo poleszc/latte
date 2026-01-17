@@ -1,6 +1,8 @@
 @dnl = internal constant [4 x i8] c"%d\0A\00"
 @d   = internal constant [3 x i8] c"%d\00"	
 @s_fmt = internal constant [4 x i8] c"%s\0A\00"
+@dealloc = internal constant [9 x i8] c"DEALLOC\0A\00"
+@alloc = internal constant [7 x i8] c"ALLOC\0A\00"
 @lf  = internal constant [4 x i8] c"%lf\00"	
 @errorString = internal constant [15 x i8] c"runtime error\0A\00"
 
@@ -115,6 +117,8 @@ define i32 @stringLength(i8* %s) {
 }
 
 define i8* @alloc_string(i64 %size) {
+    %msg_ptr = getelementptr [7 x i8], [7 x i8]* @alloc, i32 0, i32 0
+    call i32 (i8*, ...) @printf(i8* %msg_ptr)
     %total_size = add i64 %size, 8 ; +8 for the reference counter
     %raw = call i8* @malloc(i64 %total_size)
     %is_null = icmp eq i8* %raw, null
@@ -159,10 +163,11 @@ check_string:
 increment:
     %new_count = sub i64 %count, 1
     store i64 %new_count, i64* %rc_ptr_casted
-    
     %is_zero = icmp eq i64 %new_count, 0
     br i1 %is_zero, label %free, label %return
 free:
+    %msg_ptr = getelementptr [9 x i8], [9 x i8]* @dealloc, i32 0, i32 0
+    call i32 (i8*, ...) @printf(i8* %msg_ptr)
     call void @free(i8* %rc_ptr)
     br label %return
 return:
