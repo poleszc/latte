@@ -63,6 +63,7 @@ impl fmt::Display for LIROperation {
             LIROperation::FieldSet => "SetField",
             LIROperation::IsNull => "IsNull",
             LIROperation::Assign => "Assign",
+            LIROperation::DropString => "DropString",
         };
         write!(f, "{:<12}", name)
     }

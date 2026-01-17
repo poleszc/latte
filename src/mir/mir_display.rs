@@ -67,6 +67,7 @@ impl fmt::Display for MIROperation {
             MIROperation::FieldGet => "FieldGet",
             MIROperation::FieldSet => "FieldSet",
             MIROperation::IsNull => "IsNull",
+            MIROperation::DropString => "DropString",
         };
         write!(f, "{:<18}", name)
     }

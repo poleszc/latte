@@ -13,17 +13,26 @@ use crate::{
 impl MIRLoweringContext {
     pub(super) fn lower_block(&mut self, block: &TBlock) {
         let old_variable_map = self.variable_map.clone();
+        let mut block_locals = Vec::new();
+
         for stmt in &block.stmts {
-            self.lower_stmt(stmt);
+            self.lower_stmt(stmt, &mut block_locals);
         }
+
+        self.emit_drops(&block_locals, block.position);
         self.variable_map = old_variable_map;
     }
 
-    fn lower_stmt(&mut self, stmt: &TStmt) {
+    fn lower_stmt(&mut self, stmt: &TStmt, block_locals: &mut Vec<LocalID>) {
         match &stmt.kind {
             TStmtKind::Empty => {}
             TStmtKind::Block(block) => self.lower_block(block),
-            TStmtKind::Decl(ty, items) => self.lower_declaration(ty, items, stmt.position),
+            TStmtKind::Decl(ty, items) => {
+                for item in items {
+                    let local_id = self.lower_declaration_item(ty, item, stmt.position);
+                    block_locals.push(local_id);
+                }
+            }
             TStmtKind::Assign { target, value } => self.lower_assign(target, value, stmt.position),
             TStmtKind::Return { expr } => self.lower_return(expr, stmt.position),
             TStmtKind::Incr(expr) => self.lower_increment(expr, stmt.position),
@@ -46,34 +55,46 @@ impl MIRLoweringContext {
         }
     }
 
-    fn lower_declaration(&mut self, typ: &Type, items: &Vec<TItem>, stmt_position: SourcePosition) {
-        for item in items {
-            match &item.kind {
-                TItemKind::NoInit(ident) => {
-                    let local_id =
-                        self.builder()
-                            .create_local(Some(ident.name), typ.clone(), false, None);
-                    let default_value = self.get_default_initialization_value(typ);
+    fn lower_scoped_stmt(&mut self, stmt: &TStmt) {
+        let old_variable_map = self.variable_map.clone();
+        let mut scoped_locals = Vec::new();
 
-                    self.builder().emit_assign(
-                        MIRPlace::Local(local_id),
-                        default_value,
-                        stmt_position,
-                    );
-                    self.variable_map.insert(ident.name, local_id);
-                }
-                TItemKind::Init(ident, expr) => {
-                    // Calculate the expression and assign to the var.
-                    // Lower the expression in the previous context, so things like int i = i + 1 are handled well.
-                    let value = self.lower_expr(expr);
-                    let local_id =
-                        self.builder()
-                            .create_local(Some(ident.name), typ.clone(), false, None);
+        self.lower_stmt(stmt, &mut scoped_locals);
 
-                    self.variable_map.insert(ident.name, local_id);
+        self.emit_drops(&scoped_locals, stmt.position);
+        self.variable_map = old_variable_map;
+    }
+
+    fn lower_declaration_item(
+        &mut self,
+        typ: &Type,
+        item: &TItem,
+        stmt_position: SourcePosition,
+    ) -> LocalID {
+        match &item.kind {
+            TItemKind::NoInit(ident) => {
+                let local_id =
                     self.builder()
-                        .emit_assign(MIRPlace::Local(local_id), value, stmt_position);
-                }
+                        .create_local(Some(ident.name), typ.clone(), false, None);
+                let default_value = self.get_default_initialization_value(typ);
+
+                self.builder()
+                    .emit_assign(MIRPlace::Local(local_id), default_value, stmt_position);
+                self.variable_map.insert(ident.name, local_id);
+                local_id
+            }
+            TItemKind::Init(ident, expr) => {
+                // Calculate the expression and assign to the var.
+                // Lower the expression in the previous context, so things like int i = i + 1 are handled well.
+                let value = self.lower_expr(expr);
+                let local_id =
+                    self.builder()
+                        .create_local(Some(ident.name), typ.clone(), false, None);
+
+                self.variable_map.insert(ident.name, local_id);
+                self.builder()
+                    .emit_assign(MIRPlace::Local(local_id), value, stmt_position);
+                local_id
             }
         }
     }
@@ -92,11 +113,38 @@ impl MIRLoweringContext {
     fn lower_assign(&mut self, target: &TExpr, value: &TExpr, stmt_position: SourcePosition) {
         let place = self.lower_expr_as_place(target);
         let val = self.lower_expr(value);
+
+        if let MIRPlace::Local(id) = &place {
+            let info = self.builder().get_local_info(*id).clone();
+            if self.is_reference_counted_type(&info.typ) {
+                self.builder().emit_drop(*id, stmt_position);
+            }
+        }
+
         self.lower_write_to_place(place, val, stmt_position);
     }
 
     fn lower_return(&mut self, expr: &Option<TExpr>, stmt_position: SourcePosition) {
         let value = expr.as_ref().map(|e| self.lower_expr(e));
+
+        let ret_val_local = if let Some(MIRValue::Local(id)) = value {
+            Some(id)
+        } else {
+            None
+        };
+        let locals_to_drop: Vec<LocalID> = self.variable_map.values().cloned().collect();
+
+        for local_id in locals_to_drop {
+            // Skip the variable we returning.
+            if Some(local_id) == ret_val_local {
+                continue;
+            }
+            let info = self.builder().get_local_info(local_id).clone();
+            if self.is_reference_counted_type(&info.typ) {
+                self.builder().emit_drop(local_id, stmt_position);
+            }
+        }
+
         self.builder().emit_return(value, stmt_position);
     }
 
@@ -207,7 +255,7 @@ impl MIRLoweringContext {
 
             // Lower the true block.
             self.builder().set_current_block(true_block);
-            self.lower_stmt(if_true);
+            self.lower_scoped_stmt(if_true);
 
             // Set the jump, only if the block is not terminated already.
             if !self.builder().is_current_block_terminated() {
@@ -216,7 +264,7 @@ impl MIRLoweringContext {
 
             // Lower the false block.
             self.builder().set_current_block(false_block);
-            self.lower_stmt(if_false);
+            self.lower_scoped_stmt(if_false);
 
             // Set the jump, only if the block is not terminated already.
             if !self.builder().is_current_block_terminated() {
@@ -235,7 +283,7 @@ impl MIRLoweringContext {
 
             // Lower the true block.
             self.builder().set_current_block(true_block);
-            self.lower_stmt(if_true);
+            self.lower_scoped_stmt(if_true);
 
             // Set the jump, only if the block is not terminated already.
             if !self.builder().is_current_block_terminated() {
@@ -263,7 +311,7 @@ impl MIRLoweringContext {
 
         // Loop body.
         self.builder().set_current_block(loop_body);
-        self.lower_stmt(body);
+        self.lower_scoped_stmt(body);
 
         if !self.builder().is_current_block_terminated() {
             self.builder().emit_jump(loop_start, stmt_position);
@@ -368,7 +416,7 @@ impl MIRLoweringContext {
         );
 
         // Loop body.
-        self.lower_stmt(body);
+        self.lower_scoped_stmt(body);
 
         // i = i + 1;
         if !self.builder().is_current_block_terminated() {

@@ -309,6 +309,11 @@ impl<'a> LLVMGenerator<'a> {
                 let typ = self.llvm_type_from_register(dest);
                 self.emit_instr(format!("%r{} = bitcast {} {} to {}", dest.0, typ, val, typ));
             }
+
+            LIROperation::DropString => {
+                let val = self.format_value(&instr.operands[0]);
+                self.emit_instr(format!("call void @decrement_ref(i8* {})", val));
+            }
             LIROperation::IntAdd | LIROperation::IntSub | LIROperation::IntMul => {
                 self.emit_arithmetic(instr);
             }
@@ -840,26 +845,6 @@ impl<'a> LLVMGenerator<'a> {
                 ));
             }
             LIRTerminator::Return { value, .. } => {
-                let func = self.current_function.as_ref().unwrap();
-                let ret_register = if let Some(LIRValue::Register(r)) = value {
-                    Some(r)
-                } else {
-                    None
-                };
-
-                // Decrement the RC for all string registers, apart for the one we're returning.
-                for reg_info in &func.registers {
-                    if reg_info.id.0 != usize::MAX && matches!(reg_info.typ.kind, TypeKind::String)
-                    {
-                        if Some(&reg_info.id) != ret_register {
-                            self.emit_instr(format!(
-                                "call void @decrement_ref(i8* %r{})",
-                                reg_info.id.0
-                            ));
-                        }
-                    }
-                }
-
                 if let Some(val) = value {
                     let formatted_val = self.format_value(val);
                     let val_type = self.llvm_type_from_value(val);

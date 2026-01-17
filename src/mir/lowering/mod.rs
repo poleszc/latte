@@ -116,6 +116,19 @@ impl MIRLoweringContext {
         StrID::from(format!("{}_{}", class_name, method_name))
     }
 
+    fn is_reference_counted_type(&self, typ: &Type) -> bool {
+        matches!(typ.kind, TypeKind::String)
+    }
+
+    fn emit_drops(&mut self, locals: &[LocalID], pos: SourcePosition) {
+        for local_id in locals.iter().rev() {
+            let info = self.builder().get_local_info(*local_id).clone();
+            if self.is_reference_counted_type(&info.typ) {
+                self.builder().emit_drop(*local_id, pos);
+            }
+        }
+    }
+
     fn binary_op_to_mir(&self, op: &BinaryOp, lhs_type: &Type) -> MIROperation {
         match op {
             BinaryOp::Add => {
