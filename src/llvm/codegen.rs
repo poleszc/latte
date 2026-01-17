@@ -5,7 +5,6 @@ use crate::{
         BlockID, LIRBlock, LIRClass, LIRFunction, LIRInstruction, LIROperation, LIRProgram,
         LIRTerminator, LIRValue, RegisterID,
     },
-    mir::builders::function_builder,
     parser::{Type, TypeKind},
 };
 
@@ -190,16 +189,15 @@ impl<'a> LLVMGenerator<'a> {
 
         self.emit_line(format!("define {} @{}({}) {{", ret_type, func.name, args));
 
-        // Increment the ref count for all strings passed as parameters.
-        for reg in &func.parameter_registers {
-            if self.is_string(*reg) {
-                self.emit_instr(format!("call void @increment_ref(i8* %r{})", reg.0));
-            }
-        }
-
         for block_id in &func.block_order {
+            // Pass additional parameters if this is a first block, so ref count constructors are inserted after the block label.
             if let Some(block) = func.blocks.get(block_id) {
-                self.emit_block(*block_id, block);
+                let param_registers = if *block_id == func.entry_block {
+                    Some(&func.parameter_registers)
+                } else {
+                    None
+                };
+                self.emit_block(*block_id, block, param_registers);
             }
         }
         if self.error_block_label.is_some() {
@@ -251,9 +249,23 @@ impl<'a> LLVMGenerator<'a> {
         ));
     }
 
-    fn emit_block(&mut self, block_id: BlockID, block: &LIRBlock) {
+    fn emit_block(
+        &mut self,
+        block_id: BlockID,
+        block: &LIRBlock,
+        parameter_registers: Option<&Vec<RegisterID>>,
+    ) {
         self.current_block_split_count = 0;
         self.emit_label(format!("B{}", block_id.0));
+
+        // Increment the ref count for all strings passed as parameters. If we're the first block.
+        if let Some(params) = parameter_registers {
+            for reg in params {
+                if self.is_string(*reg) {
+                    self.emit_instr(format!("call void @increment_ref(i8* %r{})", reg.0));
+                }
+            }
+        }
 
         for instr in &block.instructions {
             self.emit_instruction(instr, block_id);
