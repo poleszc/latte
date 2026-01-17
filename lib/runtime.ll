@@ -128,7 +128,7 @@ err:
     unreachable
 ok:
     %rc_ptr= bitcast i8* %raw to i64*
-    store i64 1, i64* %rc_ptr
+    store i64 0, i64* %rc_ptr
     ; Move the pointer by 8 bits so it's a real string pointer.
     %res = getelementptr i8, i8* %raw, i64 8
     ret i8* %res
@@ -140,7 +140,7 @@ define void @increment_ref(i8* %str) {
 check_string:
     %rc_ptr = getelementptr i8, i8* %str, i64 -8 ; Move 8 bits back so we get to the RC.
     %rc_ptr_casted = bitcast i8* %rc_ptr to i64*
-    %count = load i64, i64* %rc_ptr
+    %count = load i64, i64* %rc_ptr_casted
     %is_static = icmp eq i64 %count, -1
     br i1 %is_static, label %return, label %increment
 increment:
@@ -157,7 +157,7 @@ define void @decrement_ref(i8* %str) {
 check_string:
     %rc_ptr = getelementptr i8, i8* %str, i64 -8 ; Move 8 bits back so we get to the RC.
     %rc_ptr_casted = bitcast i8* %rc_ptr to i64*
-    %count = load i64, i64* %rc_ptr
+    %count = load i64, i64* %rc_ptr_casted
     %is_static = icmp eq i64 %count, -1
     br i1 %is_static, label %return, label %increment
 increment:
