@@ -145,7 +145,7 @@ impl MIRLoweringContext {
             None
         };
         
-        let mut locals_to_drop: Vec<LocalID> = self.variable_map.values().cloned().collect();
+        let locals_to_drop: Vec<LocalID> = self.variable_map.values().cloned().collect();
 
         for local_id in locals_to_drop {
             // Skip the variable we returning.

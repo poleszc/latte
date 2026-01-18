@@ -3,28 +3,11 @@ class Node {
     Node next;
 }
 
-
-void foo(string s) {
-    // return s + "!";
-}
-
-string goo(string s) {
-    return s + "!";
-}
-
-
 int main() {
-    string s1 = "str"+"ing"; 
-    // s1 = s1 + "ing";
-    foo(s1);
-    
-
-
-
-    // string[] arr = new string[2];
-    // arr[0] = "first";
-    // arr[0] = "second";
-    // arr[1] = arr[0];
+    string[] arr = new string[2];
+    arr[0] = "first" + "a";
+    arr[0] = "second" + "b";
+    arr[1] = arr[0];
 
 
     // string s2 = global_func(s1); 
@@ -56,8 +39,3 @@ int main() {
     // printString("Done");
     return 0;
 }
-
-
-// void test_multiple_args(string a, string b, string c) {
-//     printString(a);
-// }

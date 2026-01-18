@@ -1,8 +1,4 @@
-void foo(string s) {
-    // printString("Test4");
-    return s + "!";
-    // return;
-}
+void foo(string s) {}
 
 string goo(string s) {
     return s + "!";
@@ -12,18 +8,25 @@ void test_multiple_args(string a, string b, string c) {
     printString(a);
 }
 
+string test_multiple_args2(string a, string b, string c) {
+    printString(a);
+    return a;
+}
+
 
 int main() {
-    // printString("Test1");
-    string s1 = "str"+"ing"; 
-    // printString("Test2");
+    // string s1 = "str"+"ing"; 
+    // string s2 = "str"+"ing"+"er"; // This is broken.
     // s1 = s1 + "ing";
+    "st" + "as"+ "as";
 
-    foo(s1);
+
+    // foo(s1);
     // goo(s1);
     // string s = goo(s1);
     
     // test_multiple_args(s1, s1, s1);
+    // string x = test_multiple_args2(s1, s1, s1);
 
     // printString("Test5");
     
