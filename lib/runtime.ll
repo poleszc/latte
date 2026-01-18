@@ -120,8 +120,8 @@ define i32 @stringLength(i8* %s) {
 
 define i8* @alloc_string(i64 %size) {
     ; Just for demo purposes.
-    %msg_ptr = getelementptr [7 x i8], [7 x i8]* @alloc, i32 0, i32 0
-    call i32 (i8*, ...) @printf(i8* %msg_ptr)
+    ; %msg_ptr = getelementptr [7 x i8], [7 x i8]* @alloc, i32 0, i32 0
+    ; call i32 (i8*, ...) @printf(i8* %msg_ptr)
     %total_size = add i64 %size, 8 ; +8 for the reference counter
     %raw = call i8* @malloc(i64 %total_size)
     %is_null = icmp eq i8* %raw, null
@@ -133,8 +133,8 @@ ok:
     %rc_ptr= bitcast i8* %raw to i64*
     store i64 1, i64* %rc_ptr
     ; Just for demo purposes.
-    %msg_ptr2 = getelementptr [5 x i8], [5 x i8]* @inc, i32 0, i32 0
-    call i32 (i8*, ...) @printf(i8* %msg_ptr2)
+    ; %msg_ptr2 = getelementptr [5 x i8], [5 x i8]* @inc, i32 0, i32 0
+    ; call i32 (i8*, ...) @printf(i8* %msg_ptr2)
     ; Move the pointer by 8 bits so it's a real string pointer.
     %res = getelementptr i8, i8* %raw, i64 8
     ret i8* %res
@@ -151,8 +151,8 @@ check_string:
     br i1 %is_static, label %return, label %increment
 increment:
     ; Just for demo purposes.
-    %msg_ptr2 = getelementptr [5 x i8], [5 x i8]* @inc, i32 0, i32 0
-    call i32 (i8*, ...) @printf(i8* %msg_ptr2)
+    ; %msg_ptr2 = getelementptr [5 x i8], [5 x i8]* @inc, i32 0, i32 0
+    ; call i32 (i8*, ...) @printf(i8* %msg_ptr2)
     %new_count = add i64 %count, 1
     store i64 %new_count, i64* %rc_ptr_casted
     br label %return
@@ -171,16 +171,16 @@ check_string:
     br i1 %is_static, label %return, label %decrement
 decrement:
     ; Just for demo purposes.
-    %msg_ptr2 = getelementptr [5 x i8], [5 x i8]* @dec, i32 0, i32 0
-    call i32 (i8*, ...) @printf(i8* %msg_ptr2)
+    ; %msg_ptr2 = getelementptr [5 x i8], [5 x i8]* @dec, i32 0, i32 0
+    ; call i32 (i8*, ...) @printf(i8* %msg_ptr2)
     %new_count = sub i64 %count, 1
     store i64 %new_count, i64* %rc_ptr_casted
     %is_zero = icmp eq i64 %new_count, 0
     br i1 %is_zero, label %free, label %return
 free:
     ; Just for demo purposes.
-    %msg_ptr = getelementptr [9 x i8], [9 x i8]* @dealloc, i32 0, i32 0
-    call i32 (i8*, ...) @printf(i8* %msg_ptr)
+    ; %msg_ptr = getelementptr [9 x i8], [9 x i8]* @dealloc, i32 0, i32 0
+    ; call i32 (i8*, ...) @printf(i8* %msg_ptr)
     call void @free(i8* %rc_ptr)
     br label %return
 return:
