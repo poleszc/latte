@@ -17,8 +17,9 @@ pub fn lower_to_mir(
     symbol_table: SymbolTable,
     inline: bool,
     verbose: bool,
+    gc_enabled: bool,
 ) -> MIRProgram {
-    let mut mir_lowering_context = lowering::MIRLoweringContext::new(symbol_table);
+    let mut mir_lowering_context = lowering::MIRLoweringContext::new(symbol_table, gc_enabled);
     let mut mir_program = mir_lowering_context.lower_program(program);
 
     if inline {

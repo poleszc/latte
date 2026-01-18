@@ -20,7 +20,7 @@ pub fn compile_llvm(
     args: &LatteArgs,
 ) -> Result<(), CompilerError> {
     let ll_path = dir.join(format!("{}.ll", stem));
-    lower_lir_to_llvm_and_save(lir_program, &ll_path)?;
+    lower_lir_to_llvm_and_save(lir_program, &ll_path, args)?;
 
     let bc_path = dir.join(format!("{}_raw.bc", stem));
     llvm_assemble(&ll_path, &bc_path)?;
@@ -62,9 +62,10 @@ fn llvm_assemble(ll_path: &PathBuf, bc_path: &PathBuf) -> Result<(), CompilerErr
 fn lower_lir_to_llvm_and_save(
     lir_program: &LIRProgram,
     ll_path: &PathBuf,
+    args: &LatteArgs,
 ) -> Result<(), CompilerError> {
     println!("[LLVM]: Lowering to LLVM...");
-    let llvm_generator = LLVMGenerator::new();
+    let llvm_generator = LLVMGenerator::new(!args.no_gc);
     let llvm_ir = llvm_generator.generate_program(lir_program);
     fs::write(ll_path, llvm_ir)?;
     println!("[LLVM]: Dumped LLVM IR to file: {}", ll_path.display());

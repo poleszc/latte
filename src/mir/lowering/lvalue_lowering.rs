@@ -117,7 +117,7 @@ mod lvalue_tests {
 
     fn setup_context() -> MIRLoweringContext {
         let st = SymbolTable::new();
-        MIRLoweringContext::new(st)
+        MIRLoweringContext::new(st, false)
     }
 
     #[test]

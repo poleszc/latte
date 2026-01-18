@@ -425,7 +425,7 @@ mod expr_logic_tests {
     #[test]
     fn test_short_circuit() {
         // a && b
-        let mut ctx = MIRLoweringContext::new(SymbolTable::new());
+        let mut ctx = MIRLoweringContext::new(SymbolTable::new(), false);
         let ty_bool = Type {
             kind: TypeKind::Bool,
             position: SourcePosition(0, 0),

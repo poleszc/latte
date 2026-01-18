@@ -109,6 +109,7 @@ pub fn assert_mir_lowering_pass(input_path: &str) {
         semantic_result.symbol_table,
         false,
         false,
+        false,
     );
     // If we got here, it means mir lowering passed.
 }
@@ -124,6 +125,7 @@ pub fn assert_lir_lowering_pass(input_path: &str) {
     let mir_program = mir::lower_to_mir(
         &semantic_result.tast,
         semantic_result.symbol_table,
+        false,
         false,
         false,
     );
@@ -144,9 +146,10 @@ pub fn assert_llvm_lowering_pass(input_path: &str) {
         semantic_result.symbol_table,
         false,
         false,
+        false,
     );
     let lir_program = lir::lower_to_lir(mir_program);
-    let llvm_generator = LLVMGenerator::new();
+    let llvm_generator = LLVMGenerator::new(false);
     llvm_generator.generate_program(&lir_program);
     // If we got here, it means the llvm lowering passed.
 }
@@ -169,7 +172,7 @@ pub fn assert_compilation_fails(input_path: &str) {
     );
 }
 
-pub fn run_integration_test_with_opts(input_path: &str, opts: &[&str]) {
+pub fn run_integration_test_with_opts(input_path: &str, opts: &[&str], gc: bool) {
     let input_path_buf = PathBuf::from(input_path);
     let stem = input_path_buf.file_stem().unwrap().to_str().unwrap();
     let expected_output_path = input_path_buf.with_extension("output");
@@ -195,6 +198,10 @@ pub fn run_integration_test_with_opts(input_path: &str, opts: &[&str]) {
         .arg("--output-dir")
         .arg(temp_dir.path())
         .args(opts);
+
+    if !gc {
+        command.arg("--no-gc");
+    }
 
     let compile_output = command
         .output()
@@ -295,64 +302,77 @@ pub fn assert_runtime_error(input_path: &str) {
 
 /// Runs an integration test without any opts.
 pub fn run_integration_test(input_path: &str) {
-    run_integration_test_with_opts(input_path, &[]);
+    run_integration_test_with_opts(input_path, &[], true);
+    run_integration_test_with_opts(input_path, &[], false);
 }
 
 /// Runs an integration test with all opts.
 pub fn run_integration_test_with_all_opts(input_path: &str) {
-    run_integration_test_with_opts(input_path, &["-O"]);
+    run_integration_test_with_opts(input_path, &["-O"], true);
+    run_integration_test_with_opts(input_path, &["-O"], false);
 }
 
 /// Runs an integration test with Constant Folding and Propagation.
 pub fn run_integration_test_with_const_prop(input_path: &str) {
-    run_integration_test_with_opts(input_path, &["--opt-const-prop"]);
+    run_integration_test_with_opts(input_path, &["--opt-const-prop"], true);
+    run_integration_test_with_opts(input_path, &["--opt-const-prop"], false);
 }
 
 /// Runs an integration test with Branch Folding and unreachable block elimination.
 pub fn run_integration_test_with_branch_elimination(input_path: &str) {
-    run_integration_test_with_opts(input_path, &["--opt-branch-fold", "--opt-dbe"]);
+    run_integration_test_with_opts(input_path, &["--opt-branch-fold", "--opt-dbe"], true);
+    run_integration_test_with_opts(input_path, &["--opt-branch-fold", "--opt-dbe"], false);
 }
 
 pub fn run_integration_test_with_dbe(input_path: &str) {
-    run_integration_test_with_opts(input_path, &["--opt-dbe"]);
+    run_integration_test_with_opts(input_path, &["--opt-dbe"], true);
+    run_integration_test_with_opts(input_path, &["--opt-dbe"], false);
 }
 
 /// Runs an integration test with only Dead Code Elimination.
 pub fn run_integration_test_with_dce(input_path: &str) {
-    run_integration_test_with_opts(input_path, &["--opt-dce"]);
+    run_integration_test_with_opts(input_path, &["--opt-dce"], true);
+    run_integration_test_with_opts(input_path, &["--opt-dce"], false);
 }
 
 /// Runs an integration test with only GCSE.
 pub fn run_integration_test_with_gcse(input_path: &str) {
-    run_integration_test_with_opts(input_path, &["--opt-gcse"]);
+    run_integration_test_with_opts(input_path, &["--opt-gcse"], true);
+    run_integration_test_with_opts(input_path, &["--opt-gcse"], false);
 }
 
 /// Runs an integration test with only Copy Propagation.
 pub fn run_integration_test_with_copy_prop(input_path: &str) {
-    run_integration_test_with_opts(input_path, &["--opt-copy-prop"]);
+    run_integration_test_with_opts(input_path, &["--opt-copy-prop"], true);
+    run_integration_test_with_opts(input_path, &["--opt-copy-prop"], false);
 }
 
 /// Runs an integration test with only Dead Function Elimination.
 pub fn run_integration_test_with_dead_function(input_path: &str) {
-    run_integration_test_with_opts(input_path, &["--opt-dead-function"]);
+    run_integration_test_with_opts(input_path, &["--opt-dead-function"], true);
+    run_integration_test_with_opts(input_path, &["--opt-dead-function"], false);
 }
 
 /// Runs an integration test with only Function Inlining.
 pub fn run_integration_test_with_function_inline(input_path: &str) {
-    run_integration_test_with_opts(input_path, &["--opt-inline"]);
+    run_integration_test_with_opts(input_path, &["--opt-inline"], true);
+    run_integration_test_with_opts(input_path, &["--opt-inline"], false);
 }
 
 /// Runs an integration test with only Phi Elimination.
 pub fn run_integration_test_with_phi_elimination(input_path: &str) {
-    run_integration_test_with_opts(input_path, &["--opt-phi-elimination"]);
+    run_integration_test_with_opts(input_path, &["--opt-phi-elimination"], true);
+    run_integration_test_with_opts(input_path, &["--opt-phi-elimination"], false);
 }
 
 /// Runs an integration test with only Empty Block Elimination.
 pub fn run_integration_test_with_empty_block(input_path: &str) {
-    run_integration_test_with_opts(input_path, &["--opt-empty-block"]);
+    run_integration_test_with_opts(input_path, &["--opt-empty-block"], true);
+    run_integration_test_with_opts(input_path, &["--opt-empty-block"], false);
 }
 
 /// Runs an integration test with only Block Merging.
 pub fn run_integration_test_with_block_merge(input_path: &str) {
-    run_integration_test_with_opts(input_path, &["--opt-block-merge"]);
+    run_integration_test_with_opts(input_path, &["--opt-block-merge"], true);
+    run_integration_test_with_opts(input_path, &["--opt-block-merge"], false);
 }

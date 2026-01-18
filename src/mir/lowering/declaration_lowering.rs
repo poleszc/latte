@@ -150,7 +150,7 @@ mod declaration_tests {
     use std::collections::HashMap;
 
     fn setup_ctx() -> MIRLoweringContext {
-        MIRLoweringContext::new(SymbolTable::new())
+        MIRLoweringContext::new(SymbolTable::new(), false)
     }
 
     #[test]
@@ -286,7 +286,7 @@ mod declaration_tests {
         };
         st.define_class(class_info).unwrap();
 
-        let mut ctx = MIRLoweringContext::new(st);
+        let mut ctx = MIRLoweringContext::new(st, false);
         let t_class_def = TClassDef {
             name: Ident {
                 name: StrID::from("Point"),

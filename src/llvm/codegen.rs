@@ -23,16 +23,17 @@ pub struct LLVMGenerator<'a> {
     lir_block_to_last_llvm_label: HashMap<BlockID, String>,
     current_block_split_count: usize,
     error_block_label: Option<String>,
+    gc_enabled: bool,
 }
 
 impl<'a> Default for LLVMGenerator<'a> {
     fn default() -> Self {
-        Self::new()
+        Self::new(true)
     }
 }
 
 impl<'a> LLVMGenerator<'a> {
-    pub fn new() -> Self {
+    pub fn new(gc_enabled: bool) -> Self {
         Self {
             output: String::new(),
             string_constants: HashMap::new(),
@@ -42,6 +43,7 @@ impl<'a> LLVMGenerator<'a> {
             lir_block_to_last_llvm_label: HashMap::new(),
             current_block_split_count: 0,
             error_block_label: None,
+            gc_enabled,
         }
     }
 
@@ -933,7 +935,7 @@ impl<'a> LLVMGenerator<'a> {
 impl<'a> LLVMGenerator<'a> {
     fn is_string(&self, reg_id: RegisterID) -> bool {
         let func = self.current_function.unwrap();
-        matches!(func.registers[reg_id.0].typ.kind, TypeKind::String)
+        self.gc_enabled && matches!(func.registers[reg_id.0].typ.kind, TypeKind::String)
     }
     fn llvm_type(&self, typ: &Type) -> String {
         match &typ.kind {
@@ -1018,7 +1020,7 @@ mod llvm_format_tests {
 
     #[test]
     fn test_llvm_string_constant_escaping() {
-        let mut generator = LLVMGenerator::new();
+        let mut generator = LLVMGenerator::new(false);
         let val = LIRValue::StringConst("Hello \"World\"\n".to_string());
         let formatted = generator.format_value(&val);
 
@@ -1030,7 +1032,7 @@ mod llvm_format_tests {
 
     #[test]
     fn test_type_mapping() {
-        let generator = LLVMGenerator::new();
+        let generator = LLVMGenerator::new(false);
         let ty_int = Type {
             kind: TypeKind::Int,
             position: SourcePosition(0, 0),

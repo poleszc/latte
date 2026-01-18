@@ -478,7 +478,7 @@ mod statement_tests {
     #[test]
     fn test_lower_increment() {
         // i++ -> i = i + 1
-        let mut ctx = MIRLoweringContext::new(SymbolTable::new());
+        let mut ctx = MIRLoweringContext::new(SymbolTable::new(), false);
         let ty_int = Type {
             kind: TypeKind::Int,
             position: SourcePosition(0, 0),
