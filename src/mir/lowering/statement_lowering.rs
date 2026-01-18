@@ -56,10 +56,10 @@ impl MIRLoweringContext {
             } => self.lower_for_each(element_type, item_name, collection, body, stmt.position),
             TStmtKind::Expr(expr) => {
                 let result = self.lower_expr(expr);
-                if matches!(expr.typ.kind, TypeKind::String) {
-                    if let MIRValue::Temp(temp_id) = result {
-                        self.builder().emit_drop_temp(temp_id, stmt.position);
-                    }
+                if matches!(expr.typ.kind, TypeKind::String)
+                    && let MIRValue::Temp(temp_id) = result
+                {
+                    self.builder().emit_drop_temp(temp_id, stmt.position);
                 }
             }
         }
@@ -144,7 +144,7 @@ impl MIRLoweringContext {
         } else {
             None
         };
-        
+
         let locals_to_drop: Vec<LocalID> = self.variable_map.values().cloned().collect();
 
         for local_id in locals_to_drop {

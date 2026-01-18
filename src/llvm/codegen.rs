@@ -607,10 +607,10 @@ impl<'a> LLVMGenerator<'a> {
             call_args.join(", ")
         ));
 
-        if let Some(dest_reg) = dest {
-            if ret_type == "i8*" && self.is_string(dest_reg) {
-                self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest_reg.0));
-            }
+        if let Some(dest_reg) = dest
+            && self.is_string(dest_reg)
+        {
+            self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest_reg.0));
         }
     }
 

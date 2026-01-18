@@ -236,16 +236,16 @@ impl MIRLoweringContext {
             lhs.position,
         );
 
-        if self.is_reference_counted_type(&lhs.typ) {
-            if let MIRValue::Temp(id) = lhs_val {
-                self.builder().emit_drop_temp(id, lhs.position);
-            }
+        if self.is_reference_counted_type(&lhs.typ)
+            && let MIRValue::Temp(id) = lhs_val
+        {
+            self.builder().emit_drop_temp(id, lhs.position);
         }
 
-        if self.is_reference_counted_type(&rhs.typ) {
-            if let MIRValue::Temp(id) = rhs_val {
-                self.builder().emit_drop_temp(id, rhs.position);
-            }
+        if self.is_reference_counted_type(&rhs.typ)
+            && let MIRValue::Temp(id) = rhs_val
+        {
+            self.builder().emit_drop_temp(id, rhs.position);
         }
         MIRValue::Temp(temp)
     }
@@ -286,10 +286,10 @@ impl MIRLoweringContext {
             .iter()
             .enumerate()
             .filter_map(|(i, arg_val)| {
-                if self.is_reference_counted_type(&args[i].typ) {
-                    if let MIRValue::Temp(id) = arg_val {
-                        return Some((i, *id));
-                    }
+                if self.is_reference_counted_type(&args[i].typ)
+                    && let MIRValue::Temp(id) = arg_val
+                {
+                    return Some((i, *id));
                 }
                 None
             })
@@ -347,10 +347,10 @@ impl MIRLoweringContext {
             .iter()
             .enumerate()
             .filter_map(|(i, arg_val)| {
-                if self.is_reference_counted_type(&args[i].typ) {
-                    if let MIRValue::Temp(id) = arg_val {
-                        return Some((i, *id));
-                    }
+                if self.is_reference_counted_type(&args[i].typ)
+                    && let MIRValue::Temp(id) = arg_val
+                {
+                    return Some((i, *id));
                 }
                 None
             })
