@@ -1,0 +1,23 @@
+void foo(string s) {
+    // return s + "!";
+}
+
+string goo(string s) {
+    return s + "!";
+}
+
+void test_multiple_args(string a, string b, string c) {
+    printString(a);
+}
+
+
+int main() {
+    string s1 = "str"+"ing"; 
+    // s1 = s1 + "ing";
+    foo(s1);
+    
+    // string s2 = global_func(s1); 
+    return 0;
+}
+
+

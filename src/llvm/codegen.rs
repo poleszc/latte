@@ -6,6 +6,7 @@ use crate::{
         LIRTerminator, LIRValue, RegisterID,
     },
     parser::{Type, TypeKind},
+    utils::StrID,
 };
 
 pub struct LLVMGenerator<'a> {
@@ -13,6 +14,7 @@ pub struct LLVMGenerator<'a> {
     string_constants: HashMap<String, String>,
     next_unique_id: usize,
     current_function: Option<&'a LIRFunction>,
+    classes: Option<&'a HashMap<StrID, LIRClass>>,
     // A mapping from LIR BlockID to the name of the last label ending the block.
     // This is a super ugly approach, since array accesses and integer division
     // cause new blocks to appear which makes the phi functions generated in LIR invalid.
@@ -36,6 +38,7 @@ impl<'a> LLVMGenerator<'a> {
             string_constants: HashMap::new(),
             next_unique_id: 0,
             current_function: None,
+            classes: None,
             lir_block_to_last_llvm_label: HashMap::new(),
             current_block_split_count: 0,
             error_block_label: None,
@@ -44,6 +47,7 @@ impl<'a> LLVMGenerator<'a> {
 
     /// Generate a LLVM program from LIR program.
     pub fn generate_program(mut self, program: &'a LIRProgram) -> String {
+        self.classes = Some(&program.classes);
         // Emit builtins.
         self.emit_preambule();
 
@@ -164,8 +168,8 @@ impl<'a> LLVMGenerator<'a> {
             "declare i1 @stringNotEqual(i8*, i8*)",
             "declare i32 @stringLength(i8*)",
             "declare i8* @calloc(i64, i64)",
-            "declare i8* @increment_ref(i8*)",
-            "declare i8* @decrement_ref(i8*)",
+            "declare void @increment_ref(i8*)",
+            "declare void @decrement_ref(i8*)",
         ];
         for decl in decls {
             self.emit_line(decl);
@@ -301,10 +305,10 @@ impl<'a> LLVMGenerator<'a> {
             LIROperation::Assign => {
                 let dest = instr.destination.unwrap();
                 // Increment the reference counter.
-                if self.is_string(dest) {
-                    let val_to_inc = self.format_value(&instr.operands[0]);
-                    self.emit_instr(format!("call void @increment_ref(i8* {})", val_to_inc));
-                }
+                // if self.is_string(dest) {
+                //     let val_to_inc = self.format_value(&instr.operands[0]);
+                //     self.emit_instr(format!("call void @increment_ref(i8* {})", val_to_inc));
+                // }
                 let val = self.format_value(&instr.operands[0]);
                 let typ = self.llvm_type_from_register(dest);
                 self.emit_instr(format!("%r{} = bitcast {} {} to {}", dest.0, typ, val, typ));
@@ -727,6 +731,7 @@ impl<'a> LLVMGenerator<'a> {
         let id = dest.0;
 
         // Calculate the size of the object to allocate.
+        // https://stackoverflow.com/questions/14608250/how-can-i-find-the-size-of-a-type
         let size_tmp = format!("%size_temp_{}", id);
         let size_int = format!("%size_{}", id);
         self.emit_instr(format!(
@@ -754,11 +759,11 @@ impl<'a> LLVMGenerator<'a> {
             "{} = getelementptr %class.{}, %class.{}* %r{}, i32 0, i32 0",
             vptr_ptr, class_name, class_name, id
         ));
+        let class = self.classes.unwrap().get(class_name).unwrap();
+        let vtable_size = class.vtable.len().max(1);
         let vtable_gep = format!(
             "getelementptr ([{} x i8*], [{} x i8*]* @vtable.{}, i32 0, i32 0)",
-            class_name.len(),
-            class_name.len(),
-            class_name
+            vtable_size, vtable_size, class_name
         );
         self.emit_instr(format!("store i8** {}, i8*** {}", vtable_gep, vptr_ptr));
     }
