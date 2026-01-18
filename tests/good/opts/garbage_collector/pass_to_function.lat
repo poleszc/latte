@@ -1,5 +1,7 @@
 void foo(string s) {
+    // printString("Test4");
     // return s + "!";
+    // return;
 }
 
 string goo(string s) {
@@ -12,9 +14,17 @@ void test_multiple_args(string a, string b, string c) {
 
 
 int main() {
+    // printString("Test1");
     string s1 = "str"+"ing"; 
+    // printString("Test2");
     // s1 = s1 + "ing";
-    foo(s1);
+
+    // foo(s1);
+    string s = goo(s1);
+    
+    // test_multiple_args(s1, s1, s1);
+
+    // printString("Test5");
     
     // string s2 = global_func(s1); 
     return 0;

@@ -55,7 +55,12 @@ impl MIRLoweringContext {
                 body,
             } => self.lower_for_each(element_type, item_name, collection, body, stmt.position),
             TStmtKind::Expr(expr) => {
-                self.lower_expr(expr);
+                let result = self.lower_expr(expr);
+                if matches!(expr.typ.kind, TypeKind::String) {
+                    if let MIRValue::Temp(temp_id) = result {
+                        self.builder().emit_drop_temp(temp_id, stmt.position);
+                    }
+                }
             }
         }
     }
@@ -66,7 +71,9 @@ impl MIRLoweringContext {
 
         self.lower_stmt(stmt, &mut scoped_locals);
 
-        self.emit_drops(&scoped_locals, stmt.position);
+        if !self.builder().is_current_block_terminated() {
+            self.emit_drops(&scoped_locals, stmt.position);
+        }
         self.variable_map = old_variable_map;
     }
 
@@ -137,7 +144,8 @@ impl MIRLoweringContext {
         } else {
             None
         };
-        let locals_to_drop: Vec<LocalID> = self.variable_map.values().cloned().collect();
+        
+        let mut locals_to_drop: Vec<LocalID> = self.variable_map.values().cloned().collect();
 
         for local_id in locals_to_drop {
             // Skip the variable we returning.
@@ -413,6 +421,10 @@ impl MIRLoweringContext {
         // Loop body.
         self.builder().set_current_block(loop_body);
 
+        if self.is_reference_counted_type(element_type) {
+            self.builder().emit_drop(item_local, stmt_position);
+        }
+
         self.builder().emit_array_get(
             MIRPlace::Local(item_local),
             collection_val.clone(),
@@ -446,6 +458,9 @@ impl MIRLoweringContext {
             self.builder().emit_jump(loop_start, stmt_position);
         }
 
+        if self.is_reference_counted_type(element_type) {
+            self.builder().emit_drop(item_local, stmt_position);
+        }
         // Leave the loop.
         self.builder().set_current_block(loop_exit);
         self.variable_map = old_variable_map;

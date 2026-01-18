@@ -305,10 +305,10 @@ impl<'a> LLVMGenerator<'a> {
             LIROperation::Assign => {
                 let dest = instr.destination.unwrap();
                 // Increment the reference counter.
-                // if self.is_string(dest) {
-                //     let val_to_inc = self.format_value(&instr.operands[0]);
-                //     self.emit_instr(format!("call void @increment_ref(i8* {})", val_to_inc));
-                // }
+                if self.is_string(dest) {
+                    let val_to_inc = self.format_value(&instr.operands[0]);
+                    self.emit_instr(format!("call void @increment_ref(i8* {})", val_to_inc));
+                }
                 let val = self.format_value(&instr.operands[0]);
                 let typ = self.llvm_type_from_register(dest);
                 self.emit_instr(format!("%r{} = bitcast {} {} to {}", dest.0, typ, val, typ));
@@ -525,6 +525,9 @@ impl<'a> LLVMGenerator<'a> {
                 "%r{} = call {} @{}({})",
                 dest.0, ret_type, func_name, args_str
             ));
+            if self.is_string(dest) {
+                self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest.0));
+            }
         } else {
             self.emit_instr(format!("call void @{}({})", func_name, args_str));
         }
@@ -603,6 +606,12 @@ impl<'a> LLVMGenerator<'a> {
             method_ptr,
             call_args.join(", ")
         ));
+
+        if let Some(dest_reg) = dest {
+            if ret_type == "i8*" && self.is_string(dest_reg) {
+                self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest_reg.0));
+            }
+        }
     }
 
     fn emit_array_op(&mut self, instr: &LIRInstruction, block_id: BlockID) {
@@ -638,6 +647,10 @@ impl<'a> LLVMGenerator<'a> {
                     "%r{} = load {}, {}* {}",
                     dest.0, elem_type, elem_type, elem_ptr
                 ));
+
+                if self.is_string(dest) {
+                    self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest.0));
+                }
             }
             LIROperation::ArraySet => {
                 let idx = self.format_value(&instr.operands[1]);
@@ -664,7 +677,9 @@ impl<'a> LLVMGenerator<'a> {
                     elem_ptr, element_typ, element_typ, data_ptr, idx
                 ));
 
-                if element_typ == "i8*" {
+                if let LIRValue::Register(reg_id) = &instr.operands[2]
+                    && self.is_string(*reg_id)
+                {
                     let old_val = format!("%old_arr_val_{}", id);
                     self.emit_instr(format!("{} = load i8*, i8** {}", old_val, elem_ptr));
                     // Decrement the RC on the old value.
@@ -797,6 +812,10 @@ impl<'a> LLVMGenerator<'a> {
                     "%r{} = load {}, {}* {}",
                     dest.0, field_type, field_type, field_ptr
                 ));
+
+                if self.is_string(dest) {
+                    self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest.0));
+                }
             }
             LIROperation::FieldSet => {
                 let val = self.format_value(&instr.operands[2]);
@@ -804,7 +823,9 @@ impl<'a> LLVMGenerator<'a> {
                 let id = self.unique_id();
 
                 // Handle the RC if it's a string.
-                if val_type == "i8*" {
+                if let LIRValue::Register(reg_id) = &instr.operands[2]
+                    && self.is_string(*reg_id)
+                {
                     let old_val = format!("%old_f_{}", id);
                     let field_ptr = format!("%f_ptr_gc_{}", id);
                     self.emit_instr(format!(

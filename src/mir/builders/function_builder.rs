@@ -177,6 +177,15 @@ impl MIRFunctionBuilder {
         });
     }
 
+    pub fn emit_drop_temp(&mut self, temp: TempID, position: SourcePosition) {
+        self.emit(MIRInstruction {
+            operation: MIROperation::DropString,
+            destination: None,
+            operands: vec![MIRValue::Temp(temp)],
+            source_position: position,
+        });
+    }
+
     pub fn emit_binary(
         &mut self,
         operation: MIROperation,

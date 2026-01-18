@@ -125,6 +125,8 @@ impl MIRLoweringContext {
         // We either add the void return or mark the block as unreachable.
         if !self.builder().is_current_block_terminated() {
             if matches!(func_def.return_type.kind, TypeKind::Void) {
+                let params_to_drop: Vec<LocalID> = self.variable_map.values().cloned().collect();
+                self.emit_drops(&params_to_drop, func_def.position);
                 let builder = self.builder();
                 if !builder.is_current_block_terminated() {
                     builder.emit_return(None, func_def.position);
