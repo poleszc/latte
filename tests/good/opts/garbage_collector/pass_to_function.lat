@@ -15,22 +15,19 @@ string test_multiple_args2(string a, string b, string c) {
 
 
 int main() {
-    // string s1 = "str"+"ing"; 
-    // string s2 = "str"+"ing"+"er"; // This is broken.
-    // s1 = s1 + "ing";
+    string s1 = "str"+"ing"; 
+    string s2 = "str"+"ing"+"er";
+    string s3 = s1 + "asd";
     "st" + "as"+ "as";
 
-
-    // foo(s1);
-    // goo(s1);
-    // string s = goo(s1);
+    foo(s1);
+    goo(s1);
+    string s = goo(s1);
     
-    // test_multiple_args(s1, s1, s1);
-    // string x = test_multiple_args2(s1, s1, s1);
-
-    // printString("Test5");
+    test_multiple_args(s1, s1, s1);
+    string x = test_multiple_args2(s1, s1, s1);
     
-    // string s2 = global_func(s1); 
+    // string s4 = global_func(s1); // This produces two errors...
     return 0;
 }
 

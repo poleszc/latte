@@ -229,7 +229,19 @@ impl MIRLoweringContext {
 
         let temp = self.builder().create_temp(result_type);
         self.builder()
-            .emit_binary(mir_op, MIRPlace::Temp(temp), lhs_val, rhs_val, lhs.position);
+            .emit_binary(mir_op, MIRPlace::Temp(temp), lhs_val.clone(), rhs_val.clone(), lhs.position);
+
+        if self.is_reference_counted_type(&lhs.typ) {
+            if let MIRValue::Temp(id) = lhs_val {
+                self.builder().emit_drop_temp(id, lhs.position);
+            }
+        }
+
+        if self.is_reference_counted_type(&rhs.typ) {
+            if let MIRValue::Temp(id) = rhs_val {
+                self.builder().emit_drop_temp(id, rhs.position);
+            }
+        }
         MIRValue::Temp(temp)
     }
 
