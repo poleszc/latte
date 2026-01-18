@@ -373,6 +373,7 @@ impl LIRFunctionBuilder {
             MIROperation::FieldGet => LIROperation::FieldGet,
             MIROperation::FieldSet => LIROperation::FieldSet,
             MIROperation::IsNull => LIROperation::IsNull,
+            MIROperation::DropString => LIROperation::DropString,
         }
     }
 

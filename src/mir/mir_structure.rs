@@ -39,6 +39,7 @@ pub enum MIROperation {
     Assign,
     Call,
     VCall,
+    DropString,
 
     // Arithmetic
     IntAdd,

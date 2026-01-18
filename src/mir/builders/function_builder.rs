@@ -168,6 +168,15 @@ impl MIRFunctionBuilder {
         });
     }
 
+    pub fn emit_drop(&mut self, local: LocalID, position: SourcePosition) {
+        self.emit(MIRInstruction {
+            operation: MIROperation::DropString,
+            destination: None,
+            operands: vec![MIRValue::Local(local)],
+            source_position: position,
+        });
+    }
+
     pub fn emit_binary(
         &mut self,
         operation: MIROperation,
