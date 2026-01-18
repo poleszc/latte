@@ -1,6 +1,6 @@
 void foo(string s) {
     // printString("Test4");
-    // return s + "!";
+    return s + "!";
     // return;
 }
 
@@ -19,8 +19,9 @@ int main() {
     // printString("Test2");
     // s1 = s1 + "ing";
 
-    // foo(s1);
-    string s = goo(s1);
+    foo(s1);
+    // goo(s1);
+    // string s = goo(s1);
     
     // test_multiple_args(s1, s1, s1);
 

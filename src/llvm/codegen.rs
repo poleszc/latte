@@ -305,10 +305,10 @@ impl<'a> LLVMGenerator<'a> {
             LIROperation::Assign => {
                 let dest = instr.destination.unwrap();
                 // Increment the reference counter.
-                if self.is_string(dest) {
-                    let val_to_inc = self.format_value(&instr.operands[0]);
-                    self.emit_instr(format!("call void @increment_ref(i8* {})", val_to_inc));
-                }
+                // if self.is_string(dest) {
+                //     let val_to_inc = self.format_value(&instr.operands[0]);
+                //     self.emit_instr(format!("call void @increment_ref(i8* {})", val_to_inc));
+                // }
                 let val = self.format_value(&instr.operands[0]);
                 let typ = self.llvm_type_from_register(dest);
                 self.emit_instr(format!("%r{} = bitcast {} {} to {}", dest.0, typ, val, typ));
@@ -525,9 +525,9 @@ impl<'a> LLVMGenerator<'a> {
                 "%r{} = call {} @{}({})",
                 dest.0, ret_type, func_name, args_str
             ));
-            if self.is_string(dest) {
-                self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest.0));
-            }
+            // if self.is_string(dest) {
+            //     self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest.0));
+            // }
         } else {
             self.emit_instr(format!("call void @{}({})", func_name, args_str));
         }

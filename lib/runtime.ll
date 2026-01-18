@@ -131,7 +131,7 @@ err:
     unreachable
 ok:
     %rc_ptr= bitcast i8* %raw to i64*
-    store i64 0, i64* %rc_ptr
+    store i64 1, i64* %rc_ptr
     ; Just for demo purposes.
     %msg_ptr2 = getelementptr [5 x i8], [5 x i8]* @inc, i32 0, i32 0
     call i32 (i8*, ...) @printf(i8* %msg_ptr2)
