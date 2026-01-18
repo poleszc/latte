@@ -228,8 +228,13 @@ impl MIRLoweringContext {
         let result_type = self.binary_op_result_type(op, &lhs.typ, lhs.position);
 
         let temp = self.builder().create_temp(result_type);
-        self.builder()
-            .emit_binary(mir_op, MIRPlace::Temp(temp), lhs_val.clone(), rhs_val.clone(), lhs.position);
+        self.builder().emit_binary(
+            mir_op,
+            MIRPlace::Temp(temp),
+            lhs_val.clone(),
+            rhs_val.clone(),
+            lhs.position,
+        );
 
         if self.is_reference_counted_type(&lhs.typ) {
             if let MIRValue::Temp(id) = lhs_val {
@@ -277,6 +282,19 @@ impl MIRLoweringContext {
             unreachable!()
         };
 
+        let temps_to_drop: Vec<(usize, TempID)> = arg_values
+            .iter()
+            .enumerate()
+            .filter_map(|(i, arg_val)| {
+                if self.is_reference_counted_type(&args[i].typ) {
+                    if let MIRValue::Temp(id) = arg_val {
+                        return Some((i, *id));
+                    }
+                }
+                None
+            })
+            .collect();
+
         if !matches!(return_type.kind, TypeKind::Void) {
             let temp = self.builder().create_temp(*return_type);
             self.builder().emit_call(
@@ -285,10 +303,18 @@ impl MIRLoweringContext {
                 arg_values,
                 position,
             );
+            // Drop all temps passed as arguments.
+            for (_, id) in temps_to_drop {
+                self.builder().emit_drop_temp(id, position);
+            }
             MIRValue::Temp(temp)
         } else {
             self.builder()
                 .emit_call(None, func_ident.name, arg_values, position);
+            // Drop all temps passed as arguments.
+            for (_, id) in temps_to_drop {
+                self.builder().emit_drop_temp(id, position);
+            }
             MIRValue::Unit
         }
     }
@@ -317,6 +343,19 @@ impl MIRLoweringContext {
             .find(|(_, func_info)| func_info.ident.name == method_name)
             .expect("Method not found in vtable");
 
+        let temps_to_drop: Vec<(usize, TempID)> = arg_values
+            .iter()
+            .enumerate()
+            .filter_map(|(i, arg_val)| {
+                if self.is_reference_counted_type(&args[i].typ) {
+                    if let MIRValue::Temp(id) = arg_val {
+                        return Some((i, *id));
+                    }
+                }
+                None
+            })
+            .collect();
+
         if !matches!(return_type.kind, TypeKind::Void) {
             let temp = self.builder().create_temp(return_type.clone());
             self.builder().emit_virtual_call(
@@ -326,10 +365,18 @@ impl MIRLoweringContext {
                 arg_values,
                 position,
             );
+            // Drop all temps passed as arguments.
+            for (_, id) in temps_to_drop {
+                self.builder().emit_drop_temp(id, position);
+            }
             MIRValue::Temp(temp)
         } else {
             self.builder()
                 .emit_virtual_call(None, object_val, vtable_index, arg_values, position);
+            // Drop all temps passed as arguments.
+            for (_, id) in temps_to_drop {
+                self.builder().emit_drop_temp(id, position);
+            }
             MIRValue::Unit
         }
     }

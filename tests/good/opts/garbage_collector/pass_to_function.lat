@@ -19,6 +19,8 @@ int main() {
     string s2 = "str"+"ing"+"er";
     string s3 = s1 + "asd";
     "st" + "as"+ "as";
+    
+    foo("asd" + "asd");
 
     foo(s1);
     goo(s1);
