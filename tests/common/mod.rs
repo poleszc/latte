@@ -291,6 +291,7 @@ pub fn run_integration_test_with_gc_checker(input_path: &str, opts: &[&str]) {
         .arg(temp_dir.path())
         .arg("--runtime-path")
         .arg("tests/common/runtime_debug.ll")
+        .arg("--opt-gc")
         .args(opts);
 
     let compile_output = command

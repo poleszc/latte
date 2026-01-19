@@ -65,7 +65,7 @@ fn lower_lir_to_llvm_and_save(
     args: &LatteArgs,
 ) -> Result<(), CompilerError> {
     println!("[LLVM]: Lowering to LLVM...");
-    let llvm_generator = LLVMGenerator::new(!args.no_gc);
+    let llvm_generator = LLVMGenerator::new(args.opt_gc);
     let llvm_ir = llvm_generator.generate_program(lir_program);
     fs::write(ll_path, llvm_ir)?;
     println!("[LLVM]: Dumped LLVM IR to file: {}", ll_path.display());

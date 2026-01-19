@@ -87,6 +87,6 @@ pub struct LatteArgs {
     #[arg(short = 'v', long)]
     pub verbose_opts: bool,
     /// Disable Garbage Collection.
-    #[arg(long, default_value_t)]
-    pub no_gc: bool,
+    #[arg(long)]
+    pub opt_gc: bool,
 }
