@@ -195,6 +195,16 @@ impl<'a> LLVMGenerator<'a> {
         writeln!(self.output, "  {}:", label.as_ref()).unwrap();
     }
 
+    fn emit_gc_increment(&mut self, val: &str) {
+        self.mark_builtin_as_used(StrID::from("increment_ref"));
+        self.emit_instr(format!("call void @increment_ref(i8* {})", val));
+    }
+
+    fn emit_gc_decrement(&mut self, val: &str) {
+        self.mark_builtin_as_used(StrID::from("decrement_ref"));
+        self.emit_instr(format!("call void @decrement_ref(i8* {})", val));
+    }
+
     fn emit_function(&mut self, func: &LIRFunction) {
         self.lir_block_to_last_llvm_label.clear();
         self.error_block_label = None;
@@ -284,8 +294,7 @@ impl<'a> LLVMGenerator<'a> {
         if let Some(params) = parameter_registers {
             for reg in params {
                 if self.is_string(*reg) {
-                    self.mark_builtin_as_used(StrID::from("increment_ref"));
-                    self.emit_instr(format!("call void @increment_ref(i8* %r{})", reg.0));
+                    self.emit_gc_increment(&format!("%r{}", reg.0));
                 }
             }
         }
@@ -331,8 +340,7 @@ impl<'a> LLVMGenerator<'a> {
 
             LIROperation::DropString => {
                 let val = self.format_value(&instr.operands[0]);
-                self.mark_builtin_as_used(StrID::from("decrement_ref"));
-                self.emit_instr(format!("call void @decrement_ref(i8* {})", val));
+                self.emit_gc_decrement(&val);
             }
             LIROperation::IntAdd | LIROperation::IntSub | LIROperation::IntMul => {
                 self.emit_arithmetic(instr);
@@ -636,7 +644,7 @@ impl<'a> LLVMGenerator<'a> {
         if let Some(dest_reg) = dest
             && self.is_string(dest_reg)
         {
-            self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest_reg.0));
+            self.emit_gc_increment(&format!("%r{}", dest_reg.0));
         }
     }
 
@@ -675,8 +683,7 @@ impl<'a> LLVMGenerator<'a> {
                 ));
 
                 if self.is_string(dest) {
-                    self.mark_builtin_as_used(StrID::from("increment_ref"));
-                    self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest.0));
+                    self.emit_gc_increment(&format!("%r{}", dest.0));
                 }
             }
             LIROperation::ArraySet => {
@@ -707,14 +714,12 @@ impl<'a> LLVMGenerator<'a> {
                 if let LIRValue::Register(reg_id) = &instr.operands[2]
                     && self.is_string(*reg_id)
                 {
-                    self.mark_builtin_as_used(StrID::from("increment_ref"));
-                    self.mark_builtin_as_used(StrID::from("decrement_ref"));
                     let old_val = format!("%old_arr_val_{}", id);
                     self.emit_instr(format!("{} = load i8*, i8** {}", old_val, elem_ptr));
                     // Decrement the RC on the old value.
-                    self.emit_instr(format!("call void @decrement_ref(i8* {})", old_val));
+                    self.emit_gc_decrement(&old_val);
                     // Increment the RC on the new value.
-                    self.emit_instr(format!("call void @increment_ref(i8* {})", val));
+                    self.emit_gc_increment(&val);
                 }
 
                 self.emit_instr(format!(
@@ -843,8 +848,7 @@ impl<'a> LLVMGenerator<'a> {
                 ));
 
                 if self.is_string(dest) {
-                    self.mark_builtin_as_used(StrID::from("increment_ref"));
-                    self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest.0));
+                    self.emit_gc_increment(&format!("%r{}", dest.0));
                 }
             }
             LIROperation::FieldSet => {
@@ -863,12 +867,10 @@ impl<'a> LLVMGenerator<'a> {
                         field_ptr, class_name, class_name, obj_val, field_idx
                     ));
                     self.emit_instr(format!("{} = load i8*, i8** {}", old_val, field_ptr));
-                    self.mark_builtin_as_used(StrID::from("increment_ref"));
-                    self.mark_builtin_as_used(StrID::from("decrement_ref"));
                     // Decrement the RC on the old value.
-                    self.emit_instr(format!("call void @decrement_ref(i8* {})", old_val));
+                    self.emit_gc_decrement(&old_val);
                     // Increment the RC on the new value.
-                    self.emit_instr(format!("call void @increment_ref(i8* {})", val));
+                    self.emit_gc_increment(&val);
                 }
 
                 let field_ptr = format!("%field_set_ptr_{}", id);
