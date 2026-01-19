@@ -123,7 +123,7 @@ define i8* @alloc_string(i64 %size) {
     ; %msg_ptr = getelementptr [7 x i8], [7 x i8]* @alloc, i32 0, i32 0
     ; call i32 (i8*, ...) @printf(i8* %msg_ptr)
     %total_size = add i64 %size, 8 ; +8 for the reference counter
-    %raw = call i8* @malloc(i64 %total_size)
+    %raw = call i8* @calloc(i64 1, i64 %total_size)
     %is_null = icmp eq i8* %raw, null
     br i1 %is_null, label %err, label %ok
 err:

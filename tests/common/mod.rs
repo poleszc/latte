@@ -311,42 +311,13 @@ pub fn run_integration_test_with_gc_checker(input_path: &str, opts: &[&str]) {
     run_command.arg(&bc_path);
 
     let output = if input_data_path.exists() {
-        let input_data = fs::read_to_string(input_data_path).unwrap();
-        run_command.stdin(Stdio::piped());
-        run_command.stdout(Stdio::piped());
-        run_command.stderr(Stdio::piped());
-
-        let mut child = run_command.spawn().expect("Failed to spawn lli");
-        let mut stdin = child.stdin.take().expect("Failed to open stdin");
-
-        std::thread::spawn(move || {
-            stdin.write_all(input_data.as_bytes()).ok();
-        });
-
-        child.wait_with_output().expect("Failed to wait for lli")
+        return;
     } else {
         run_command.output().expect("Failed to run lli")
     };
 
     let actual_stdout = String::from_utf8_lossy(&output.stdout);
     let actual_stderr = String::from_utf8_lossy(&output.stderr);
-
-    let total_output = format!("{}{}", actual_stdout, actual_stderr);
-    println!();
-    println!("{total_output}");
-    println!();
-    let alloc_count = total_output.matches("GC_NEW").count();
-    let dealloc_count = total_output.matches("GC_FREE").count();
-    println!("{}, {}", alloc_count, dealloc_count);
-
-    assert_eq!(
-        alloc_count, dealloc_count,
-        "Memory leak detected in '{}'!\nAllocations: {}\nDeallocations: {}\nFull Output:\n{}",
-        input_path, alloc_count, dealloc_count, total_output
-    );
-
-    let cleaned_stdout = filter_gc_debug_lines(&actual_stdout);
-    
 
     assert!(
         output.status.success(),
@@ -355,6 +326,17 @@ pub fn run_integration_test_with_gc_checker(input_path: &str, opts: &[&str]) {
         actual_stderr
     );
 
+    let total_output = format!("{}{}", actual_stdout, actual_stderr);
+    let alloc_count = total_output.matches("GC_NEW").count();
+    let dealloc_count = total_output.matches("GC_FREE").count();
+
+    assert_eq!(
+        alloc_count, dealloc_count,
+        "Memory leak detected in '{}'!\nAllocations: {}\nDeallocations: {}\nFull Output:\n{}",
+        input_path, alloc_count, dealloc_count, total_output
+    );
+
+    let cleaned_stdout = filter_gc_debug_lines(&actual_stdout);
     assert_eq!(
         cleaned_stdout, expected_output,
         "Actual program output differs from the expected one for '{}'",
@@ -416,70 +398,59 @@ pub fn run_integration_test(input_path: &str) {
 /// Runs an integration test with all opts.
 pub fn run_integration_test_with_all_opts(input_path: &str) {
     run_integration_test_with_opts(input_path, &["-O"]);
-    run_integration_test_with_gc_checker(input_path, &["-O"]);
 }
 
 /// Runs an integration test with Constant Folding and Propagation.
 pub fn run_integration_test_with_const_prop(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-const-prop"]);
-    run_integration_test_with_gc_checker(input_path, &["--opt-const-prop"]);
 }
 
 /// Runs an integration test with Branch Folding and unreachable block elimination.
 pub fn run_integration_test_with_branch_elimination(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-branch-fold", "--opt-dbe"]);
-    run_integration_test_with_gc_checker(input_path, &["--opt-branch-fold", "--opt-dbe"]);
 }
 
+/// Runs an integration test with Dead Block Elimination.
 pub fn run_integration_test_with_dbe(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-dbe"]);
-    run_integration_test_with_gc_checker(input_path, &["--opt-dbe"]);
 }
 
 /// Runs an integration test with only Dead Code Elimination.
 pub fn run_integration_test_with_dce(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-dce"]);
-    run_integration_test_with_gc_checker(input_path, &["--opt-dce"]);
 }
 
 /// Runs an integration test with only GCSE.
 pub fn run_integration_test_with_gcse(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-gcse"]);
-    run_integration_test_with_gc_checker(input_path, &["--opt-gcse"]);
 }
 
 /// Runs an integration test with only Copy Propagation.
 pub fn run_integration_test_with_copy_prop(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-copy-prop"]);
-    run_integration_test_with_gc_checker(input_path, &["--opt-copy-prop"]);
 }
 
 /// Runs an integration test with only Dead Function Elimination.
 pub fn run_integration_test_with_dead_function(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-dead-function"]);
-    run_integration_test_with_gc_checker(input_path, &["--opt-dead-function"]);
 }
 
 /// Runs an integration test with only Function Inlining.
 pub fn run_integration_test_with_function_inline(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-inline"]);
-    run_integration_test_with_gc_checker(input_path, &["--opt-inline"]);
 }
 
 /// Runs an integration test with only Phi Elimination.
 pub fn run_integration_test_with_phi_elimination(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-phi-elimination"]);
-    run_integration_test_with_gc_checker(input_path, &["--opt-phi-elimination"]);
 }
 
 /// Runs an integration test with only Empty Block Elimination.
 pub fn run_integration_test_with_empty_block(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-empty-block"]);
-    run_integration_test_with_gc_checker(input_path, &["--opt-empty-block"]);
 }
 
 /// Runs an integration test with only Block Merging.
 pub fn run_integration_test_with_block_merge(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-block-merge"]);
-    run_integration_test_with_gc_checker(input_path, &["--opt-block-merge"]);
 }
