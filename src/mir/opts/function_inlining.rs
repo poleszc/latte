@@ -122,8 +122,7 @@ impl MIRFunctionInlining {
                 break;
             }
         }
-
-        instr_count > 0 && instr_count < self.max_func_size && !is_recursive
+        instr_count < self.max_func_size && !is_recursive
     }
 
     /// Inline all needed calls in the MIRFunction.

@@ -1,39 +1,30 @@
 # Latte - Piotr Oleszczuk, nr 448390
 ## Z rzeczy punktowanych
-- Front-end - 4
-- Backend LLVM - 8
-- Phi - 2
-- Tablice - 1
-- Struktury/Obiekty/Metody - 8
-- GCSE - 5
-- Function Inlining - 2
-- Garbage Collector dla stringów - 2
+- Front-end (4)
+- Backend LLVM (8)
+- Phi (2)
+- Tablice (1)
+- Struktury/Obiekty/Metody (8) - w tym zagnieżdżone struktury, obiekty, tablice struktur, obiekty z tablicami itp.
+- GCSE (5)
+- Function Inlining (2)
+- Garbage Collector dla stringów (2)
 
 Suma: 32
 
 ## Dodatkowe rzeczy:
 - Optymalizacje:
-  - Constant Propagation
-  - Copy Propagation
-  - Dead Code Elimination
-  - Branch Folding - usuwanie branchy jeżeli w czasie kompilacji znamy warunek skoku (np. po constant propagation).
-  - Dead Block Elimination - usuwanie nieosiągalnych bloków, które mogły powstać w wyniku branch folding.
-  - Dead Function Elimination - usuwanie nie wywoływanych funkcji.
+  - Constant Folding & Propagation - 
+  - `tests/good/opts/constant_folding_and_propagation`
+  - Copy Propagation - `tests/good/opts/copy_propagation`
+  - Dead Code Elimination - `tests/good/opts/dead_code_elimination`
+  - Branch Folding - usuwanie branchy jeżeli w czasie kompilacji znamy warunek skoku (np. po constant propagation). `tests/good/opts/branch_folding`
+  - Dead Block Elimination - usuwanie nieosiągalnych bloków, które mogły powstać w wyniku branch folding. Do przetestowania polecam uruchomić `tests/good/opts/branch_folding` z `--opt-branch-fold --opt-dbe -v`, żeby zobaczyć, że martwe bloki z branch folding'u się usuną. Ciężko jest sprawić, żeby kompilator sam z siebie wygenerował takie nieosiągalne bloki.
+  - Dead Function Elimination - usuwanie nie wywoływanych funkcji. `tests/good/opts/dead_function_elimination`
   - Empty Block Elimination - łączenie łańcuszka bloków, które zawierają tylko jump w bloku.
-  - Block Merging - łączenie łańcuszków bloków w jeden jeżeli są trywialnie połączone: (I1, I2, Jump) -> (I3, I4, Jump) -> (I5, Jump) zmieni się w (I1, I2, I3, I4, I5, Jump)
+  - Block Merging - łączenie łańcuszków bloków w jeden jeżeli są trywialnie połączone: `B0(I1, I2, Jump B1)` -> `B1(I3, I4, Jump B2)` -> `B2(I5, Jump B3)` zmieni się w `B0(I1, I2, I3, I4, I5, Jump B3)`. Do przetestowania polecam odpalić `tests/good/opts/function_inline/complex_inline.lat` z `--opt-inline --opt-block-merge -v`. 
   - Phi Elimination - eliminacja głupich phi (z jednym argumentem, lub jedną wartością dla każdego źródła)
-- Error recovery - całkiem nietrywialna logika we frontendzie, która pozwala na nie zatrzymywanie sie po wykryciu pierwszego błędu semantycznego tylko wypisanie wszystkich występujących.
-
-## Co jest zrobione
-- Pełna podstawowa wersja zadania z backend'em LLVM
-- Dodatkowo z rozszerzeń (zarówno we frontendzie i backendzie):
-  - Użycie rejestrów i phi zamiast alloca (aktualnie w generowanym LLVM IR pojawiają się jeszcze instrukcje typu `%r0 = bitcast i32 10 to i32`, czyli odpowiednik `%r0 = 10` działający nie tylko dla int'ów. To oczywiscie zniknie po pierwszym passie constant propagation)
-  - Tablice (bez tablic tablic, nie do końca jest dla mnie jasne, czy powinny one być)
-  - Struktury
-  - Obiekty
-  - Metody wirtualne
-  - Zagnieżdżone struktury, obiekty, tablice struktur, obiekty z tablicami itp.
-  - Jawna obsługa błędów wykonania takich jak dzielenie przez 0, null ptr access (poprzez wywołanie `error()` z `runtime.ll`)
+- Error recovery - całkiem nietrywialna logika we frontendzie, która pozwala na nie zatrzymywanie sie po wykryciu pierwszego błędu semantycznego tylko wypisanie wszystkich występujących. `tests/bad/semantic/error_recovery`
+- Jawna obsługa błędów wykonania takich jak dzielenie przez 0, null ptr access, albo out of bounds access (poprzez wywołanie `error()` z `runtime.ll`). `tests/bad/runtime`
 
 ## Budowanie projektu
 1) Instalacja Rust:
@@ -45,7 +36,7 @@ Suma: 32
 2) Budowanie projektu:
    - Projekt sam skompiluje się po wykonaniu skryptu `build`. Jeżeli jednak zajdzie potrzeba ponownej
     kompilacji (pomijajac już samą instalacje Rust) w katalogu głównym projektu trzeba uruchomić `make`,
-    który skompiluje projekt i przekopiuje pliki wykonywalne `latc_llvm` oraz `insc_llvm` do katalogu głównego.
+    który skompiluje projekt i przekopiuje pliki wykonywalne `latc_llvm` do katalogu głównego.
     - **Dodatkowe opcje:**
       - `make build-llvm` - przebuduje jedynie binarkę z backendem LLVM
       - `make clean` - usuwa zbudowane binarki oraz pliki `*.{mir, lir, tast.json, json, ll, bc}` z katalogu `tests/in`
@@ -55,7 +46,10 @@ Suma: 32
 ## Użycie kompilatora
 ### Podstawowe użycie
 ```bash
-# Uruchomienie `latc_llvm` na pliku z rozszerzeniem `.lat` wykona analize semantyczną i kompilacje do LLVM. W lokalizacji pliku źródłowego pojawi się plik `*.ll` z LLVM IR kompilowanego kodu, plik `*_raw.bc` z bitkodem kompilowanego pliku oraz `*.bc` z bitkodem skompilowanego pliku zlinkowanym z biblioteką `runtime.ll` z katalogu `lib/`. To ten plik '*.bc' bez sufiksu raw można odpalać za pomocą `lli`.
+# Uruchomienie `latc_llvm` na pliku z rozszerzeniem `.lat` wykona analize semantyczną i kompilacje do LLVM.
+# W lokalizacji pliku źródłowego pojawi się plik `*.ll` z LLVM IR kompilowanego kodu, plik `*_raw.bc` z 
+# bitkodem kompilowanego pliku oraz `*.bc` z bitkodem skompilowanego pliku zlinkowanym z biblioteką `runtime.ll` 
+# z katalogu `lib/`. To ten plik '*.bc' bez sufiksu raw można odpalać za pomocą `lli`.
 
 # Program kończy się kodem 1 w przypadku błędu analizy semantycznej (i wypisze błąd na STDERR) i kodem 0 w przypadku sukcesu. 
 ./latc_llvm tests/good/official/core001.lat
@@ -85,10 +79,13 @@ cargo run tests/good/official/core001.lat --run
 ./latc_llvm tests/good/official/core001.lat --emit-all
 ```
 
-### Optymalizacje
+### Optymalizacje i Garbage Collector
+- Polecam testowanie optymalizacji z flagą `-v`/`--verbose`, wtedy na `stderr` będą wypisywać się stany programu po każdym przejściu optymalizacyjnym, które wykonało zmiany.
 - Domyślnie wszystkie optymalizacje są wyłączone. Uruchamia się je zestawem flag:
 ```bash
 ./latc_llvm tests/good/official/core001.lat -O                    # Włącza wszystkie optymalizacje.
+./latc_llvm tests/good/official/core001.lat -O -v                 # '-v' włącza dodatkowo "gadatliwy" tryb optymalizacji. Co każde przejście optymalizacji, 
+                                                                  # która wykonała zmiane wypisuje stan programu po tej optymalizacji.
 ./latc_llvm tests/good/official/core001.lat --opt-const-prop      # Constant propagation i constant folding.
 ./latc_llvm tests/good/official/core001.lat --opt-branch-fold     # Branch folding.
 ./latc_llvm tests/good/official/core001.lat --opt-dbe             # Dead Block Elimination.
@@ -101,7 +98,10 @@ cargo run tests/good/official/core001.lat --run
 ./latc_llvm tests/good/official/core001.lat --opt-empty-block     # Empty Block Elimination.
 ./latc_llvm tests/good/official/core001.lat --opt-block-merge     # Block Merging
 ./latc_llvm tests/good/official/core001.lat --opt-gc              # Uruchomienie Garbage Collector'a
-./latc_llvm tests/good/official/core001.lat --opt-max-iterations <OPT_MAX_ITERATIONS> # Opcjonalnie można ustawić maksymalną liczbe przejść przez program w czasie optymalizacji. Domyślnie maksymalna wartość to 10, ale optymalizator zatrzymuje się wcześniej jeżeli wykryje że wyoptymalizował już wszystko co się da.
+# Opcjonalnie można ustawić maksymalną liczbe przejść przez program w czasie optymalizacji. 
+# Domyślnie maksymalna wartość to 100, ale optymalizator zatrzymuje się wcześniej jeżeli 
+# wykryje, że wyoptymalizował już wszystko co się da.
+./latc_llvm tests/good/official/core001.lat --opt-max-iterations <OPT_MAX_ITERATIONS> 
 ```
 
 ## Struktura testów
