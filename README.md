@@ -7,7 +7,7 @@
 - Struktury/Obiekty/Metody (8) - w tym zagnieżdżone struktury, obiekty, tablice struktur, obiekty z tablicami itp.
 - GCSE (5)
 - Function Inlining (2)
-- Garbage Collector dla stringów (2)
+- Garbage Collector dla stringów (2) 
 
 Suma: 32
 
@@ -79,7 +79,7 @@ cargo run tests/good/official/core001.lat --run
 ./latc_llvm tests/good/official/core001.lat --emit-all
 ```
 
-### Optymalizacje i Garbage Collector
+### Optymalizacje
 - Polecam testowanie optymalizacji z flagą `-v`/`--verbose`, wtedy na `stderr` będą wypisywać się stany programu po każdym przejściu optymalizacyjnym, które wykonało zmiany.
 - Domyślnie wszystkie optymalizacje są wyłączone. Uruchamia się je zestawem flag:
 ```bash
@@ -104,6 +104,18 @@ cargo run tests/good/official/core001.lat --run
 ./latc_llvm tests/good/official/core001.lat --opt-max-iterations <OPT_MAX_ITERATIONS> 
 ```
 
+### Garbage Collector
+- Całkiem prosty, niestety nie mam destruktorów i copy konstruktor'ów dla tablic i klas, więc jak zacznie pakować się stringi do klas albo tablic to nie działa :(
+- Do przetestowania polecam `tests/good/garbage_collector/ubijak.lat` z włączonym i wyłączonym `garbage_collectorem` i obserwowanie zużycia pamięci.
+- UWAGA: Z wyłączonym GC trzeba ubijaka szybko wyłączyć bo ubije...
+```bash
+# Uruchomienie Garbage Collector'a
+./latc_llvm tests/good/garbage_collector/simple_string.lat --opt-gc    
+
+# Dodatkowo, można zlinkować się do alternatywnego `runtime.ll`, które wypisuje `GC_NEW` przy każdej alokacji i `GC_FREE` przy dealokacji, żeby zobaczyć, że liczba alokacji i dealokacji sie zgadza.
+./latc_llvm tests/good/garbage_collector/simple_string.lat --opt-gc --runtime-path tests/common/runtime_debug.ll   
+```
+
 ## Struktura testów
 - W przetestowaniu funkcjonalności może pomóc znajomość folderu z testami sprawdzić jak działa kompilator.
 ```bash
@@ -123,8 +135,8 @@ tests
     │   ├── struct
     │   └── virtual
     ├── extra               # Dodatkowe testy podstawy latte, bez rozszerzeń.
-    ├── official            # Oficjalne, prawidłowe testy MRJP
-    ├── garbage_collector   # Oficjalne, prawidłowe testy MRJP
+    ├── official            # Oficjalne, prawidłowe testy MRJP.
+    ├── garbage_collector   # Testy sprawdzające garbage collector.
     └── opts                # Testy sprawdzające optymalizacje
         ├── branch_removal
         ├── constant_folding_and_propagation
