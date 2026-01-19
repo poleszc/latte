@@ -1,5 +1,5 @@
 # Latte - Piotr Oleszczuk, nr 448390
-## Punkty
+## Z rzeczy punktowanych
 - Front-end - 4
 - Backend LLVM - 8
 - Phi - 2
@@ -7,8 +7,22 @@
 - Struktury/Obiekty/Metody - 8
 - GCSE - 5
 - Function Inlining - 2
+- Garbage Collector dla stringów - 2
 
-Suma: 28
+Suma: 32
+
+## Dodatkowe rzeczy:
+- Optymalizacje:
+  - Constant Propagation
+  - Copy Propagation
+  - Dead Code Elimination
+  - Branch Folding - usuwanie branchy jeżeli w czasie kompilacji znamy warunek skoku (np. po constant propagation).
+  - Dead Block Elimination - usuwanie nieosiągalnych bloków, które mogły powstać w wyniku branch folding.
+  - Dead Function Elimination - usuwanie nie wywoływanych funkcji.
+  - Empty Block Elimination - łączenie łańcuszka bloków, które zawierają tylko jump w bloku.
+  - Block Merging - łączenie łańcuszków bloków w jeden jeżeli są trywialnie połączone: (I1, I2, Jump) -> (I3, I4, Jump) -> (I5, Jump) zmieni się w (I1, I2, I3, I4, I5, Jump)
+  - Phi Elimination - eliminacja głupich phi (z jednym argumentem, lub jedną wartością dla każdego źródła)
+- Error recovery - całkiem nietrywialna logika we frontendzie, która pozwala na nie zatrzymywanie sie po wykryciu pierwszego błędu semantycznego tylko wypisanie wszystkich występujących.
 
 ## Co jest zrobione
 - Pełna podstawowa wersja zadania z backend'em LLVM
@@ -20,11 +34,6 @@ Suma: 28
   - Metody wirtualne
   - Zagnieżdżone struktury, obiekty, tablice struktur, obiekty z tablicami itp.
   - Jawna obsługa błędów wykonania takich jak dzielenie przez 0, null ptr access (poprzez wywołanie `error()` z `runtime.ll`)
-- Optymalizacje:
-  - Constant Propagation i Constant Folding
-  - Dead Code Elimination
-  - Branch Folding - zamienianie instrukcji typu `br [stała_logiczna_znana_w_czasie_kompilacji], blok1, blok2` na odpowiedni `jump`
-  - Dead block elimination - usuwanie nieosiagalnych bloków powstałych w wyniku Branch Folding
 
 ## Budowanie projektu
 1) Instalacja Rust:
@@ -79,11 +88,19 @@ cargo run tests/good/official/core001.lat --run
 ### Optymalizacje
 - Domyślnie wszystkie optymalizacje są wyłączone. Uruchamia się je zestawem flag:
 ```bash
-./latc_llvm tests/good/official/core001.lat -O                # Włącza wszystkie optymalizacje.
-./latc_llvm tests/good/official/core001.lat --opt-const-prop  # Constant propagation i constant folding.
-./latc_llvm tests/good/official/core001.lat --opt-branch-fold # Branch folding.
-./latc_llvm tests/good/official/core001.lat --opt-dbe         # Dead Block Elimination.
-./latc_llvm tests/good/official/core001.lat --opt-dce         # Dead Code Elimination.
+./latc_llvm tests/good/official/core001.lat -O                    # Włącza wszystkie optymalizacje.
+./latc_llvm tests/good/official/core001.lat --opt-const-prop      # Constant propagation i constant folding.
+./latc_llvm tests/good/official/core001.lat --opt-branch-fold     # Branch folding.
+./latc_llvm tests/good/official/core001.lat --opt-dbe             # Dead Block Elimination.
+./latc_llvm tests/good/official/core001.lat --opt-dce             # Dead Code Elimination.
+./latc_llvm tests/good/official/core001.lat --opt-gcse            # Global Common Sub-expression Elimination.
+./latc_llvm tests/good/official/core001.lat --opt-copy-prop       # Copy Propagation.
+./latc_llvm tests/good/official/core001.lat --opt-dead-function   # Dead Function Elimination.
+./latc_llvm tests/good/official/core001.lat --opt-function-inline # Function Inlining.
+./latc_llvm tests/good/official/core001.lat --opt-phi-elimination # Phi Elimination.
+./latc_llvm tests/good/official/core001.lat --opt-empty-block     # Empty Block Elimination.
+./latc_llvm tests/good/official/core001.lat --opt-block-merge     # Block Merging
+./latc_llvm tests/good/official/core001.lat --opt-gc              # Uruchomienie Garbage Collector'a
 ./latc_llvm tests/good/official/core001.lat --opt-max-iterations <OPT_MAX_ITERATIONS> # Opcjonalnie można ustawić maksymalną liczbe przejść przez program w czasie optymalizacji. Domyślnie maksymalna wartość to 10, ale optymalizator zatrzymuje się wcześniej jeżeli wykryje że wyoptymalizował już wszystko co się da.
 ```
 
@@ -107,12 +124,15 @@ tests
     │   └── virtual
     ├── extra               # Dodatkowe testy podstawy latte, bez rozszerzeń.
     ├── official            # Oficjalne, prawidłowe testy MRJP
+    ├── garbage_collector   # Oficjalne, prawidłowe testy MRJP
     └── opts                # Testy sprawdzające optymalizacje
         ├── branch_removal
         ├── constant_folding_and_propagation
+        ├── copy_propagation
         ├── dead_code_elimination
-        ├── garbage_collector
-        └── tail_call
+        ├── dead_function_elimination
+        ├── function_inlining
+        └── gcse
 ```
 
 ## Struktura projektu
@@ -139,7 +159,6 @@ src/
 │   └── mod.rs
 ├── lir                             # LIR – Low Intermediate Representation (z SSA).
 │   ├── lowering                    # Transformacja MIR -> LIR.
-│   │   ├── cfg.rs                  # Analiza grafu przepływu sterowania, dominatory itp.
 │   │   ├── function_lowering.rs    # Generowanie postaci SSA (wstawianie węzłów Phi).
 │   │   ├── program_lowering.rs     # Koordynacja obniżania całego programu.
 │   │   └── mod.rs
@@ -150,18 +169,23 @@ src/
 │   ├── codegen.rs                  # Główny generator kodu LLVM IR z LIR
 │   ├── driver.rs                   # Integracja z zewnętrznymi narzędziami (llvm-as, llvm-link, lli).
 │   └── mod.rs
-├── opts                            # Moduł optymalizacji kodu, działający na LIR przed generacja kodu LLVM.
-│   ├── branch_folding.rs           # Usuwanie niepotrzebnych gałęzi.
-│   ├── constant_propagation.rs     # Propagacja stałych i zwijanie stałych.
-│   ├── dead_block_elimination.rs   # Usuwanie martwych bloków.
-│   ├── dead_code_elimination.rs    # Usuwanie martwego kodu.
-│   ├── mod.rs                      # Główna logika uruchamiania optymalizacji na LIRze.
-│   ├── pass.rs                     # Trait specyfikujący pojedynczą optymalizacje.
-│   └── phi_removal.rs              # Usuwanie uproszczonych phi (jeszcze nie zaimplementowane).
-├── parser                          # Lekser, parser i surowe AST.
-│   ├── ast                         # Węzły AST (nietypowane).
-│   ├── lexer.rs                    # Lekser (Logos).
-│   ├── tokens.rs                   # Definicje tokenów.
+├── opts                              # Moduł optymalizacji kodu, działający na LIR przed generacja kodu LLVM.
+│   ├── block_merging.rs              # Łączenie trywialnych bloków.
+│   ├── branch_folding.rs             # Usuwanie niepotrzebnych gałęzi.
+│   ├── constant_propagation.rs       # Propagacja stałych i zwijanie stałych.
+│   ├── copy_propagation.rs           # Propagacja kopii.
+│   ├── dead_block_elimination.rs     # Usuwanie martwych bloków.
+│   ├── dead_code_elimination.rs      # Usuwanie martwego kodu.
+│   ├── dead_function_elimination.rs  # Usuwanie martwego kodu.
+│   ├── empty_block_elimination.rs    # Usuwanie bloków z samym jump'em.
+│   ├── gcse.rs                       # Global Common Sub-expression Elimination.
+│   ├── mod.rs                        # Główna logika uruchamiania optymalizacji na LIRze.
+│   ├── pass.rs                       # Trait specyfikujący pojedynczą optymalizacje.
+│   └── phi_removal.rs                # Usuwanie uproszczonych phi (jeszcze nie zaimplementowane).
+├── parser                            # Lekser, parser i surowe AST.
+│   ├── ast                           # Węzły AST (nietypowane).
+│   ├── lexer.rs                      # Lekser (Logos).
+│   ├── tokens.rs                     # Definicje tokenów.
 │   └── mod.rs
 ├── semantics                       # Analiza semantyczna i generacja TAST.
 │   ├── analysis
@@ -178,6 +202,7 @@ src/
 │   ├── tast                        # TAST — otypowane AST (wynik analizy semantycznej).
 │   └── mod.rs
 └── utils
+    ├── cfg.rs                      # Analiza grafu przepływu sterowania, dominatory itp. Do SSA i GCSE.
     ├── str_id.rs                   # String interning (StrID/Ustr).
     └── mod.rs
 ```
