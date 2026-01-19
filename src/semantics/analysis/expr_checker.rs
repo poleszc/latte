@@ -343,7 +343,11 @@ impl<'a> ExpressionChecker<'a> {
                 Err(e) => {
                     self.ctx.add_error(e);
                     let typed_args = args.iter().map(|arg| self.visit_expr(arg)).collect();
-                    let typed_callee = self.visit_expr(callee);
+                    let typed_callee = tast::TExpr {
+                        kind: tast::TExprKind::Var(*name),
+                        position: callee.position,
+                        typ: self.ctx.error_type(callee.position),
+                    };
                     let kind = tast::TExprKind::App {
                         callee: Box::new(typed_callee),
                         args: typed_args,

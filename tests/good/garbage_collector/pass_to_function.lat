@@ -29,7 +29,7 @@ int main() {
     test_multiple_args(s1, s1, s1);
     string x = test_multiple_args2(s1, s1, s1);
     
-    // string s4 = global_func(s1); // This produces two errors...
+    string s4 = global_func(s1); // This produces two errors...
     return 0;
 }
 
