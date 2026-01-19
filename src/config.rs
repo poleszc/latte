@@ -86,7 +86,7 @@ pub struct LatteArgs {
     /// Print program state after every optimization pass.
     #[arg(short = 'v', long)]
     pub verbose_opts: bool,
-    /// Disable Garbage Collection.
+    /// Enable Garbage Collection.
     #[arg(long)]
     pub opt_gc: bool,
 }
