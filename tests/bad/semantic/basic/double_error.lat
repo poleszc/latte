@@ -3,5 +3,3 @@ int main() {
     string s4 = global_func(s1);
     return 0;
 }
-
-
