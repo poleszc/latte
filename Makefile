@@ -18,7 +18,7 @@ clean-all: clean
 
 clean:
 	rm -f $(BINARY) lib/runtime.bc
-	$(foreach ext, $(EXTS), find tests -type f -name "*.$(ext)" -delete;)
+	$(foreach ext, $(EXTS), find tests -type f -name "*.$(ext)" ! -name "runtime_debug.ll"-delete;)
 
 .PHONY:
 	all build build-llvm test clean clean-all
