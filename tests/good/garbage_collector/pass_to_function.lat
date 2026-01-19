@@ -1,0 +1,36 @@
+void foo(string s) {}
+
+string goo(string s) {
+    return s + "!";
+}
+
+void test_multiple_args(string a, string b, string c) {
+    printString(a);
+}
+
+string test_multiple_args2(string a, string b, string c) {
+    printString(a);
+    return a;
+}
+
+
+int main() {
+    string s1 = "str"+"ing"; 
+    string s2 = "str"+"ing"+"er";
+    string s3 = s1 + "asd";
+    "st" + "as"+ "as";
+    
+    foo("asd" + "asd");
+
+    foo(s1);
+    goo(s1);
+    string s = goo(s1);
+    
+    test_multiple_args(s1, s1, s1);
+    string x = test_multiple_args2(s1, s1, s1);
+    
+    // string s4 = global_func(s1); // This produces two errors...
+    return 0;
+}
+
+

@@ -13,6 +13,19 @@ use std::{
 };
 use tempfile::tempdir;
 
+fn filter_gc_debug_lines(output: &str) -> String {
+    output
+        .lines()
+        .filter(|line| !line.contains("GC_NEW") && !line.contains("GC_FREE"))
+        .collect::<Vec<_>>()
+        .join("\n")
+        + if output.ends_with('\n') && !output.is_empty() {
+            "\n"
+        } else {
+            ""
+        }
+}
+
 pub fn assert_parsing_succeeds(input_path: &str) {
     let source_code = std::fs::read_to_string(input_path)
         .unwrap_or_else(|err| panic!("Failed to read a test file '{}': {}", input_path, err));
@@ -109,6 +122,7 @@ pub fn assert_mir_lowering_pass(input_path: &str) {
         semantic_result.symbol_table,
         false,
         false,
+        false,
     );
     // If we got here, it means mir lowering passed.
 }
@@ -124,6 +138,7 @@ pub fn assert_lir_lowering_pass(input_path: &str) {
     let mir_program = mir::lower_to_mir(
         &semantic_result.tast,
         semantic_result.symbol_table,
+        false,
         false,
         false,
     );
@@ -144,9 +159,10 @@ pub fn assert_llvm_lowering_pass(input_path: &str) {
         semantic_result.symbol_table,
         false,
         false,
+        false,
     );
     let lir_program = lir::lower_to_lir(mir_program);
-    let llvm_generator = LLVMGenerator::new();
+    let llvm_generator = LLVMGenerator::new(false);
     llvm_generator.generate_program(&lir_program);
     // If we got here, it means the llvm lowering passed.
 }
@@ -248,6 +264,87 @@ pub fn run_integration_test_with_opts(input_path: &str, opts: &[&str]) {
     );
 }
 
+pub fn run_integration_test_with_gc_checker(input_path: &str, opts: &[&str]) {
+    let input_path_buf = PathBuf::from(input_path);
+    let stem = input_path_buf.file_stem().unwrap().to_str().unwrap();
+    let expected_output_path = input_path_buf.with_extension("output");
+    let input_data_path = input_path_buf.with_extension("input");
+
+    if !expected_output_path.exists() {
+        panic!("Missing .output file for: {}", input_path)
+    }
+
+    let temp_dir = tempdir().expect("Failed to create a temp directory for tests");
+    let expected_output = fs::read_to_string(&expected_output_path).unwrap_or_else(|err| {
+        panic!(
+            "Failed to read a file '{}': {}",
+            expected_output_path.display(),
+            err
+        )
+    });
+
+    // Compile the program.
+    let mut command = Command::new(LLVM_COMPILER_BIN);
+    command
+        .arg(input_path)
+        .arg("--output-dir")
+        .arg(temp_dir.path())
+        .arg("--runtime-path")
+        .arg("tests/common/runtime_debug.ll")
+        .arg("--opt-gc")
+        .args(opts);
+
+    let compile_output = command
+        .output()
+        .expect("Failed to execute the compiler binary");
+
+    assert!(
+        compile_output.status.success(),
+        "Compilation failed for '{}'.\n[STDERR]:\n{}",
+        input_path,
+        String::from_utf8_lossy(&compile_output.stderr)
+    );
+
+    let bc_path = temp_dir.path().join(format!("{}.bc", stem));
+
+    // Run the program.
+    let mut run_command = Command::new("lli");
+    run_command.arg(&bc_path);
+
+    let output = if input_data_path.exists() {
+        return;
+    } else {
+        run_command.output().expect("Failed to run lli")
+    };
+
+    let actual_stdout = String::from_utf8_lossy(&output.stdout);
+    let actual_stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "Program execution failed for '{}'.\n[STDERR]:\n{}",
+        input_path,
+        actual_stderr
+    );
+
+    let total_output = format!("{}{}", actual_stdout, actual_stderr);
+    let alloc_count = total_output.matches("GC_NEW").count();
+    let dealloc_count = total_output.matches("GC_FREE").count();
+
+    assert_eq!(
+        alloc_count, dealloc_count,
+        "Memory leak detected in '{}'!\nAllocations: {}\nDeallocations: {}\nFull Output:\n{}",
+        input_path, alloc_count, dealloc_count, total_output
+    );
+
+    let cleaned_stdout = filter_gc_debug_lines(&actual_stdout);
+    assert_eq!(
+        cleaned_stdout, expected_output,
+        "Actual program output differs from the expected one for '{}'",
+        input_path
+    );
+}
+
 pub fn assert_runtime_error(input_path: &str) {
     let input_path_buf = PathBuf::from(input_path);
     let stem = input_path_buf.file_stem().unwrap().to_str().unwrap();
@@ -296,6 +393,7 @@ pub fn assert_runtime_error(input_path: &str) {
 /// Runs an integration test without any opts.
 pub fn run_integration_test(input_path: &str) {
     run_integration_test_with_opts(input_path, &[]);
+    run_integration_test_with_gc_checker(input_path, &[]);
 }
 
 /// Runs an integration test with all opts.
@@ -313,6 +411,7 @@ pub fn run_integration_test_with_branch_elimination(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-branch-fold", "--opt-dbe"]);
 }
 
+/// Runs an integration test with Dead Block Elimination.
 pub fn run_integration_test_with_dbe(input_path: &str) {
     run_integration_test_with_opts(input_path, &["--opt-dbe"]);
 }

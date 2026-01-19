@@ -125,6 +125,8 @@ impl MIRLoweringContext {
         // We either add the void return or mark the block as unreachable.
         if !self.builder().is_current_block_terminated() {
             if matches!(func_def.return_type.kind, TypeKind::Void) {
+                let params_to_drop: Vec<LocalID> = self.variable_map.values().cloned().collect();
+                self.emit_drops(&params_to_drop, func_def.position);
                 let builder = self.builder();
                 if !builder.is_current_block_terminated() {
                     builder.emit_return(None, func_def.position);
@@ -148,7 +150,7 @@ mod declaration_tests {
     use std::collections::HashMap;
 
     fn setup_ctx() -> MIRLoweringContext {
-        MIRLoweringContext::new(SymbolTable::new())
+        MIRLoweringContext::new(SymbolTable::new(), false)
     }
 
     #[test]
@@ -284,7 +286,7 @@ mod declaration_tests {
         };
         st.define_class(class_info).unwrap();
 
-        let mut ctx = MIRLoweringContext::new(st);
+        let mut ctx = MIRLoweringContext::new(st, false);
         let t_class_def = TClassDef {
             name: Ident {
                 name: StrID::from("Point"),

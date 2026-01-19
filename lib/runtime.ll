@@ -1,6 +1,10 @@
 @dnl = internal constant [4 x i8] c"%d\0A\00"
 @d   = internal constant [3 x i8] c"%d\00"	
 @s_fmt = internal constant [4 x i8] c"%s\0A\00"
+@dealloc = internal constant [9 x i8] c"DEALLOC\0A\00"
+@alloc = internal constant [7 x i8] c"ALLOC\0A\00"
+@inc = internal constant [5 x i8] c"INC\0A\00"
+@dec = internal constant [5 x i8] c"DEC\0A\00"
 @lf  = internal constant [4 x i8] c"%lf\00"	
 @errorString = internal constant [15 x i8] c"runtime error\0A\00"
 
@@ -11,12 +15,12 @@ declare i32 @puts(i8*)
 declare i32 @fgets(i8*, i32, i8*)
 declare i8* @calloc(i64, i64)
 declare i8* @malloc(i64)
+declare void @free(i8*)
 declare void @exit(i32)
 declare i64 @strlen(i8*)
 declare i8* @strcpy(i8*, i8*)
 declare i8* @strcat(i8*, i8*)
 declare i32 @strcmp(i8*, i8*)
-declare i32 @fflush(i8*)
 
 @stdin = external global i8*
 
@@ -49,7 +53,7 @@ define i32 @readInt() {
 }
 
 define i8* @readString() {
-    %buffer = call i8* @malloc(i64 2048)
+    %buffer = call i8* @alloc_string(i64 2048)
     %is_null = icmp eq i8* %buffer, null
     br i1 %is_null, label %err, label %ok
 err:
@@ -84,7 +88,7 @@ define i8* @stringConcat(i8* %s1, i8* %s2) {
     %total_len = add i64 %len1, %len2
     %total_len_with_null = add i64 %total_len, 1
     
-    %new_str = call i8* @malloc(i64 %total_len_with_null)
+    %new_str = call i8* @alloc_string(i64 %total_len_with_null)
     %is_null = icmp eq i8* %new_str, null
     br i1 %is_null, label %err, label %ok
 err:
@@ -112,4 +116,73 @@ define i32 @stringLength(i8* %s) {
     %len = call i64 @strlen(i8* %s)
     %res = trunc i64 %len to i32
     ret i32 %res
+}
+
+define i8* @alloc_string(i64 %size) {
+    ; Just for demo purposes.
+    ; %msg_ptr = getelementptr [7 x i8], [7 x i8]* @alloc, i32 0, i32 0
+    ; call i32 (i8*, ...) @printf(i8* %msg_ptr)
+    %total_size = add i64 %size, 8 ; +8 for the reference counter
+    %raw = call i8* @calloc(i64 1, i64 %total_size)
+    %is_null = icmp eq i8* %raw, null
+    br i1 %is_null, label %err, label %ok
+err:
+    call void @error()
+    unreachable
+ok:
+    %rc_ptr= bitcast i8* %raw to i64*
+    store i64 1, i64* %rc_ptr
+    ; Just for demo purposes.
+    ; %msg_ptr2 = getelementptr [5 x i8], [5 x i8]* @inc, i32 0, i32 0
+    ; call i32 (i8*, ...) @printf(i8* %msg_ptr2)
+    ; Move the pointer by 8 bits so it's a real string pointer.
+    %res = getelementptr i8, i8* %raw, i64 8
+    ret i8* %res
+}
+
+define void @increment_ref(i8* %str) {
+    %is_null = icmp eq i8* %str, null
+    br i1 %is_null, label %return, label %check_string
+check_string:
+    %rc_ptr = getelementptr i8, i8* %str, i64 -8 ; Move 8 bits back so we get to the RC.
+    %rc_ptr_casted = bitcast i8* %rc_ptr to i64*
+    %count = load i64, i64* %rc_ptr_casted
+    %is_static = icmp eq i64 %count, -1
+    br i1 %is_static, label %return, label %increment
+increment:
+    ; Just for demo purposes.
+    ; %msg_ptr2 = getelementptr [5 x i8], [5 x i8]* @inc, i32 0, i32 0
+    ; call i32 (i8*, ...) @printf(i8* %msg_ptr2)
+    %new_count = add i64 %count, 1
+    store i64 %new_count, i64* %rc_ptr_casted
+    br label %return
+return:
+    ret void
+}
+
+define void @decrement_ref(i8* %str) {
+    %is_null = icmp eq i8* %str, null
+    br i1 %is_null, label %return, label %check_string
+check_string:
+    %rc_ptr = getelementptr i8, i8* %str, i64 -8 ; Move 8 bits back so we get to the RC.
+    %rc_ptr_casted = bitcast i8* %rc_ptr to i64*
+    %count = load i64, i64* %rc_ptr_casted
+    %is_static = icmp eq i64 %count, -1
+    br i1 %is_static, label %return, label %decrement
+decrement:
+    ; Just for demo purposes.
+    ; %msg_ptr2 = getelementptr [5 x i8], [5 x i8]* @dec, i32 0, i32 0
+    ; call i32 (i8*, ...) @printf(i8* %msg_ptr2)
+    %new_count = sub i64 %count, 1
+    store i64 %new_count, i64* %rc_ptr_casted
+    %is_zero = icmp eq i64 %new_count, 0
+    br i1 %is_zero, label %free, label %return
+free:
+    ; Just for demo purposes.
+    ; %msg_ptr = getelementptr [9 x i8], [9 x i8]* @dealloc, i32 0, i32 0
+    ; call i32 (i8*, ...) @printf(i8* %msg_ptr)
+    call void @free(i8* %rc_ptr)
+    br label %return
+return:
+    ret void
 }

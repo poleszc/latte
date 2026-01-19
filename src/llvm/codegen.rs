@@ -6,6 +6,7 @@ use crate::{
         LIRTerminator, LIRValue, RegisterID,
     },
     parser::{Type, TypeKind},
+    utils::StrID,
 };
 
 pub struct LLVMGenerator<'a> {
@@ -13,6 +14,7 @@ pub struct LLVMGenerator<'a> {
     string_constants: HashMap<String, String>,
     next_unique_id: usize,
     current_function: Option<&'a LIRFunction>,
+    classes: Option<&'a HashMap<StrID, LIRClass>>,
     // A mapping from LIR BlockID to the name of the last label ending the block.
     // This is a super ugly approach, since array accesses and integer division
     // cause new blocks to appear which makes the phi functions generated in LIR invalid.
@@ -21,29 +23,33 @@ pub struct LLVMGenerator<'a> {
     lir_block_to_last_llvm_label: HashMap<BlockID, String>,
     current_block_split_count: usize,
     error_block_label: Option<String>,
+    gc_enabled: bool,
 }
 
 impl<'a> Default for LLVMGenerator<'a> {
     fn default() -> Self {
-        Self::new()
+        Self::new(true)
     }
 }
 
 impl<'a> LLVMGenerator<'a> {
-    pub fn new() -> Self {
+    pub fn new(gc_enabled: bool) -> Self {
         Self {
             output: String::new(),
             string_constants: HashMap::new(),
             next_unique_id: 0,
             current_function: None,
+            classes: None,
             lir_block_to_last_llvm_label: HashMap::new(),
             current_block_split_count: 0,
             error_block_label: None,
+            gc_enabled,
         }
     }
 
     /// Generate a LLVM program from LIR program.
     pub fn generate_program(mut self, program: &'a LIRProgram) -> String {
+        self.classes = Some(&program.classes);
         // Emit builtins.
         self.emit_preambule();
 
@@ -69,12 +75,19 @@ impl<'a> LLVMGenerator<'a> {
 
         let mut string_constants = String::new();
         for (string_val, id) in &self.string_constants {
-            let escaped = string_val.replace("\\", "\\\\").replace("\"", "\\22");
+            let escaped = string_val
+                .replace("\\", "\\\\")
+                .replace("\"", "\\22")
+                .replace("\n", "\\0A")
+                .replace("\t", "\\09")
+                .replace("\r", "\\0D");
             let len = string_val.len() + 1;
+            // Emit a structure with 8 bits for the RC, and the string itself. String constants start
+            // with their RC equal to -1 since they are not garbage collected.
             writeln!(
                 string_constants,
-                "@{} = internal constant [{} x i8] c\"{}\\00\", align 1",
-                id, len, escaped
+                "@{} = internal constant {{ i64, [{} x i8] }} {{ i64 -1, [{} x i8] c\"{}\\00\" }}, align 1",
+                id, len, len, escaped
             )
             .unwrap();
         }
@@ -157,6 +170,8 @@ impl<'a> LLVMGenerator<'a> {
             "declare i1 @stringNotEqual(i8*, i8*)",
             "declare i32 @stringLength(i8*)",
             "declare i8* @calloc(i64, i64)",
+            "declare void @increment_ref(i8*)",
+            "declare void @decrement_ref(i8*)",
         ];
         for decl in decls {
             self.emit_line(decl);
@@ -181,8 +196,14 @@ impl<'a> LLVMGenerator<'a> {
         self.emit_line(format!("define {} @{}({}) {{", ret_type, func.name, args));
 
         for block_id in &func.block_order {
+            // Pass additional parameters if this is a first block, so ref count constructors are inserted after the block label.
             if let Some(block) = func.blocks.get(block_id) {
-                self.emit_block(*block_id, block);
+                let param_registers = if *block_id == func.entry_block {
+                    Some(&func.parameter_registers)
+                } else {
+                    None
+                };
+                self.emit_block(*block_id, block, param_registers);
             }
         }
         if self.error_block_label.is_some() {
@@ -234,9 +255,23 @@ impl<'a> LLVMGenerator<'a> {
         ));
     }
 
-    fn emit_block(&mut self, block_id: BlockID, block: &LIRBlock) {
+    fn emit_block(
+        &mut self,
+        block_id: BlockID,
+        block: &LIRBlock,
+        parameter_registers: Option<&Vec<RegisterID>>,
+    ) {
         self.current_block_split_count = 0;
         self.emit_label(format!("B{}", block_id.0));
+
+        // Increment the ref count for all strings passed as parameters. If we're the first block.
+        if let Some(params) = parameter_registers {
+            for reg in params {
+                if self.is_string(*reg) {
+                    self.emit_instr(format!("call void @increment_ref(i8* %r{})", reg.0));
+                }
+            }
+        }
 
         for instr in &block.instructions {
             self.emit_instruction(instr, block_id);
@@ -274,6 +309,11 @@ impl<'a> LLVMGenerator<'a> {
                 let val = self.format_value(&instr.operands[0]);
                 let typ = self.llvm_type_from_register(dest);
                 self.emit_instr(format!("%r{} = bitcast {} {} to {}", dest.0, typ, val, typ));
+            }
+
+            LIROperation::DropString => {
+                let val = self.format_value(&instr.operands[0]);
+                self.emit_instr(format!("call void @decrement_ref(i8* {})", val));
             }
             LIROperation::IntAdd | LIROperation::IntSub | LIROperation::IntMul => {
                 self.emit_arithmetic(instr);
@@ -560,6 +600,12 @@ impl<'a> LLVMGenerator<'a> {
             method_ptr,
             call_args.join(", ")
         ));
+
+        if let Some(dest_reg) = dest
+            && self.is_string(dest_reg)
+        {
+            self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest_reg.0));
+        }
     }
 
     fn emit_array_op(&mut self, instr: &LIRInstruction, block_id: BlockID) {
@@ -595,6 +641,10 @@ impl<'a> LLVMGenerator<'a> {
                     "%r{} = load {}, {}* {}",
                     dest.0, elem_type, elem_type, elem_ptr
                 ));
+
+                if self.is_string(dest) {
+                    self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest.0));
+                }
             }
             LIROperation::ArraySet => {
                 let idx = self.format_value(&instr.operands[1]);
@@ -620,6 +670,18 @@ impl<'a> LLVMGenerator<'a> {
                     "{} = getelementptr {}, {}* {}, i32 {}",
                     elem_ptr, element_typ, element_typ, data_ptr, idx
                 ));
+
+                if let LIRValue::Register(reg_id) = &instr.operands[2]
+                    && self.is_string(*reg_id)
+                {
+                    let old_val = format!("%old_arr_val_{}", id);
+                    self.emit_instr(format!("{} = load i8*, i8** {}", old_val, elem_ptr));
+                    // Decrement the RC on the old value.
+                    self.emit_instr(format!("call void @decrement_ref(i8* {})", old_val));
+                    // Increment the RC on the new value.
+                    self.emit_instr(format!("call void @increment_ref(i8* {})", val));
+                }
+
                 self.emit_instr(format!(
                     "store {} {}, {}* {}",
                     element_typ, val, element_typ, elem_ptr
@@ -678,6 +740,7 @@ impl<'a> LLVMGenerator<'a> {
         let id = dest.0;
 
         // Calculate the size of the object to allocate.
+        // https://stackoverflow.com/questions/14608250/how-can-i-find-the-size-of-a-type
         let size_tmp = format!("%size_temp_{}", id);
         let size_int = format!("%size_{}", id);
         self.emit_instr(format!(
@@ -705,11 +768,11 @@ impl<'a> LLVMGenerator<'a> {
             "{} = getelementptr %class.{}, %class.{}* %r{}, i32 0, i32 0",
             vptr_ptr, class_name, class_name, id
         ));
+        let class = self.classes.unwrap().get(class_name).unwrap();
+        let vtable_size = class.vtable.len().max(1);
         let vtable_gep = format!(
             "getelementptr ([{} x i8*], [{} x i8*]* @vtable.{}, i32 0, i32 0)",
-            class_name.len(),
-            class_name.len(),
-            class_name
+            vtable_size, vtable_size, class_name
         );
         self.emit_instr(format!("store i8** {}, i8*** {}", vtable_gep, vptr_ptr));
     }
@@ -743,11 +806,32 @@ impl<'a> LLVMGenerator<'a> {
                     "%r{} = load {}, {}* {}",
                     dest.0, field_type, field_type, field_ptr
                 ));
+
+                if self.is_string(dest) {
+                    self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest.0));
+                }
             }
             LIROperation::FieldSet => {
                 let val = self.format_value(&instr.operands[2]);
                 let val_type = self.llvm_type_from_value(&instr.operands[2]);
                 let id = self.unique_id();
+
+                // Handle the RC if it's a string.
+                if let LIRValue::Register(reg_id) = &instr.operands[2]
+                    && self.is_string(*reg_id)
+                {
+                    let old_val = format!("%old_f_{}", id);
+                    let field_ptr = format!("%f_ptr_gc_{}", id);
+                    self.emit_instr(format!(
+                        "{} = getelementptr %class.{}, %class.{}* {}, i32 0, i32 {}",
+                        field_ptr, class_name, class_name, obj_val, field_idx
+                    ));
+                    self.emit_instr(format!("{} = load i8*, i8** {}", old_val, field_ptr));
+                    // Decrement the RC on the old value.
+                    self.emit_instr(format!("call void @decrement_ref(i8* {})", old_val));
+                    // Increment the RC on the new value.
+                    self.emit_instr(format!("call void @increment_ref(i8* {})", val));
+                }
 
                 let field_ptr = format!("%field_set_ptr_{}", id);
                 self.emit_instr(format!(
@@ -849,6 +933,10 @@ impl<'a> LLVMGenerator<'a> {
 // Helpers
 // ======================
 impl<'a> LLVMGenerator<'a> {
+    fn is_string(&self, reg_id: RegisterID) -> bool {
+        let func = self.current_function.unwrap();
+        self.gc_enabled && matches!(func.registers[reg_id.0].typ.kind, TypeKind::String)
+    }
     fn llvm_type(&self, typ: &Type) -> String {
         match &typ.kind {
             TypeKind::Int => "i32".to_string(),
@@ -897,8 +985,9 @@ impl<'a> LLVMGenerator<'a> {
                     })
                     .clone();
                 let len = s.len() + 1; // \0
+                // When initializing the string constant we move the pointer 8 bits forward to skip the RC.
                 format!(
-                    "getelementptr ([{} x i8], [{} x i8]* @{}, i32 0, i32 0)",
+                    "getelementptr ({{i64, [{} x i8] }}, {{ i64, [{} x i8] }}* @{}, i32 0, i32 1)",
                     len, len, string_id
                 )
             }
@@ -931,7 +1020,7 @@ mod llvm_format_tests {
 
     #[test]
     fn test_llvm_string_constant_escaping() {
-        let mut generator = LLVMGenerator::new();
+        let mut generator = LLVMGenerator::new(false);
         let val = LIRValue::StringConst("Hello \"World\"\n".to_string());
         let formatted = generator.format_value(&val);
 
@@ -943,7 +1032,7 @@ mod llvm_format_tests {
 
     #[test]
     fn test_type_mapping() {
-        let generator = LLVMGenerator::new();
+        let generator = LLVMGenerator::new(false);
         let ty_int = Type {
             kind: TypeKind::Int,
             position: SourcePosition(0, 0),

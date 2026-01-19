@@ -21,18 +21,20 @@ pub struct MIRLoweringContext {
     variable_map: HashMap<StrID, LocalID>,
     current_function: Option<MIRFunctionBuilder>,
     current_class_fields: HashMap<StrID, (usize, Type)>,
+    gc_enabled: bool,
 }
 
 // ======================
 // Basic functionality.
 // ======================
 impl MIRLoweringContext {
-    pub fn new(symbol_table: SymbolTable) -> Self {
+    pub fn new(symbol_table: SymbolTable, gc_enabled: bool) -> Self {
         MIRLoweringContext {
             symbol_table,
             variable_map: HashMap::new(),
             current_function: None,
             current_class_fields: HashMap::new(),
+            gc_enabled,
         }
     }
 
@@ -114,6 +116,19 @@ impl MIRLoweringContext {
 
     fn mangle_method_name(&self, class_name: StrID, method_name: StrID) -> StrID {
         StrID::from(format!("{}_{}", class_name, method_name))
+    }
+
+    fn is_reference_counted_type(&self, typ: &Type) -> bool {
+        self.gc_enabled && matches!(typ.kind, TypeKind::String)
+    }
+
+    fn emit_drops(&mut self, locals: &[LocalID], pos: SourcePosition) {
+        for local_id in locals.iter().rev() {
+            let info = self.builder().get_local_info(*local_id).clone();
+            if self.is_reference_counted_type(&info.typ) {
+                self.builder().emit_drop(*local_id, pos);
+            }
+        }
     }
 
     fn binary_op_to_mir(&self, op: &BinaryOp, lhs_type: &Type) -> MIROperation {

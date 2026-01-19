@@ -39,6 +39,7 @@ pub enum LIRValue {
 pub enum LIROperation {
     Phi,
     Assign,
+    DropString,
 
     // Arithmetic
     IntAdd,

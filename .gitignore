@@ -23,3 +23,5 @@ latc_llvm
 merge_project.fish
 latte.txt
 test_progress.md
+
+!**/runtime_debug.ll

@@ -81,6 +81,7 @@ pub fn run_compiler<
         semantic_analysis_result.symbol_table,
         args.opt_inline || args.optimize,
         args.verbose_opts,
+        args.opt_gc,
     );
     if args.emit_mir || args.emit_all {
         dump_mir(&output_dir, file_stem, &mir_program)?;
