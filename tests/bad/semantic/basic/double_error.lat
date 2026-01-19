@@ -1,0 +1,5 @@
+int main() {
+    string s1 = "str"+"ing"; 
+    string s4 = global_func(s1);
+    return 0;
+}
