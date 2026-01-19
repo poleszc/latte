@@ -68,7 +68,6 @@ impl EmptyBlockElimination {
             return true;
         }
 
-        // Dla każdego poprzednika bloku, który chcemy usunąć
         for &pred_id in &func.blocks.get(&to_remove).unwrap().predecessors {
             if let Some(pred_block) = func.blocks.get(&pred_id) {
                 // For each predecessor of the block, check if it jumps to the target
