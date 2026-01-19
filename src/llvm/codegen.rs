@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt::Write};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Write,
+};
 
 use crate::{
     lir::{
@@ -24,6 +27,8 @@ pub struct LLVMGenerator<'a> {
     current_block_split_count: usize,
     error_block_label: Option<String>,
     gc_enabled: bool,
+    // A map to track the used builtins, so not all od the `runtime.ll`` builtins are linked if they are not used.
+    used_builtins: HashSet<StrID>,
 }
 
 impl<'a> Default for LLVMGenerator<'a> {
@@ -44,6 +49,7 @@ impl<'a> LLVMGenerator<'a> {
             current_block_split_count: 0,
             error_block_label: None,
             gc_enabled,
+            used_builtins: HashSet::new(),
         }
     }
 
@@ -51,8 +57,6 @@ impl<'a> LLVMGenerator<'a> {
     pub fn generate_program(mut self, program: &'a LIRProgram) -> String {
         self.classes = Some(&program.classes);
         // Emit builtins.
-        self.emit_preambule();
-
         let mut sorted_classes: Vec<_> = program.classes.keys().cloned().collect();
         sorted_classes.sort_by_key(|id| id.to_string());
         for class_id in &sorted_classes {
@@ -70,6 +74,18 @@ impl<'a> LLVMGenerator<'a> {
                 self.current_function = Some(func);
                 self.emit_function(func);
                 self.current_function = None;
+            }
+        }
+
+        let mut declarations = String::new();
+
+        let mut sorted_used: Vec<_> = self.used_builtins.iter().collect();
+        sorted_used.sort_by_key(|id| id.to_string());
+
+        for id in sorted_used {
+            let name_str = id.to_string();
+            if let Some(decl) = Self::get_builtin_declaration(&name_str) {
+                writeln!(declarations, "{}", decl).unwrap();
             }
         }
 
@@ -92,7 +108,7 @@ impl<'a> LLVMGenerator<'a> {
             .unwrap();
         }
 
-        format!("{}\n{}", string_constants, self.output)
+        format!("{}\n{}\n{}", declarations, string_constants, self.output)
     }
 
     /// Performs a pass through all function blocks looking for instructions which
@@ -139,6 +155,28 @@ impl<'a> LLVMGenerator<'a> {
         self.next_unique_id += 1;
         id
     }
+
+    fn get_builtin_declaration(name: &str) -> Option<&'static str> {
+        match name {
+            "printInt" => Some("declare void @printInt(i32)"),
+            "printString" => Some("declare void @printString(i8*)"),
+            "error" => Some("declare void @error()"),
+            "readInt" => Some("declare i32 @readInt()"),
+            "readString" => Some("declare i8* @readString()"),
+            "stringConcat" => Some("declare i8* @stringConcat(i8*, i8*)"),
+            "stringEqual" => Some("declare i1 @stringEqual(i8*, i8*)"),
+            "stringNotEqual" => Some("declare i1 @stringNotEqual(i8*, i8*)"),
+            "stringLength" => Some("declare i32 @stringLength(i8*)"),
+            "calloc" => Some("declare i8* @calloc(i64, i64)"),
+            "increment_ref" => Some("declare void @increment_ref(i8*)"),
+            "decrement_ref" => Some("declare void @decrement_ref(i8*)"),
+            _ => None,
+        }
+    }
+
+    fn mark_builtin_as_used(&mut self, id: StrID) {
+        self.used_builtins.insert(id);
+    }
 }
 
 // ======================
@@ -155,28 +193,6 @@ impl<'a> LLVMGenerator<'a> {
 
     fn emit_label(&mut self, label: impl AsRef<str>) {
         writeln!(self.output, "  {}:", label.as_ref()).unwrap();
-    }
-
-    fn emit_preambule(&mut self) {
-        // TODO: Make not all of them appear
-        let decls = [
-            "declare void @printInt(i32)",
-            "declare void @printString(i8*)",
-            "declare void @error()",
-            "declare i32 @readInt()",
-            "declare i8* @readString()",
-            "declare i8* @stringConcat(i8*, i8*)",
-            "declare i1 @stringEqual(i8*, i8*)",
-            "declare i1 @stringNotEqual(i8*, i8*)",
-            "declare i32 @stringLength(i8*)",
-            "declare i8* @calloc(i64, i64)",
-            "declare void @increment_ref(i8*)",
-            "declare void @decrement_ref(i8*)",
-        ];
-        for decl in decls {
-            self.emit_line(decl);
-        }
-        self.emit_line("");
     }
 
     fn emit_function(&mut self, func: &LIRFunction) {
@@ -268,6 +284,7 @@ impl<'a> LLVMGenerator<'a> {
         if let Some(params) = parameter_registers {
             for reg in params {
                 if self.is_string(*reg) {
+                    self.mark_builtin_as_used(StrID::from("increment_ref"));
                     self.emit_instr(format!("call void @increment_ref(i8* %r{})", reg.0));
                 }
             }
@@ -286,6 +303,7 @@ impl<'a> LLVMGenerator<'a> {
 
     fn get_error_label(&mut self) -> String {
         if self.error_block_label.is_none() {
+            self.mark_builtin_as_used(StrID::from("error"));
             self.error_block_label = Some("B_runtime_error".to_string())
         }
         self.error_block_label.clone().unwrap()
@@ -313,6 +331,7 @@ impl<'a> LLVMGenerator<'a> {
 
             LIROperation::DropString => {
                 let val = self.format_value(&instr.operands[0]);
+                self.mark_builtin_as_used(StrID::from("decrement_ref"));
                 self.emit_instr(format!("call void @decrement_ref(i8* {})", val));
             }
             LIROperation::IntAdd | LIROperation::IntSub | LIROperation::IntMul => {
@@ -349,8 +368,14 @@ impl<'a> LLVMGenerator<'a> {
             LIROperation::ArrayGet | LIROperation::ArraySet | LIROperation::ArrayLength => {
                 self.emit_array_op(instr, block_id);
             }
-            LIROperation::NewArray => self.emit_new_array(instr),
-            LIROperation::NewObject => self.emit_new_object(instr),
+            LIROperation::NewArray => {
+                self.mark_builtin_as_used(StrID::from("calloc"));
+                self.emit_new_array(instr)
+            }
+            LIROperation::NewObject => {
+                self.mark_builtin_as_used(StrID::from("calloc"));
+                self.emit_new_object(instr)
+            }
             LIROperation::FieldGet | LIROperation::FieldSet => {
                 self.emit_field_op(instr, &block_id);
             }
@@ -473,6 +498,7 @@ impl<'a> LLVMGenerator<'a> {
             LIROperation::StringConcat => {
                 let lhs = self.format_value(&instr.operands[0]);
                 let rhs = self.format_value(&instr.operands[1]);
+                self.mark_builtin_as_used(StrID::from("stringConcat"));
                 self.emit_instr(format!(
                     "%r{} = call i8* @stringConcat(i8* {}, i8* {})",
                     dest.0, lhs, rhs
@@ -481,6 +507,7 @@ impl<'a> LLVMGenerator<'a> {
             LIROperation::StringEq => {
                 let lhs = self.format_value(&instr.operands[0]);
                 let rhs = self.format_value(&instr.operands[1]);
+
                 self.emit_instr(format!(
                     "%r{} = call i1 @stringEqual(i8* {}, i8* {})",
                     dest.0, lhs, rhs
@@ -489,6 +516,7 @@ impl<'a> LLVMGenerator<'a> {
             LIROperation::StringNeq => {
                 let lhs = self.format_value(&instr.operands[0]);
                 let rhs = self.format_value(&instr.operands[1]);
+                self.mark_builtin_as_used(StrID::from("stringNotEqual"));
                 self.emit_instr(format!(
                     "%r{} = call i1 @stringNotEqual(i8* {}, i8* {})",
                     dest.0, lhs, rhs
@@ -496,6 +524,7 @@ impl<'a> LLVMGenerator<'a> {
             }
             LIROperation::StringLength => {
                 let val = self.format_value(&instr.operands[0]);
+                self.mark_builtin_as_used(StrID::from("stringLength"));
                 self.emit_instr(format!(
                     "%r{} = call i32 @stringLength(i8* {})",
                     dest.0, val
@@ -507,7 +536,10 @@ impl<'a> LLVMGenerator<'a> {
 
     fn emit_call(&mut self, instr: &LIRInstruction) {
         let func_name = match &instr.operands[0] {
-            LIRValue::Function(name) => name,
+            LIRValue::Function(name) => {
+                self.mark_builtin_as_used(*name);
+                name
+            }
             _ => unreachable!(),
         };
         let args: Vec<_> = instr.operands[1..]
@@ -643,6 +675,7 @@ impl<'a> LLVMGenerator<'a> {
                 ));
 
                 if self.is_string(dest) {
+                    self.mark_builtin_as_used(StrID::from("increment_ref"));
                     self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest.0));
                 }
             }
@@ -674,6 +707,8 @@ impl<'a> LLVMGenerator<'a> {
                 if let LIRValue::Register(reg_id) = &instr.operands[2]
                     && self.is_string(*reg_id)
                 {
+                    self.mark_builtin_as_used(StrID::from("increment_ref"));
+                    self.mark_builtin_as_used(StrID::from("decrement_ref"));
                     let old_val = format!("%old_arr_val_{}", id);
                     self.emit_instr(format!("{} = load i8*, i8** {}", old_val, elem_ptr));
                     // Decrement the RC on the old value.
@@ -808,6 +843,7 @@ impl<'a> LLVMGenerator<'a> {
                 ));
 
                 if self.is_string(dest) {
+                    self.mark_builtin_as_used(StrID::from("increment_ref"));
                     self.emit_instr(format!("call void @increment_ref(i8* %r{})", dest.0));
                 }
             }
@@ -827,6 +863,8 @@ impl<'a> LLVMGenerator<'a> {
                         field_ptr, class_name, class_name, obj_val, field_idx
                     ));
                     self.emit_instr(format!("{} = load i8*, i8** {}", old_val, field_ptr));
+                    self.mark_builtin_as_used(StrID::from("increment_ref"));
+                    self.mark_builtin_as_used(StrID::from("decrement_ref"));
                     // Decrement the RC on the old value.
                     self.emit_instr(format!("call void @decrement_ref(i8* {})", old_val));
                     // Increment the RC on the new value.
