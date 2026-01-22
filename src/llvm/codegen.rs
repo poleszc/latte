@@ -515,7 +515,7 @@ impl<'a> LLVMGenerator<'a> {
             LIROperation::StringEq => {
                 let lhs = self.format_value(&instr.operands[0]);
                 let rhs = self.format_value(&instr.operands[1]);
-
+                self.mark_builtin_as_used(StrID::from("stringEqual"));
                 self.emit_instr(format!(
                     "%r{} = call i1 @stringEqual(i8* {}, i8* {})",
                     dest.0, lhs, rhs

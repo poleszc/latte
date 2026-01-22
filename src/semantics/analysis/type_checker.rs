@@ -23,6 +23,7 @@ impl<'a> TypeChecker<'a> {
             (TypeKind::String, TypeKind::String) => true,
             (TypeKind::Bool, TypeKind::Bool) => true,
             (TypeKind::Void, TypeKind::Void) => true,
+            (TypeKind::Null, TypeKind::Null) => true,
             (TypeKind::Class(i1), TypeKind::Class(i2)) => i1.name == i2.name,
             (TypeKind::Array(inner1), TypeKind::Array(inner2)) => Self::types_equal(inner1, inner2),
             _ => false,
@@ -41,7 +42,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         if matches!(subtype.kind, TypeKind::Null) {
-            return matches!(supertype.kind, TypeKind::Class(_) | TypeKind::Array(_));
+            return matches!(supertype.kind, TypeKind::Class(_) | TypeKind::Array(_) | TypeKind::Null);
         }
 
         if TypeChecker::types_equal(subtype, supertype) {
