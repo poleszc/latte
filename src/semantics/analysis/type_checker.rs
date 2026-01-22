@@ -42,7 +42,10 @@ impl<'a> TypeChecker<'a> {
         }
 
         if matches!(subtype.kind, TypeKind::Null) {
-            return matches!(supertype.kind, TypeKind::Class(_) | TypeKind::Array(_) | TypeKind::Null);
+            return matches!(
+                supertype.kind,
+                TypeKind::Class(_) | TypeKind::Array(_) | TypeKind::Null
+            );
         }
 
         if TypeChecker::types_equal(subtype, supertype) {
