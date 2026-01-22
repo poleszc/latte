@@ -3,4 +3,3 @@ int main() {
     printString("ala"+a[0]+"makota");
     return 0;
 }
-// OK

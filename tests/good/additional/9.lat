@@ -27,4 +27,3 @@ int main() {
     printClass(x); 
     return 0; 
 } 
-// OK
