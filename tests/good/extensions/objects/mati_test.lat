@@ -1,0 +1,15 @@
+class Node {
+    int val;
+}
+
+
+Node foo() {
+    return new Node;
+}
+
+int main() {
+    foo().val = 123;
+    printInt(foo().val);
+
+    return 0;
+}

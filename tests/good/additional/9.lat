@@ -1,0 +1,30 @@
+class A { 
+    string s; 
+    string ss; 
+}
+void printClass(A a) { 
+    if (a == null) printString("null"); 
+    else printString("{s: " + a.s + ", ss: " + a.ss + "}"); 
+} 
+
+void f2(A i0, A i1, A i2, A i3, A i4, A i5, A i6, A i7, A i8, A i9, A i10, A i11, A i12, A i13, A i14, A i15, A i16, A i17, A i18, A i19, A i20, A i21, A i22, A i23, A i24, A i25, A i26, A i27, A i28, A i29, A i30, A i31, A i32, A i33, A i34) { 
+    i2.ss = "vi"; 
+    printClass(i2); 
+    i2 = null; // usunięcie tej linii leczy panikę... printClass(i2); } 
+}
+
+int main() { 
+    A x = new A; 
+    x.s = ";p,l.r;l,pg ,;r.g]"; 
+    x.ss = "mimimimimimimimimimim"; 
+    printString("=== 2 ==="); 
+    f2(
+        new A, null, x, null, new A, null, null, null, new A, 
+        new A, null, new A, null, null, null, new A, null, 
+        new A, new A, new A, new A, new A, new A, new A, null, 
+        new A, null, new A, new A, null, null, new A, new A, null, null
+    ); 
+    printClass(x); 
+    return 0; 
+} 
+// OK

@@ -1,0 +1,6 @@
+int main() {
+    string[] a = new string[1];
+    printString("ala"+a[0]+"makota");
+    return 0;
+}
+// OK

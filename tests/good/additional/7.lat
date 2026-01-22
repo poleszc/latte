@@ -1,0 +1,4 @@
+class C { boolean fld; }
+class D { C c; }
+void tester() { (new D).c.fld = true; }
+int main() { return 0; }

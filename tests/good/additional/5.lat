@@ -1,0 +1,25 @@
+class A { void tada(){ } }
+class B extends A {}
+class C extends A {}
+
+int main(){
+    int i = 0;
+    A a;
+    while(i < 2){
+      int c = readInt();
+      if(c > 0){
+        c = -12;
+      } else {
+        c = 12;
+      }
+      if(c == c){
+        a = new B;
+      } else {
+        a = new C;
+      }
+      a.tada();
+      printInt(c);
+      i++;
+    }
+    return 0;
+}

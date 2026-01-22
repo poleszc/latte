@@ -1,0 +1,16 @@
+class A {
+    int x;
+    int foo(){return 1;}
+    void test(){
+      printInt(this.x);     // działa
+      printInt(x);          // też działa
+      printInt(this.foo()); // działa
+      printInt(foo());   // nie kompiluje się!
+    }
+}
+int main() {
+  A a = new A;
+  a.test();
+  return 0;
+}
+// OK
