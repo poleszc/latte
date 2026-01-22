@@ -61,8 +61,10 @@ impl ConstantFoldingAndPropagation {
                 LIROperation::IntLe => self.fold_comparison(&instr.operands, |a, b| a <= b),
                 LIROperation::IntGt => self.fold_comparison(&instr.operands, |a, b| a > b),
                 LIROperation::IntGe => self.fold_comparison(&instr.operands, |a, b| a >= b),
-                LIROperation::IntEq => self.fold_comparison(&instr.operands, |a, b| a == b),
-                LIROperation::IntNeq => self.fold_comparison(&instr.operands, |a, b| a != b),
+
+                LIROperation::IntEq => self.fold_equality(&instr.operands, |b| b),
+                LIROperation::IntNeq => self.fold_equality(&instr.operands, |b| !b),
+
                 LIROperation::BoolAnd => self.fold_bool_and(&instr.operands),
                 LIROperation::BoolOr => self.fold_bool_or(&instr.operands),
                 LIROperation::BoolNot => self.fold_bool_not(&instr.operands),
@@ -113,6 +115,30 @@ impl ConstantFoldingAndPropagation {
         match self.evaluate_value(&operands[0]) {
             ConstantValue::Int(n) => ConstantValue::Int(op(n)),
             _ => ConstantValue::Unknown,
+        }
+    }
+
+    fn fold_equality<F>(&self, operands: &[LIRValue], op: F) -> ConstantValue
+    where
+        F: Fn(bool) -> bool,
+    {
+        assert!(operands.len() == 2);
+        let lhs = self.evaluate_value(&operands[0]);
+        let rhs = self.evaluate_value(&operands[1]);
+
+        let result = match (lhs, rhs) {
+            (ConstantValue::Int(l), ConstantValue::Int(r)) => Some(l == r),
+            (ConstantValue::Bool(l), ConstantValue::Bool(r)) => Some(l == r),
+            (ConstantValue::String(l), ConstantValue::String(r)) => Some(l == r),
+            (ConstantValue::Null, ConstantValue::Null) => Some(true),
+            (ConstantValue::Null, ConstantValue::String(_)) => Some(false),
+            (ConstantValue::String(_), ConstantValue::Null) => Some(false),
+            _ => None,
+        };
+
+        match result {
+            Some(b) => ConstantValue::Bool(op(b)),
+            None => ConstantValue::Unknown,
         }
     }
 

@@ -1,0 +1,12 @@
+class C {
+    string s;
+    boolean empty() { return s == ""; }
+}
+
+int main() {
+    C c = new C;
+    if (c.empty()) {
+        printString("OK");
+    }
+    return 0;
+}

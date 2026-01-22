@@ -1,0 +1,6 @@
+int main() {
+    if (null == null) {
+        printString("hello");
+    }
+    return 0;
+}

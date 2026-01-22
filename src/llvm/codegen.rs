@@ -122,25 +122,31 @@ impl<'a> LLVMGenerator<'a> {
 
             for instr in &block.instructions {
                 match instr.operation {
-                    LIROperation::ArrayGet
-                    | LIROperation::ArraySet
-                    | LIROperation::IntDiv
-                    | LIROperation::IntMod
-                    | LIROperation::FieldGet
+                    LIROperation::IntDiv | LIROperation::IntMod => {
+                        let mut will_split = true;
+                        if let LIRValue::IntConst(n) = &instr.operands[1] {
+                            if *n != 0 {
+                                will_split = false;
+                            }
+                        }
+
+                        if will_split {
+                            current_label = format!("B{}_ok_{}", block_id.0, split_count);
+                            split_count += 1;
+                        }
+                    }
+                    LIROperation::FieldGet
                     | LIROperation::FieldSet
                     | LIROperation::VCall
                     | LIROperation::ArrayLength => {
                         current_label = format!("B{}_ok_{}", block_id.0, split_count);
                         split_count += 1;
+                    }
 
-                        // These instructions perform two splits, one for null ptr check, one for array bound check.
-                        if matches!(
-                            instr.operation,
-                            LIROperation::ArrayGet | LIROperation::ArraySet
-                        ) {
-                            current_label = format!("B{}_ok_{}", block_id.0, split_count);
-                            split_count += 1;
-                        }
+                    LIROperation::ArrayGet | LIROperation::ArraySet => {
+                        split_count += 1;
+                        current_label = format!("B{}_ok_{}", block_id.0, split_count);
+                        split_count += 1;
                     }
                     _ => {}
                 }
@@ -409,7 +415,23 @@ impl<'a> LLVMGenerator<'a> {
 
     fn emit_div_mod(&mut self, instr: &LIRInstruction, block_id: BlockID) {
         let dest = instr.destination.unwrap();
-        let rhs = self.format_value(&instr.operands[1]);
+
+        let lhs = self.format_value(&instr.operands[0]);
+        let rhs_val = &instr.operands[1];
+        let op = if instr.operation == LIROperation::IntDiv {
+            "sdiv"
+        } else {
+            "srem"
+        };
+
+        if let LIRValue::IntConst(n) = rhs_val {
+            if *n != 0 {
+                self.emit_instr(format!("%r{} = {} i32 {}, {}", dest.0, op, lhs, *n));
+                return;
+            }
+        }
+
+        let rhs = self.format_value(rhs_val);
         let split_id = self.current_block_split_count;
         self.current_block_split_count += 1;
 
@@ -426,11 +448,6 @@ impl<'a> LLVMGenerator<'a> {
         ));
 
         self.emit_label(ok_label);
-        let op = if instr.operation == LIROperation::IntDiv {
-            "sdiv"
-        } else {
-            "srem"
-        };
         let lhs = self.format_value(&instr.operands[0]);
         self.emit_instr(format!("%r{} = {} i32 {}, {}", dest.0, op, lhs, rhs));
     }
@@ -515,7 +532,7 @@ impl<'a> LLVMGenerator<'a> {
             LIROperation::StringEq => {
                 let lhs = self.format_value(&instr.operands[0]);
                 let rhs = self.format_value(&instr.operands[1]);
-
+                self.mark_builtin_as_used(StrID::from("stringEqual"));
                 self.emit_instr(format!(
                     "%r{} = call i1 @stringEqual(i8* {}, i8* {})",
                     dest.0, lhs, rhs

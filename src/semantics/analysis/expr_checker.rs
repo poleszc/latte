@@ -341,6 +341,32 @@ impl<'a> ExpressionChecker<'a> {
                     (kind, return_type)
                 }
                 Err(e) => {
+                    if let Some(class_name) = self.ctx.current_class {
+                        let all_methods = self.ctx.symbol_table.get_all_class_methods(class_name);
+                        if let Some(method_info) = all_methods.get(&name.name) {
+                            let method_info = method_info.clone();
+
+                            let this_expr = tast::TExpr {
+                                kind: tast::TExprKind::This,
+                                position: callee.position,
+                                typ: Type {
+                                    kind: TypeKind::Class(self.ctx.mock_identifier(class_name)),
+                                    position: callee.position,
+                                },
+                            };
+
+                            let typed_args =
+                                self.check_and_transform_arguments(&method_info, args, position);
+
+                            let kind = tast::TExprKind::Method {
+                                object: Box::new(this_expr),
+                                method_name: *name,
+                                args: typed_args,
+                            };
+                            return (kind, method_info.return_type.clone());
+                        }
+                    }
+
                     self.ctx.add_error(e);
                     let typed_args = args.iter().map(|arg| self.visit_expr(arg)).collect();
                     let typed_callee = tast::TExpr {

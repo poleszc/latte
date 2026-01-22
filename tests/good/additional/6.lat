@@ -1,0 +1,7 @@
+int main() {
+    A a = new A, b = new B;
+    printInt(a.f());
+    printInt(b.f());
+    printInt(a.g());
+    printInt(b.g());
+}

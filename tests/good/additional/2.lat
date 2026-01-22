@@ -1,0 +1,20 @@
+int fac(int n) {
+    if (n <= 1) return 1;
+    return n * fac(n-1);
+}
+
+boolean isFacEven(int n) {
+    if (fac(n) % 2 == 0) {
+      return true;
+    } else return false;
+}
+
+int main() {
+    int x = readInt();
+    if (isFacEven(x)) {
+      printString("Fac is even");
+    } else {
+      printString("Fac is odd");
+    }
+    return 0;
+}
