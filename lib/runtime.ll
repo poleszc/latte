@@ -6,6 +6,7 @@
 @inc = internal constant [5 x i8] c"INC\0A\00"
 @dec = internal constant [5 x i8] c"DEC\0A\00"
 @lf  = internal constant [4 x i8] c"%lf\00"	
+@empty = internal constant [1 x i8] c"\00"
 @errorString = internal constant [15 x i8] c"runtime error\0A\00"
 
 declare i32 @printf(i8*, ...) 
@@ -31,8 +32,12 @@ define void @printInt(i32 %x) {
 }
 
 define void @printString(i8* %s) {
+    %is_null = icmp eq i8* %s, null
+    %empty_ptr = getelementptr [1 x i8], [1 x i8]* @empty, i32 0, i32 0
+    %string = select i1 %is_null, i8* %empty_ptr, i8* %s
+    
     %fmt = getelementptr [4 x i8], [4 x i8]* @s_fmt, i32 0, i32 0
-    call i32 (i8*, ...) @printf(i8* %fmt, i8* %s)
+    call i32 (i8*, ...) @printf(i8* %fmt, i8* %string)
     ret void
 }
 
@@ -83,8 +88,16 @@ end:
 }
  
 define i8* @stringConcat(i8* %s1, i8* %s2) {
-    %len1 = call i64 @strlen(i8* %s1)
-    %len2 = call i64 @strlen(i8* %s2)
+    %s1_is_null = icmp eq i8* %s1, null
+    %empty_ptr = getelementptr [1 x i8], [1 x i8]* @empty, i32 0, i32 0
+    %safe_s1 = select i1 %s1_is_null, i8* %empty_ptr, i8* %s1
+    
+    %s2_is_null = icmp eq i8* %s2, null
+    %safe_s2 = select i1 %s2_is_null, i8* %empty_ptr, i8* %s2
+
+
+    %len1 = call i64 @strlen(i8* %safe_s1)
+    %len2 = call i64 @strlen(i8* %safe_s2)
     %total_len = add i64 %len1, %len2
     %total_len_with_null = add i64 %total_len, 1
     
@@ -95,25 +108,43 @@ err:
     call void @error()
     unreachable
 ok:
-    call i8* @strcpy(i8* %new_str, i8* %s1)
-    call i8* @strcat(i8* %new_str, i8* %s2)
+    call i8* @strcpy(i8* %new_str, i8* %safe_s1)
+    call i8* @strcat(i8* %new_str, i8* %safe_s2)
     ret i8* %new_str
 }
 
 define i1 @stringEqual(i8* %s1, i8* %s2) {
-    %cmp = call i32 @strcmp(i8* %s1, i8* %s2)
+    %s1_is_null = icmp eq i8* %s1, null
+    %empty_ptr = getelementptr [1 x i8], [1 x i8]* @empty, i32 0, i32 0
+    %safe_s1 = select i1 %s1_is_null, i8* %empty_ptr, i8* %s1
+    
+    %s2_is_null = icmp eq i8* %s2, null
+    %safe_s2 = select i1 %s2_is_null, i8* %empty_ptr, i8* %s2
+
+    %cmp = call i32 @strcmp(i8* %safe_s1, i8* %safe_s2)
     %res = icmp eq i32 %cmp, 0
     ret i1 %res
 }
 
 define i1 @stringNotEqual(i8* %s1, i8* %s2) {
-    %cmp = call i32 @strcmp(i8* %s1, i8* %s2)
+    %s1_is_null = icmp eq i8* %s1, null
+    %empty_ptr = getelementptr [1 x i8], [1 x i8]* @empty, i32 0, i32 0
+    %safe_s1 = select i1 %s1_is_null, i8* %empty_ptr, i8* %s1
+    
+    %s2_is_null = icmp eq i8* %s2, null
+    %safe_s2 = select i1 %s2_is_null, i8* %empty_ptr, i8* %s2
+
+    %cmp = call i32 @strcmp(i8* %safe_s1, i8* %safe_s2)
     %res = icmp ne i32 %cmp, 0
     ret i1 %res
 }
 
 define i32 @stringLength(i8* %s) {
-    %len = call i64 @strlen(i8* %s)
+    %is_null = icmp eq i8* %s, null
+    %empty_ptr = getelementptr [1 x i8], [1 x i8]* @empty, i32 0, i32 0
+    %safe_s = select i1 %is_null, i8* %empty_ptr, i8* %s
+
+    %len = call i64 @strlen(i8* %safe_s)
     %res = trunc i64 %len to i32
     ret i32 %res
 }

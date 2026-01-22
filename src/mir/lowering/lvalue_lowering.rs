@@ -22,7 +22,17 @@ impl MIRLoweringContext {
             // I assume a parenthesis expression is an lvalue. This means code like this: '(object).field' is considered valid.
             TExprKind::Paren(inner) => self.lower_expr_as_place(inner),
             TExprKind::This => MIRPlace::Local(self.get_this_local()),
-            _ => panic!("Expression is not an lvalue. This should be caught by semantic checker"),
+
+            _ => {
+                let value = self.lower_expr(expr);
+                match value {
+                    MIRValue::Local(local_id) => MIRPlace::Local(local_id),
+                    MIRValue::Temp(temp_id) => MIRPlace::Temp(temp_id),
+                    _ => panic!(
+                        "Expression is not an lvalue. This should be caught by semantic checker"
+                    ),
+                }
+            }
         }
     }
 
